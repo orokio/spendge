@@ -37,7 +37,7 @@ final class BudgetService {
     func budget(category: Category?, year: Int, month: Int) throws -> Budget? {
         if let category {
             let categoryID = category.id
-            var descriptor = FetchDescriptor<Budget>(
+            let descriptor = FetchDescriptor<Budget>(
                 predicate: #Predicate { $0.year == year && $0.month == month && $0.category?.id == categoryID }
             )
             return try context.fetch(descriptor).first
