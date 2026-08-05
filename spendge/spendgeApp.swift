@@ -10,10 +10,17 @@ import SwiftData
 
 @main
 struct spendgeApp: App {
+    private let container = ModelContainerProvider.make()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
+                .task {
+                    #if DEBUG
+                    DemoData.installIfNeeded(context: container.mainContext)
+                    #endif
+                }
         }
-        .modelContainer(ModelContainerProvider.make())
+        .modelContainer(container)
     }
 }
