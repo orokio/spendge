@@ -27,6 +27,38 @@ struct MonthlySummary: Equatable {
     var totalIncome: Decimal { Money.yuan(from: totalIncomeCents) }
 }
 
+/// 金额输入建议：用户看到的是「已经填好的金额」或「几个档位」。
+struct AmountSuggestion: Equatable {
+    enum Style: String, Equatable {
+        case none             // 数据不足，手输
+        case mode             // 众数预填
+        case medianWithChips  // 中位数预填 + 常用档
+        case bucketsOnly      // 只给档位，不预填历史值
+    }
+
+    let prefillCents: Int64?
+    let chips: [Int64]
+    let style: Style
+
+    /// 选档位得到的是估计值，写入时带上标记。
+    var isEstimate: Bool { style == .bucketsOnly }
+
+    static let empty = AmountSuggestion(prefillCents: nil, chips: [], style: .none)
+}
+
+/// 月度数据覆盖率。覆盖率不是加分项，是回看的前提。
+struct MonthCoverage: Equatable {
+    let daysWithRecords: Int
+    let daysConfirmedNoSpend: Int
+    let coveredDays: Int
+    let daysInMonth: Int
+
+    var ratio: Double {
+        guard daysInMonth > 0 else { return 0 }
+        return Double(coveredDays) / Double(daysInMonth)
+    }
+}
+
 /// 账单业务逻辑：记账、改账、删账、查询、月度统计、余额计算。
 @MainActor
 final class TransactionService {
@@ -46,6 +78,9 @@ final class TransactionService {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
+        isApproximateAmount: Bool = false,
+        isImpulse: Bool? = nil,
+        source: TransactionSource = .manual,
         category: Category? = nil,
         account: Account
     ) throws -> Transaction {
@@ -55,6 +90,9 @@ final class TransactionService {
             kind: kind,
             date: date,
             note: note,
+            isApproximateAmount: isApproximateAmount,
+            isImpulse: isImpulse,
+            source: source,
             category: category,
             account: account
         )
@@ -139,6 +177,64 @@ final class TransactionService {
         return try context.fetch(descriptor)
     }
 
+    // MARK: - 金额建议
+
+    /// 按分类历史金额的离散程度给出预填策略。
+    /// 高方差分类不预填历史值——会诱发锚定偏差，用户看一眼就确认，数据被污染。
+    func amountSuggestion(for category: Category, sampleLimit: Int = 30) throws -> AmountSuggestion {
+        let categoryID = category.id
+        var descriptor = FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.category?.id == categoryID },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = sampleLimit
+        let amounts = try context.fetch(descriptor).map(\.amountCents)
+
+        guard amounts.count >= 3 else { return .empty }
+
+        let mean = Double(amounts.reduce(into: Int64(0)) { $0 += $1 }) / Double(amounts.count)
+        guard mean > 0 else { return .empty }
+        let variance = amounts.reduce(0.0) { $0 + pow(Double($1) - mean, 2) } / Double(amounts.count)
+        let coefficient = variance.squareRoot() / mean
+
+        if coefficient < 0.15 {
+            return AmountSuggestion(prefillCents: mode(of: amounts), chips: [], style: .mode)
+        }
+        if coefficient <= 0.5 {
+            let prefill = median(of: Array(amounts.prefix(3)))
+            let chips = topValues(of: amounts, limit: 2, excluding: prefill)
+            return AmountSuggestion(prefillCents: prefill, chips: chips, style: .medianWithChips)
+        }
+        return AmountSuggestion(prefillCents: nil, chips: quantileChips(of: amounts), style: .bucketsOnly)
+    }
+
+    // MARK: - 覆盖率
+
+    /// 某月的覆盖率：有记录或已确认无支出的天数。
+    func coverage(forMonth year: Int, month: Int) throws -> MonthCoverage {
+        let range = try monthRange(year: year, month: month)
+        let txns = try transactions(from: range.start, to: range.end)
+        let monthStart = range.start
+        let monthEnd = range.end
+        let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>(
+            predicate: #Predicate { $0.day >= monthStart && $0.day < monthEnd }
+        ))
+
+        var recorded: Set<Int> = []
+        for txn in txns { recorded.insert(calendar.component(.day, from: txn.date)) }
+
+        var confirmed: Set<Int> = []
+        for item in confirmations { confirmed.insert(calendar.component(.day, from: item.day)) }
+
+        let daysInMonth = calendar.range(of: .day, in: .month, for: range.start)?.count ?? 30
+        return MonthCoverage(
+            daysWithRecords: recorded.count,
+            daysConfirmedNoSpend: confirmed.subtracting(recorded).count,
+            coveredDays: recorded.union(confirmed).count,
+            daysInMonth: daysInMonth
+        )
+    }
+
     // MARK: - 统计
 
     /// 账户当前余额（分）= 期初余额 + 收入 - 支出。
@@ -187,6 +283,46 @@ final class TransactionService {
             throw SpendgeError.invalidDate
         }
         return (start, end)
+    }
+
+    // MARK: - 建议辅助
+
+    /// 众数；平票取最近一笔（amounts 已按时间倒序）。
+    private func mode(of amounts: [Int64]) -> Int64 {
+        var counts: [Int64: Int] = [:]
+        for amount in amounts { counts[amount, default: 0] += 1 }
+        let maxCount = counts.values.max() ?? 1
+        let candidates = Set(counts.filter { $0.value == maxCount }.keys)
+        return amounts.first { candidates.contains($0) } ?? amounts[0]
+    }
+
+    private func median(of amounts: [Int64]) -> Int64 {
+        let sorted = amounts.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        return sorted[sorted.count / 2]
+    }
+
+    private func topValues(of amounts: [Int64], limit: Int, excluding value: Int64) -> [Int64] {
+        var counts: [Int64: Int] = [:]
+        for amount in amounts where amount != value { counts[amount, default: 0] += 1 }
+        return counts
+            .sorted { $0.value == $1.value ? $0.key > $1.key : $0.value > $1.value }
+            .prefix(limit)
+            .map(\.key)
+    }
+
+    /// 档位：历史分位数，四舍五入到 5 元，去重。
+    private func quantileChips(of amounts: [Int64]) -> [Int64] {
+        let sorted = amounts.sorted()
+        let quantiles: [Double] = [0.25, 0.5, 0.75, 0.9]
+        var result: [Int64] = []
+        for quantile in quantiles {
+            let index = min(sorted.count - 1, max(0, Int((Double(sorted.count - 1) * quantile).rounded())))
+            let rounded = Int64((Double(sorted[index]) / 500).rounded()) * 500
+            let value = max(100, rounded)
+            if !result.contains(value) { result.append(value) }
+        }
+        return result
     }
 
     private func makeCategorySummaries(

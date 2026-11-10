@@ -10,6 +10,17 @@ final class Transaction {
     var kindRawValue: String
     var date: Date
     var note: String?
+    /// 金额是否为估计值（档位选择产生）。参与求和，但叙事与覆盖率需要区分。
+    var isApproximateAmount: Bool = false
+    /// 轻量行为信号。nil 表示未标记，避免历史数据被当成「不冲动」。
+    var isImpulse: Bool?
+    /// 来源：手动 / 补记。
+    var sourceRawValue: String = TransactionSource.manual.rawValue
+    /// 内部横切标签，用户不可见，由推断填充。
+    var dietModeRawValue: String?
+    var sceneRawValue: String?
+    var natureRawValue: String?
+
     var createdAt: Date
     var updatedAt: Date
 
@@ -22,6 +33,9 @@ final class Transaction {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
+        isApproximateAmount: Bool = false,
+        isImpulse: Bool? = nil,
+        source: TransactionSource = .manual,
         category: Category? = nil,
         account: Account,
         createdAt: Date = .now,
@@ -32,6 +46,9 @@ final class Transaction {
         self.kindRawValue = kind.rawValue
         self.date = date
         self.note = note
+        self.isApproximateAmount = isApproximateAmount
+        self.isImpulse = isImpulse
+        self.sourceRawValue = source.rawValue
         self.category = category
         self.account = account
         self.createdAt = createdAt
@@ -41,6 +58,26 @@ final class Transaction {
     var kind: TransactionKind {
         get { TransactionKind(rawValue: kindRawValue) ?? .expense }
         set { kindRawValue = newValue.rawValue }
+    }
+
+    var source: TransactionSource {
+        get { TransactionSource(rawValue: sourceRawValue) ?? .manual }
+        set { sourceRawValue = newValue.rawValue }
+    }
+
+    var dietMode: DietMode? {
+        get { dietModeRawValue.flatMap(DietMode.init(rawValue:)) }
+        set { dietModeRawValue = newValue?.rawValue }
+    }
+
+    var spendScene: SpendScene? {
+        get { sceneRawValue.flatMap(SpendScene.init(rawValue:)) }
+        set { sceneRawValue = newValue?.rawValue }
+    }
+
+    var spendNature: SpendNature? {
+        get { natureRawValue.flatMap(SpendNature.init(rawValue:)) }
+        set { natureRawValue = newValue?.rawValue }
     }
 
     /// 金额（元）

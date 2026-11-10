@@ -94,6 +94,12 @@ erDiagram
 - `balanceCents(for:)` = 期初余额 + 收入 − 支出
 - `totalAssetsCents()` 汇总全部账户（含已归档）
 
+## 已知坑（开发期踩过）
+
+1. **不要同时存在两个指向同一组 Model 的 ModelContainer。** 第二个（哪怕是 in-memory）在第一次 fetch 时会 EXC_BREAKPOINT。需要隔离环境时用独立进程，或直接读主容器。
+2. **#Predicate 里不能访问枚举的 rawValue。** 运行时 trap，不会抛错。必须在外层先取出字符串：`let raw = kind.rawValue`，再写 `#Predicate { $0.kindRawValue == raw }`。
+3. **结构变更不做迁移。** DEBUG 下按 `spendge.seedVersion` 在创建容器之前删除 store 文件——迁移失败发生在创建阶段，事后补救来不及。
+
 ## 后续扩展位
 
 - 转账：`Transaction.toAccount` 字段方向已预留

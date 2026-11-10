@@ -18,6 +18,7 @@ struct spendgeApp: App {
                 .task {
                     #if DEBUG
                     DemoData.installIfNeeded(context: container.mainContext)
+                    SelfCheck.run(context: container.mainContext)
                     #endif
                 }
         }

@@ -6,9 +6,13 @@ import SwiftData
 final class Category {
     @Attribute(.unique) var id: UUID
     var name: String
+    /// 稳定标识（CategoryCode 的 rawValue）。代码里一律按 code 匹配，不按 name。
+    var code: String?
     var iconName: String
     var colorHex: String
     var kindRawValue: String
+    /// 内部聚合领域，用户不可见。
+    var domainRawValue: String = CategoryDomain.other.rawValue
     var sortOrder: Int
     /// 系统预置分类不允许删除（可改名、可归档）
     var isSystem: Bool
@@ -25,9 +29,11 @@ final class Category {
     init(
         id: UUID = UUID(),
         name: String,
+        code: String? = nil,
         iconName: String = "tag.fill",
         colorHex: String = "#9CA3AF",
         kind: TransactionKind,
+        domain: CategoryDomain = .other,
         sortOrder: Int = 99,
         isSystem: Bool = false,
         isArchived: Bool = false,
@@ -36,9 +42,11 @@ final class Category {
     ) {
         self.id = id
         self.name = name
+        self.code = code
         self.iconName = iconName
         self.colorHex = colorHex
         self.kindRawValue = kind.rawValue
+        self.domainRawValue = domain.rawValue
         self.sortOrder = sortOrder
         self.isSystem = isSystem
         self.isArchived = isArchived
@@ -49,5 +57,14 @@ final class Category {
     var kind: TransactionKind {
         get { TransactionKind(rawValue: kindRawValue) ?? .expense }
         set { kindRawValue = newValue.rawValue }
+    }
+
+    var domain: CategoryDomain {
+        get { CategoryDomain(rawValue: domainRawValue) ?? .other }
+        set { domainRawValue = newValue.rawValue }
+    }
+
+    var categoryCode: CategoryCode? {
+        code.flatMap(CategoryCode.init(rawValue:))
     }
 }

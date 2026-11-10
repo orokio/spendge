@@ -13,15 +13,14 @@ final class CategoryService {
     /// 分类列表，按类型、排序号、名称排列。
     func categories(kind: TransactionKind? = nil, includeArchived: Bool = false) throws -> [Category] {
         var predicate: Predicate<Category>?
-        switch (kind, includeArchived) {
-        case let (kind?, false):
-            predicate = #Predicate { $0.kindRawValue == kind.rawValue && $0.isArchived == false }
-        case let (kind?, true):
-            predicate = #Predicate { $0.kindRawValue == kind.rawValue }
-        case (nil, false):
+        if let kind {
+            // 注意：#Predicate 里不能访问枚举的 rawValue（运行时 trap），必须先取出字符串
+            let raw = kind.rawValue
+            predicate = includeArchived
+                ? #Predicate { $0.kindRawValue == raw }
+                : #Predicate { $0.kindRawValue == raw && $0.isArchived == false }
+        } else if !includeArchived {
             predicate = #Predicate { $0.isArchived == false }
-        case (nil, true):
-            break
         }
 
         var descriptor = FetchDescriptor<Category>(predicate: predicate)

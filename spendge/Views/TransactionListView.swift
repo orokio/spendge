@@ -24,7 +24,7 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             VStack(spacing: 0) {
                 MonthStepper(month: $month)
                     .padding(.vertical, 12)
@@ -128,9 +128,12 @@ private struct TransactionRow: View {
 
             Spacer()
 
-            Text(AmountFormat.string(cents: transaction.amountCents, showsSign: true))
-                .font(.system(.body, design: .rounded).weight(.semibold))
-                .foregroundStyle(transaction.kind == .income ? Color.income : .primary)
+            Text(AmountFormat.string(
+                cents: transaction.kind == .expense ? -transaction.amountCents : transaction.amountCents,
+                showsSign: true
+            ))
+            .font(.system(.body, design: .rounded).weight(.semibold))
+            .foregroundStyle(transaction.kind == .income ? Color.income : .primary)
         }
         .padding(.vertical, 2)
     }

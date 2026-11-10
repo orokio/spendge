@@ -3,26 +3,26 @@ import SwiftData
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case transactions
+        case home
         case record
-        case statistics
+        case review
     }
 
-    @State private var selectedTab: Tab = .transactions
+    @State private var selectedTab: Tab = .home // .home
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            TransactionListView()
-                .tabItem { Label("流水", systemImage: "list.bullet.rectangle.portrait") }
-                .tag(Tab.transactions)
+            HomeView()
+                .tabItem { Label("今天", systemImage: "sun.max") }
+                .tag(Tab.home)
 
             RecordView(selectedTab: $selectedTab)
                 .tabItem { Label("记一笔", systemImage: "plus.circle.fill") }
                 .tag(Tab.record)
 
-            StatisticsView()
-                .tabItem { Label("统计", systemImage: "chart.pie.fill") }
-                .tag(Tab.statistics)
+            ReviewView()
+                .tabItem { Label("回看", systemImage: "chart.bar.doc.horizontal") }
+                .tag(Tab.review)
         }
         .tint(.brand)
     }

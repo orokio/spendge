@@ -86,11 +86,13 @@ final class AccountService {
         try transactionService.balanceCents(for: account)
     }
 
-    /// 全部账户余额之和（分）。
+    /// 全部账户余额之和（分）。一次取全量账单再分组，避免每个账户各查一次。
     func totalAssetsCents(includeArchived: Bool = false) throws -> Int64 {
-        var total: Int64 = 0
-        for account in try accounts(includeArchived: includeArchived) {
-            total += try balanceCents(for: account)
+        let accountList = try accounts(includeArchived: includeArchived)
+        let accountIDs = Set(accountList.map(\.id))
+        var total = accountList.reduce(into: Int64(0)) { $0 += $1.initialBalanceCents }
+        for txn in try context.fetch(FetchDescriptor<Transaction>()) where accountIDs.contains(txn.account.id) {
+            total += txn.balanceDeltaCents
         }
         return total
     }
