@@ -61,3 +61,4 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 - 产品方向：[docs/product-plan.md](docs/product-plan.md)
 - 开发计划：[docs/dev-plan.md](docs/dev-plan.md)
 - 技术设计：[docs/architecture.md](docs/architecture.md)
+- 试用反馈：[docs/feedback.md](docs/feedback.md)
