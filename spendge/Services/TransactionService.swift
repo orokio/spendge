@@ -52,10 +52,13 @@ struct MonthCoverage: Equatable {
     let daysConfirmedNoSpend: Int
     let coveredDays: Int
     let daysInMonth: Int
+    /// 已经过去的天数（当月 = 今天几号；过去的月份 = 整月）。
+    /// 覆盖率按它做分母，否则月初每个人看起来都像没记账。
+    let elapsedDays: Int
 
     var ratio: Double {
-        guard daysInMonth > 0 else { return 0 }
-        return Double(coveredDays) / Double(daysInMonth)
+        guard elapsedDays > 0 else { return 0 }
+        return Double(coveredDays) / Double(elapsedDays)
     }
 }
 
@@ -227,11 +230,15 @@ final class TransactionService {
         for item in confirmations { confirmed.insert(calendar.component(.day, from: item.day)) }
 
         let daysInMonth = calendar.range(of: .day, in: .month, for: range.start)?.count ?? 30
+        let isCurrentMonth = calendar.isDate(range.start, equalTo: .now, toGranularity: .month)
+        let elapsedDays = isCurrentMonth ? calendar.component(.day, from: .now) : daysInMonth
+
         return MonthCoverage(
             daysWithRecords: recorded.count,
             daysConfirmedNoSpend: confirmed.subtracting(recorded).count,
             coveredDays: recorded.union(confirmed).count,
-            daysInMonth: daysInMonth
+            daysInMonth: daysInMonth,
+            elapsedDays: elapsedDays
         )
     }
 

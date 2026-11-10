@@ -14,7 +14,7 @@ struct spendgeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            RootView()
                 .task {
                     #if DEBUG
                     DemoData.installIfNeeded(context: container.mainContext)

@@ -1,69 +1,64 @@
 # Spendge · 海绵记账
 
-一个 iOS 记账应用（个人项目）。当前处于开发早期：**数据模型与业务骨架已完成，UI/UE 待讨论后设计**。
+一个 iOS 记账应用（个人项目）。当前处于早期验证阶段：**核心交互已实现，正在试用验证留存假设**。
+
+产品方向：不做功能堆叠的账簿工具，而是让「记账这个动作」有意义——记录靠选择，选择靠积累，回看讲生活不讲报表。
 
 ## 技术栈
 
 - SwiftUI + SwiftData
-- 本地优先存储（无网络依赖），后续可接 CloudKit 同步
+- 本地优先（无网络依赖），后续接 CloudKit
 - 部署目标 iOS 17.0
 
 ## 目录结构
 
 ```
 spendge/
-├── Models/          # SwiftData 数据模型与预置数据
-│   ├── Account.swift        # 账户
-│   ├── Category.swift       # 分类
-│   ├── Transaction.swift    # 账单
-│   ├── Budget.swift         # 预算
-│   ├── Money.swift          # 金额工具（分/元转换）
-│   ├── SpendgeEnums.swift   # 收支类型 / 账户类型
-│   └── DefaultData.swift    # 首次启动种子数据
-├── Services/        # 业务逻辑层
-│   ├── TransactionService.swift  # 记账/查询/月度统计/余额
-│   ├── CategoryService.swift     # 分类管理
-│   ├── AccountService.swift      # 账户管理与总资产
-│   ├── BudgetService.swift       # 预算与进度
+├── Models/
+│   ├── Account / Category / Transaction / Budget
+│   ├── DayConfirmation.swift   # 「今天没花钱」的确认记录
+│   ├── Money.swift             # 分/元转换
+│   ├── SpendgeEnums.swift      # 收支类型 / 账户类型 / 分类 code 与领域 / 内部标签
+│   └── DefaultData.swift       # 种子：11 个动作分类 + 4 个收入分类 + 现金账户
+├── Services/
+│   ├── TransactionService.swift     # 记账/查询/月度汇总/覆盖率/金额建议
+│   ├── InsightService.swift         # 首屏那句话（确定性模板）
+│   ├── DayConfirmationService.swift # 每日确认，幂等
+│   ├── CategoryService / AccountService / BudgetService
+│   ├── SelfCheck.swift              # DEBUG 只读自检，结果写 Documents/selfcheck.log
+│   ├── DemoData.swift               # DEBUG 模拟数据（按 code 匹配）
 │   ├── ModelContainerProvider.swift
-│   ├── DemoData.swift            # DEBUG 模拟账单（仅 Debug 构建）
 │   └── SpendgeError.swift
-├── Views/            # UI 层（初版 demo）
-│   ├── MainTabView.swift         # 底部三 Tab：流水 / 记一笔 / 统计
-│   ├── TransactionListView.swift # 流水：月度汇总 + 按日分组列表
-│   ├── RecordView.swift          # 记一笔：金额键盘 + 分类网格
-│   ├── StatisticsView.swift      # 统计：收支汇总 + 预算进度 + 分类占比
-│   └── Components.swift          # 通用组件（品牌色/金额/分类图标/月份切换）
-├── spendgeApp.swift   # App 入口（已挂载 ModelContainer）
+├── Views/
+│   ├── RootView.swift      # 无 Tab：今天 ←→ 回看，横向拖动切换
+│   ├── TodayView.swift     # hero 一句话 + 今日流水 + FAB
+│   ├── RecordSheet.swift   # 半屏记录面板：日期轴 + 金额 + 分类胶囊
+│   ├── ReviewView.swift    # 回看：覆盖率 / 笔数柱状图 / 吃的结构 / 领域分布
+│   └── Components.swift
+└── spendgeApp.swift
 ```
 
-## 当前能力（业务层）
+## 当前能力
 
-- 记一笔 / 改一笔 / 删一笔
-- 按时间区间、账户、分类、关键词查询
-- 月度汇总（收支总额 + 分类分布）
-- 账户余额与总资产
-- 预算设置与进度
-- 首次启动自动写入 14 个默认分类 + 「现金」账户
+- **今天**：一句话（如「这周点了 2 次外卖，比上周少 4 次」）+ 今日流水 + 「今天没花钱」
+- **记一笔**：点分类 → 金额已预填（或给档位）→ 记下；14 天日期轴；账户/备注/冲动折叠在「···」
+- **回看**：覆盖率（按已过天数算）、记录密度柱状图、吃的结构、领域分布、预算
+- **业务层**：记账 / 查询 / 月度汇总 / 余额 / 预算进度 / 数据覆盖率 / 自适应金额建议
 
-## UI 初版 demo
+## 开发
 
-- 底部三 Tab：流水 / 记一笔 / 统计
-- 流水：月度切换、本月收支卡片、按日分组账单列表、左滑删除
-- 记一笔：自定义金额键盘、支出/收入切换、分类网格、账户与日期选择、备注
-- 统计：收支汇总卡片、整体预算进度、支出分类占比条
-- DEBUG 构建首次启动自动生成 3 个月模拟账单（Release 无此行为）
+```
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -project spendge.xcodeproj -scheme spendge \
+  -destination 'generic/platform=iOS Simulator' build
+```
 
-## 验证情况
+- DEBUG 启动会跑 SelfCheck（11 项只读不变量），结果同时写到 App 沙盒 `Documents/selfcheck.log`
+- 种子版本（`spendge.seedVersion`）变化时，**创建容器前删除 store 文件**，不做迁移
+- 结构变更相关坑见 [docs/architecture.md](docs/architecture.md) 的「已知坑」
 
-- 已通过 `xcodebuild` 编译验证（Xcode 26.6）
-- 冒烟测试覆盖：种子数据、记账、月度汇总、余额联动、搜索、预算进度、删除保护（临时脚本，验证后已清理）
-- UI demo 需在 Xcode 中运行模拟器人工验证
+## 文档
 
-## 待决策
-
-- UI/UE 方案
-- 记账页交互细节（键盘布局、分类配色）
-- 是否需要转账、周期记账、多账本等扩展能力
-
-文档入口：产品方向见 [docs/product-plan.md](docs/product-plan.md)，开发计划见 [docs/dev-plan.md](docs/dev-plan.md)，技术设计见 [docs/architecture.md](docs/architecture.md)。
+- 产品方向：[docs/product-plan.md](docs/product-plan.md)
+- 开发计划：[docs/dev-plan.md](docs/dev-plan.md)
+- 技术设计：[docs/architecture.md](docs/architecture.md)

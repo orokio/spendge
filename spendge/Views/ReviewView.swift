@@ -1,14 +1,23 @@
 import SwiftUI
 import SwiftData
 
-/// 回看：讲生活，不讲报表。
-/// 只用描述句——给事实贴标签就是审判。
+/// 回看：只回答一个问题——这个月过成什么样。
+/// 一种时间尺度（月份），不掺日视角的交互。
 struct ReviewView: View {
+    let onBack: () -> Void
+
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @Query private var budgets: [Budget]
+    @Query private var confirmations: [DayConfirmation]
 
     @State private var coverage: MonthCoverage?
+
+    private struct DayStat: Identifiable {
+        let id: Int
+        let count: Int
+        let hasRecord: Bool
+    }
 
     private var monthTransactions: [Transaction] {
         transactions.filter { Calendar.current.isDate($0.date, equalTo: .now, toGranularity: .month) }
@@ -16,6 +25,27 @@ struct ReviewView: View {
 
     private var expenseTransactions: [Transaction] {
         monthTransactions.filter { $0.kind == .expense }
+    }
+
+    private var dayStats: [DayStat] {
+        let calendar = Calendar.current
+        // 只画到今天：未来的日期不是「缺口」，不该出现在图里
+        let dayCount = calendar.component(.day, from: .now)
+        var counts: [Int: Int] = [:]
+        var recorded: Set<Int> = []
+
+        for txn in monthTransactions {
+            let day = calendar.component(.day, from: txn.date)
+            recorded.insert(day)
+            counts[day, default: 0] += 1
+        }
+        for item in confirmations where calendar.isDate(item.day, equalTo: .now, toGranularity: .month) {
+            recorded.insert(calendar.component(.day, from: item.day))
+        }
+
+        return (1...dayCount).map { day in
+            DayStat(id: day, count: counts[day] ?? 0, hasRecord: recorded.contains(day))
+        }
     }
 
     private var homemadeDays: Int {
@@ -53,55 +83,84 @@ struct ReviewView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    coverageCard
-                    dietCard
-                    domainCard
-                    if monthBudget != nil { budgetCard }
-                }
-                .padding()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 30) {
+                header
+                dietSection
+                domainSection
+                if monthBudget != nil { budgetSection }
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("回看")
-            .task { refresh() }
-            .onChange(of: transactions.count) { _, _ in refresh() }
+            .padding(.horizontal, 24)
+            .padding(.top, 64)
+            .padding(.bottom, 48)
         }
+        .scrollIndicators(.hidden)
+        .background(Color(.systemGroupedBackground))
+        .overlay(alignment: .topLeading) {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+            }
+            .padding(.leading, 8)
+            .padding(.top, 8)
+        }
+        .task { refresh() }
+        .onChange(of: transactions.count) { _, _ in refresh() }
+        .onChange(of: confirmations.count) { _, _ in refresh() }
     }
 
-    // MARK: - 覆盖率
+    // MARK: - 这个月
 
-    private var coverageCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
             Text("这个月")
-                .font(.subheadline.weight(.medium))
+                .font(.footnote)
                 .foregroundStyle(.secondary)
 
             if let coverage {
                 Text("\(coverage.coveredDays) 天有你的记录")
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
-                Text(coverage.daysConfirmedNoSpend > 0
-                     ? "其中 \(coverage.daysConfirmedNoSpend) 天是确认没花钱 · 覆盖 \(Int(coverage.ratio * 100))%"
-                     : "覆盖 \(Int(coverage.ratio * 100))%")
-                    .font(.caption)
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                Text("覆盖 \(Int(coverage.ratio * 100))%")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 Text("还没有数据")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
             }
+
+            sparkline
+                .padding(.top, 2)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - 饮食结构
+    /// 静态柱状图：有记录的高度表示金额，缺口是 2pt 的细线。
+    private var sparkline: some View {
+        HStack(alignment: .bottom, spacing: 1.5) {
+            ForEach(dayStats) { stat in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(stat.hasRecord ? Color.brand.opacity(0.8) : Color.secondary.opacity(0.16))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: barHeight(stat))
+            }
+        }
+        .frame(height: 32, alignment: .bottom)
+    }
 
-    private var dietCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("吃的", systemImage: "fork.knife")
+    /// 柱高表示当天记了几笔——这根条讲的是记录密度，不是金额结构。
+    /// 金额会被房租这类固定大额压平，笔数不会。
+    private func barHeight(_ stat: DayStat) -> CGFloat {
+        guard stat.hasRecord else { return 2 }
+        guard stat.count > 0 else { return 8 }
+        return min(30, 8 + CGFloat(stat.count) * 7)
+    }
+
+    // MARK: - 吃的
+
+    private var dietSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("吃的")
                 .font(.headline)
 
             HStack(spacing: 0) {
@@ -113,13 +172,10 @@ struct ReviewView: View {
 
             if impulseCount > 0 {
                 Text("其中有 \(impulseCount) 笔被你标为「冲动了」。")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func statColumn(value: String, unit: String, title: String) -> some View {
@@ -138,16 +194,16 @@ struct ReviewView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - 领域分布
+    // MARK: - 钱花在哪儿
 
-    private var domainCard: some View {
+    private var domainSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("钱花在哪儿", systemImage: "circle.grid.2x2")
+            Text("钱花在哪儿")
                 .font(.headline)
 
             if domainRows.isEmpty {
                 Text("本月还没有支出")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 let maxCents = max(domainRows.first?.cents ?? 1, 1)
@@ -159,56 +215,46 @@ struct ReviewView: View {
 
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
-                                Capsule().fill(Color(.systemGray5))
+                                Capsule().fill(Color.secondary.opacity(0.12))
                                 Capsule()
-                                    .fill(Color.brand.opacity(0.85))
+                                    .fill(Color.brand.opacity(0.75))
                                     .frame(width: max(geo.size.width * Double(row.cents) / Double(maxCents), 6))
                             }
                         }
-                        .frame(height: 6)
+                        .frame(height: 5)
 
                         Text(AmountFormat.string(cents: row.cents))
-                            .font(.caption.weight(.medium))
-                            .frame(width: 76, alignment: .trailing)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 72, alignment: .trailing)
                     }
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - 预算
 
-    @ViewBuilder
-    private var budgetCard: some View {
-        if let budget = monthBudget {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("本月预算", systemImage: "target")
-                        .font(.headline)
-                    Spacer()
-                    Text(AmountFormat.string(cents: budget.amountCents))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                ProgressView(value: min(Double(totalExpenseCents) / Double(max(budget.amountCents, 1)), 1))
-                    .tint(Color.brand)
-
-                Text(budgetDescription(budget))
-                    .font(.caption)
+    private var budgetSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("预算")
+                    .font(.headline)
+                Spacer()
+                Text(budgetDescription())
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+
+            if let budget = monthBudget {
+                ProgressView(value: min(Double(totalExpenseCents) / Double(max(budget.amountCents, 1)), 1))
+                    .tint(Color.brand)
+            }
         }
     }
 
-    /// 描述句，不是评判句。
-    private func budgetDescription(_ budget: Budget) -> String {
+    private func budgetDescription() -> String {
+        guard let budget = monthBudget else { return "" }
         let remaining = budget.amountCents - totalExpenseCents
         if remaining >= 0 {
             return "还剩 \(AmountFormat.string(cents: remaining))"
