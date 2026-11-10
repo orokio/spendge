@@ -37,21 +37,20 @@ struct TodayView: View {
 
             fab
         }
+        .background(Color(.systemGroupedBackground))
         .background {
-            ZStack(alignment: .top) {
-                Color(.systemGroupedBackground)
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.brand.opacity(0.17), location: 0),
-                        .init(color: Color.brand.opacity(0.05), location: 0.6),
-                        .init(color: Color.brand.opacity(0), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 330)
-                .ignoresSafeArea(edges: .top)
-            }
+            // 全屏渐变：不要用固定高度，否则底部会出现一道硬边
+            LinearGradient(
+                stops: [
+                    .init(color: Color.brand.opacity(0.18), location: 0),
+                    .init(color: Color.brand.opacity(0.11), location: 0.16),
+                    .init(color: Color.brand.opacity(0.04), location: 0.30),
+                    .init(color: Color.brand.opacity(0), location: 0.44),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
         }
         .sheet(isPresented: $showSheet) {
             RecordSheet()

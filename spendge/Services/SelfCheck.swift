@@ -28,16 +28,16 @@ enum SelfCheck {
         expect(expenses.filter { $0.domain == .food }.count == 4, "吃的领域应有 4 个分类")
         expect(categories.contains { $0.categoryCode == .salary }, "应有工资分类")
 
-        // 2. 金额建议随方差分层
-        if let takeout = categories.first(where: { $0.categoryCode == .takeout }) {
-            let suggestion = (try? transactionService.amountSuggestion(for: takeout)) ?? .empty
-            expect(suggestion.style != .none, "外卖应有足够历史给出建议")
-        }
-        if let grocery = categories.first(where: { $0.categoryCode == .grocery }) {
-            let suggestion = (try? transactionService.amountSuggestion(for: grocery)) ?? .empty
-            expect(suggestion.style == .bucketsOnly, "买菜应只给档位")
-            expect(suggestion.prefillCents == nil, "高方差分类不得预填历史值")
-        }
+        // 2. 金额建议随方差分层（纯函数，不依赖库里的历史）
+        let lowVariance = AmountSuggestion.make(from: [3_000, 2_500, 2_500, 2_500])
+        expect(lowVariance.style == .mode, "低方差应使用众数预填")
+        expect(lowVariance.prefillCents == 2_500, "众数应取出现最多的金额")
+
+        let highVariance = AmountSuggestion.make(from: [2_000, 10_000, 18_000, 26_000])
+        expect(highVariance.style == .bucketsOnly, "高方差应只给档位")
+        expect(highVariance.prefillCents == nil, "高方差分类不得预填历史值")
+        expect(!highVariance.chips.isEmpty, "档位不应为空")
+        expect(AmountSuggestion.make(from: [2_000, 3_000]).style == .none, "样本不足时不应预填")
 
         // 3. 覆盖率自洽
         let calendar = Calendar.current

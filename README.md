@@ -26,7 +26,6 @@ spendge/
 │   ├── DayConfirmationService.swift # 每日确认，幂等
 │   ├── CategoryService / AccountService / BudgetService
 │   ├── SelfCheck.swift              # DEBUG 只读自检，结果写 Documents/selfcheck.log
-│   ├── DemoData.swift               # DEBUG 模拟数据（按 code 匹配）
 │   ├── ModelContainerProvider.swift
 │   └── SpendgeError.swift
 ├── Views/

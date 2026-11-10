@@ -44,6 +44,68 @@ struct AmountSuggestion: Equatable {
     var isEstimate: Bool { style == .bucketsOnly }
 
     static let empty = AmountSuggestion(prefillCents: nil, chips: [], style: .none)
+
+    /// 纯函数：按历史金额的离散程度决定预填策略。脱离数据库，便于自检与测试。
+    /// 高方差分类不预填历史值——会诱发锚定偏差，用户看一眼就确认，数据被污染。
+    static func make(from amounts: [Int64]) -> AmountSuggestion {
+        guard amounts.count >= 3 else { return .empty }
+
+        let mean = Double(amounts.reduce(into: Int64(0)) { $0 += $1 }) / Double(amounts.count)
+        guard mean > 0 else { return .empty }
+        let variance = amounts.reduce(0.0) { $0 + pow(Double($1) - mean, 2) } / Double(amounts.count)
+        let coefficient = variance.squareRoot() / mean
+
+        if coefficient < 0.15 {
+            return AmountSuggestion(prefillCents: mode(amounts), chips: [], style: .mode)
+        }
+        if coefficient <= 0.5 {
+            let prefill = median(Array(amounts.prefix(3)))
+            return AmountSuggestion(
+                prefillCents: prefill,
+                chips: topValues(amounts, limit: 2, excluding: prefill),
+                style: .medianWithChips
+            )
+        }
+        return AmountSuggestion(prefillCents: nil, chips: quantileChips(amounts), style: .bucketsOnly)
+    }
+
+    /// 众数；平票取最近一笔（amounts 已按时间倒序）。
+    private static func mode(_ amounts: [Int64]) -> Int64 {
+        var counts: [Int64: Int] = [:]
+        for amount in amounts { counts[amount, default: 0] += 1 }
+        let maxCount = counts.values.max() ?? 1
+        let candidates = Set(counts.filter { $0.value == maxCount }.keys)
+        return amounts.first { candidates.contains($0) } ?? amounts[0]
+    }
+
+    private static func median(_ amounts: [Int64]) -> Int64 {
+        let sorted = amounts.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        return sorted[sorted.count / 2]
+    }
+
+    private static func topValues(_ amounts: [Int64], limit: Int, excluding value: Int64) -> [Int64] {
+        var counts: [Int64: Int] = [:]
+        for amount in amounts where amount != value { counts[amount, default: 0] += 1 }
+        return counts
+            .sorted { $0.value == $1.value ? $0.key > $1.key : $0.value > $1.value }
+            .prefix(limit)
+            .map(\.key)
+    }
+
+    /// 档位：历史分位数，四舍五入到 5 元，去重。
+    private static func quantileChips(_ amounts: [Int64]) -> [Int64] {
+        let sorted = amounts.sorted()
+        let quantiles: [Double] = [0.25, 0.5, 0.75, 0.9]
+        var result: [Int64] = []
+        for quantile in quantiles {
+            let index = min(sorted.count - 1, max(0, Int((Double(sorted.count - 1) * quantile).rounded())))
+            let rounded = Int64((Double(sorted[index]) / 500).rounded()) * 500
+            let value = max(100, rounded)
+            if !result.contains(value) { result.append(value) }
+        }
+        return result
+    }
 }
 
 /// 月度数据覆盖率。覆盖率不是加分项，是回看的前提。
@@ -192,23 +254,7 @@ final class TransactionService {
         )
         descriptor.fetchLimit = sampleLimit
         let amounts = try context.fetch(descriptor).map(\.amountCents)
-
-        guard amounts.count >= 3 else { return .empty }
-
-        let mean = Double(amounts.reduce(into: Int64(0)) { $0 += $1 }) / Double(amounts.count)
-        guard mean > 0 else { return .empty }
-        let variance = amounts.reduce(0.0) { $0 + pow(Double($1) - mean, 2) } / Double(amounts.count)
-        let coefficient = variance.squareRoot() / mean
-
-        if coefficient < 0.15 {
-            return AmountSuggestion(prefillCents: mode(of: amounts), chips: [], style: .mode)
-        }
-        if coefficient <= 0.5 {
-            let prefill = median(of: Array(amounts.prefix(3)))
-            let chips = topValues(of: amounts, limit: 2, excluding: prefill)
-            return AmountSuggestion(prefillCents: prefill, chips: chips, style: .medianWithChips)
-        }
-        return AmountSuggestion(prefillCents: nil, chips: quantileChips(of: amounts), style: .bucketsOnly)
+        return AmountSuggestion.make(from: amounts)
     }
 
     // MARK: - 覆盖率
@@ -290,46 +336,6 @@ final class TransactionService {
             throw SpendgeError.invalidDate
         }
         return (start, end)
-    }
-
-    // MARK: - 建议辅助
-
-    /// 众数；平票取最近一笔（amounts 已按时间倒序）。
-    private func mode(of amounts: [Int64]) -> Int64 {
-        var counts: [Int64: Int] = [:]
-        for amount in amounts { counts[amount, default: 0] += 1 }
-        let maxCount = counts.values.max() ?? 1
-        let candidates = Set(counts.filter { $0.value == maxCount }.keys)
-        return amounts.first { candidates.contains($0) } ?? amounts[0]
-    }
-
-    private func median(of amounts: [Int64]) -> Int64 {
-        let sorted = amounts.sorted()
-        guard !sorted.isEmpty else { return 0 }
-        return sorted[sorted.count / 2]
-    }
-
-    private func topValues(of amounts: [Int64], limit: Int, excluding value: Int64) -> [Int64] {
-        var counts: [Int64: Int] = [:]
-        for amount in amounts where amount != value { counts[amount, default: 0] += 1 }
-        return counts
-            .sorted { $0.value == $1.value ? $0.key > $1.key : $0.value > $1.value }
-            .prefix(limit)
-            .map(\.key)
-    }
-
-    /// 档位：历史分位数，四舍五入到 5 元，去重。
-    private func quantileChips(of amounts: [Int64]) -> [Int64] {
-        let sorted = amounts.sorted()
-        let quantiles: [Double] = [0.25, 0.5, 0.75, 0.9]
-        var result: [Int64] = []
-        for quantile in quantiles {
-            let index = min(sorted.count - 1, max(0, Int((Double(sorted.count - 1) * quantile).rounded())))
-            let rounded = Int64((Double(sorted[index]) / 500).rounded()) * 500
-            let value = max(100, rounded)
-            if !result.contains(value) { result.append(value) }
-        }
-        return result
     }
 
     private func makeCategorySummaries(

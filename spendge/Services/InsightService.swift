@@ -25,6 +25,14 @@ final class InsightService {
         let weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
         let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: weekStart) ?? weekStart
 
+        // 还没有任何记录时，给一句开场，而不是报缺口
+        let monthTransactions = try context.fetch(FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.date >= monthStart }
+        ))
+        if monthTransactions.isEmpty {
+            return Insight(title: "从今天开始，它会越来越懂你", detail: nil)
+        }
+
         let takeoutThisWeek = try count(.takeout, from: weekStart, to: now)
         let takeoutLastWeek = try count(.takeout, from: lastWeekStart, to: weekStart)
         let homemadeDays = try distinctDays(.grocery, from: monthStart, to: now)
@@ -65,12 +73,6 @@ final class InsightService {
         }
 
         // 4. 兜底：总量
-        let monthTransactions = try context.fetch(FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= monthStart }
-        ))
-        if monthTransactions.isEmpty {
-            return Insight(title: "从今天开始，它会越来越懂你", detail: nil)
-        }
         return Insight(
             title: "这个月你记了 \(monthTransactions.count) 笔",
             detail: coverage.coveredDays > 0 ? "覆盖 \(coverage.coveredDays) 天" : nil

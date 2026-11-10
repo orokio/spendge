@@ -34,7 +34,7 @@ enum ModelContainerProvider {
     /// 在容器创建之前执行——迁移一旦失败会在创建阶段 trap，事后补救已经来不及。
     private static func removeStoreIfSchemaChanged() {
         let key = "spendge.seedVersion"
-        let current = 5
+        let current = 6
         guard UserDefaults.standard.integer(forKey: key) != current else { return }
 
         let fileManager = FileManager.default
