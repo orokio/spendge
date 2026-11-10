@@ -66,4 +66,4 @@ spendge/
 - 记账页交互细节（键盘布局、分类配色）
 - 是否需要转账、周期记账、多账本等扩展能力
 
-详细设计见 [docs/architecture.md](docs/architecture.md)。
+文档入口：产品方向见 [docs/product-plan.md](docs/product-plan.md)，开发计划见 [docs/dev-plan.md](docs/dev-plan.md)，技术设计见 [docs/architecture.md](docs/architecture.md)。
