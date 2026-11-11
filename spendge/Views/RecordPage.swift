@@ -128,7 +128,6 @@ struct RecordPage: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         noteField
-                            .frame(maxHeight: .infinity)
                         HStack(spacing: 10) {
                             saveButton
                             micButton
@@ -293,6 +292,16 @@ struct RecordPage: View {
 
     // MARK: - 金额
 
+    /// 位数越多字号越小，保持字重和比例，不做整体缩放。
+    private var amountFontSize: CGFloat {
+        switch String(inputYuan).count {
+        case 0...5: return 46
+        case 6: return 40
+        case 7: return 34
+        default: return 30
+        }
+    }
+
     private var amountView: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text("≈")
@@ -300,10 +309,9 @@ struct RecordPage: View {
                 .foregroundStyle(.secondary)
 
             Text(inputYuan > 0 ? "\(inputYuan)" : "0")
-                .font(.system(size: 46, weight: .bold, design: .rounded))
+                .font(.system(size: amountFontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
                 .lineLimit(1)
-                .minimumScaleFactor(0.55)
                 .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -367,8 +375,10 @@ struct RecordPage: View {
     }
 
     private func append(_ digit: String) {
-        guard inputYuan < 100_000_000 else { return }
-        inputYuan = inputYuan * 10 + (Int(digit) ?? 0)
+        // 判断「加上这一位之后」的数值，避免多进一位
+        let next = inputYuan * 10 + (Int(digit) ?? 0)
+        guard next < 100_000_000 else { return }
+        inputYuan = next
         usedEstimate = false
         amountEdited = true
     }
@@ -389,7 +399,7 @@ struct RecordPage: View {
                 .onSubmit { noteFocused = false }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
     }
 
