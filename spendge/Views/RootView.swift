@@ -20,7 +20,11 @@ struct RootView: View {
                 DragGesture(minimumDistance: 24)
                     .onChanged { value in
                         guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                        dragOffset = value.translation.width
+                        let width = value.translation.width
+                        // 第一页只允许左滑，最后一页只允许右滑，避免滑到头还回弹一下
+                        if page == 0, width > 0 { dragOffset = 0; return }
+                        if page == 1, width < 0 { dragOffset = 0; return }
+                        dragOffset = width
                     }
                     .onEnded { value in
                         let horizontal = abs(value.translation.width) > abs(value.translation.height)
