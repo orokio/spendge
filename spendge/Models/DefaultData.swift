@@ -17,34 +17,34 @@ enum DefaultData {
     }
 
     static let expenseCategorySeeds: [CategorySeed] = [
-        .init(code: .grocery, name: "买菜做饭", iconName: "cart.fill",
-              colorHex: "#F97316", kind: .expense, domain: .food, sortOrder: 1),
-        .init(code: .snack, name: "零食水果", iconName: "carrot.fill",
-              colorHex: "#FBBF24", kind: .expense, domain: .food, sortOrder: 2),
         .init(code: .takeout, name: "点外卖", iconName: "takeoutbag.and.cup.and.straw.fill",
-              colorHex: "#FB923C", kind: .expense, domain: .food, sortOrder: 3),
-        .init(code: .dineout, name: "下馆子", iconName: "fork.knife",
-              colorHex: "#F59E0B", kind: .expense, domain: .food, sortOrder: 4),
+              colorHex: "#FB923C", kind: .expense, domain: .food, sortOrder: 1),
+        .init(code: .grocery, name: "买菜做饭", iconName: "cart.fill",
+              colorHex: "#F97316", kind: .expense, domain: .food, sortOrder: 2),
         .init(code: .drink, name: "咖啡奶茶", iconName: "cup.and.saucer.fill",
-              colorHex: "#B45309", kind: .expense, domain: .food, sortOrder: 5),
+              colorHex: "#B45309", kind: .expense, domain: .food, sortOrder: 3),
+        .init(code: .snack, name: "零食水果", iconName: "carrot.fill",
+              colorHex: "#FBBF24", kind: .expense, domain: .food, sortOrder: 4),
         .init(code: .outing, name: "出行游玩", iconName: "figure.walk",
-              colorHex: "#3B82F6", kind: .expense, domain: .transport, sortOrder: 6),
-        .init(code: .housing, name: "房租水电", iconName: "house.fill",
-              colorHex: "#14B8A6", kind: .expense, domain: .housing, sortOrder: 7),
+              colorHex: "#3B82F6", kind: .expense, domain: .transport, sortOrder: 5),
+        .init(code: .dineout, name: "下馆子", iconName: "fork.knife",
+              colorHex: "#F59E0B", kind: .expense, domain: .food, sortOrder: 6),
         .init(code: .daily, name: "生活日用", iconName: "shippingbox.fill",
-              colorHex: "#A855F7", kind: .expense, domain: .goods, sortOrder: 8),
+              colorHex: "#A855F7", kind: .expense, domain: .goods, sortOrder: 7),
+        .init(code: .housing, name: "房租水电", iconName: "house.fill",
+              colorHex: "#14B8A6", kind: .expense, domain: .housing, sortOrder: 8),
         .init(code: .wear, name: "衣帽鞋袜", iconName: "tshirt.fill",
               colorHex: "#EC4899", kind: .expense, domain: .goods, sortOrder: 9),
-        .init(code: .gear, name: "装备器材", iconName: "wrench.and.screwdriver.fill",
-              colorHex: "#DB2777", kind: .expense, domain: .goods, sortOrder: 10),
-        .init(code: .appliance, name: "家具家电", iconName: "sofa.fill",
-              colorHex: "#C026D3", kind: .expense, domain: .housing, sortOrder: 11),
         .init(code: .subscription, name: "订阅话费", iconName: "creditcard.fill",
-              colorHex: "#0EA5E9", kind: .expense, domain: .other, sortOrder: 12),
+              colorHex: "#0EA5E9", kind: .expense, domain: .other, sortOrder: 10),
         .init(code: .social, name: "人情往来", iconName: "gift.fill",
-              colorHex: "#EF4444", kind: .expense, domain: .social, sortOrder: 13),
+              colorHex: "#EF4444", kind: .expense, domain: .social, sortOrder: 11),
         .init(code: .health, name: "医疗保健", iconName: "cross.case.fill",
-              colorHex: "#10B981", kind: .expense, domain: .health, sortOrder: 14),
+              colorHex: "#10B981", kind: .expense, domain: .health, sortOrder: 12),
+        .init(code: .gear, name: "装备器材", iconName: "wrench.and.screwdriver.fill",
+              colorHex: "#DB2777", kind: .expense, domain: .goods, sortOrder: 13),
+        .init(code: .appliance, name: "家具家电", iconName: "sofa.fill",
+              colorHex: "#C026D3", kind: .expense, domain: .housing, sortOrder: 14),
         .init(code: .otherExpense, name: "其他", iconName: "ellipsis.circle",
               colorHex: "#9CA3AF", kind: .expense, domain: .other, sortOrder: 99),
     ]
@@ -64,11 +64,11 @@ enum DefaultData {
     /// 与结构变更不同，这里不删库——账单归属是用户数据。
     static func migrateCategoriesIfNeeded(context: ModelContext) {
         let key = "spendge.categoryMigration"
-        guard UserDefaults.standard.integer(forKey: key) < 5 else { return }
+        guard UserDefaults.standard.integer(forKey: key) < 6 else { return }
 
         let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
         guard !categories.isEmpty else {
-            UserDefaults.standard.set(5, forKey: key)
+            UserDefaults.standard.set(6, forKey: key)
             return
         }
 
@@ -119,7 +119,7 @@ enum DefaultData {
         }
 
         try? context.save()
-        UserDefaults.standard.set(5, forKey: key)
+        UserDefaults.standard.set(6, forKey: key)
     }
 
     /// 幂等：已有数据时不重复写入。

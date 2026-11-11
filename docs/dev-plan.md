@@ -56,20 +56,20 @@
 
    | code | 名称 | 内部领域 |
    | --- | --- | --- |
-   | `grocery` | 买菜做饭 | 吃 |
-   | `snack` | 零食水果 | 吃 |
    | `takeout` | 点外卖 | 吃 |
-   | `dineout` | 下馆子 | 吃 |
+   | `grocery` | 买菜做饭 | 吃 |
    | `drink` | 咖啡奶茶 | 吃 |
+   | `snack` | 零食水果 | 吃 |
    | `outing` | 出行游玩 | 行 |
-   | `housing` | 房租水电 | 住 |
+   | `dineout` | 下馆子 | 吃 |
    | `daily` | 生活日用 | 用 |
+   | `housing` | 房租水电 | 住 |
    | `wear` | 衣帽鞋袜 | 用 |
-   | `gear` | 装备器材 | 用 |
-   | `appliance` | 家具家电 | 住 |
    | `subscription` | 订阅话费 | — |
    | `social` | 人情往来 | 人情 |
    | `health` | 医疗保健 | 健康 |
+   | `gear` | 装备器材 | 用 |
+   | `appliance` | 家具家电 | 住 |
    | `other_expense` | 其他 | — |
 
    > 旧 `transport` + `fun` 迁移到 `outing`，旧 `shopping` 迁移到 `gear`；迁移函数保留已有账单，不删库。
