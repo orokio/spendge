@@ -26,6 +26,21 @@ struct TodayView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
+            // 渐变作为独立图层铺满整屏，不要放进 background 里算尺寸
+            LinearGradient(
+                stops: [
+                    .init(color: Color.brand.opacity(0.20), location: 0),
+                    .init(color: Color.brand.opacity(0.15), location: 0.12),
+                    .init(color: Color.brand.opacity(0.08), location: 0.28),
+                    .init(color: Color.brand.opacity(0.03), location: 0.42),
+                    .init(color: Color.brand.opacity(0), location: 0.55),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     hero
@@ -37,21 +52,8 @@ struct TodayView: View {
 
             fab
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
-        .background {
-            // 全屏渐变：不要用固定高度，否则底部会出现一道硬边
-            LinearGradient(
-                stops: [
-                    .init(color: Color.brand.opacity(0.18), location: 0),
-                    .init(color: Color.brand.opacity(0.11), location: 0.16),
-                    .init(color: Color.brand.opacity(0.04), location: 0.30),
-                    .init(color: Color.brand.opacity(0), location: 0.44),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        }
         .sheet(isPresented: $showSheet) {
             RecordSheet()
         }
@@ -78,9 +80,8 @@ struct TodayView: View {
             }
             .padding(.bottom, -4)
 
-            Text(insight?.title ?? "正在看你的账本…")
-                .font(.system(size: 26, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
+            highlighted(insight?.title ?? "正在看你的账本…")
+                .font(.system(size: 26, weight: .medium, design: .rounded))
                 .fixedSize(horizontal: false, vertical: true)
                 .transition(.opacity.combined(with: .offset(y: 6)))
 
@@ -148,31 +149,47 @@ struct TodayView: View {
         .contentShape(Rectangle())
     }
 
+    /// 空状态只给一个动作，不再同时出现「今天还没记」和「今天没花钱」。
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if confirmedToday {
-                Label("今天确认没花钱", systemImage: "checkmark.circle.fill")
+        Button {
+            if !confirmedToday { confirmNoSpend() }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(confirmedToday ? Color.brand : Color.secondary.opacity(0.45))
+                Text("今天没花钱")
                     .font(.subheadline)
-                    .foregroundStyle(Color.brand)
-            } else {
-                Text("今天还没记")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    confirmNoSpend()
-                } label: {
-                    Text("今天没花钱")
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
-                        .background(Color.brand.opacity(0.12), in: Capsule())
-                        .foregroundStyle(Color.brand)
-                }
-                .buttonStyle(.plain)
+                    .foregroundStyle(confirmedToday ? Color.brand : .secondary)
+                Spacer()
             }
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
-        .padding(.top, 4)
+        .buttonStyle(.plain)
+        .disabled(confirmedToday)
+        .padding(.top, 2)
+    }
+
+    /// 数字用品牌色，句子本身保持中性。
+    private func highlighted(_ text: String) -> Text {
+        var result = Text("")
+        var buffer = ""
+        var bufferIsNumber = false
+
+        for character in text {
+            let isNumber = character.isNumber
+            if !buffer.isEmpty, isNumber != bufferIsNumber {
+                result = result + Text(buffer).foregroundColor(bufferIsNumber ? .brand : .primary)
+                buffer = ""
+            }
+            buffer.append(character)
+            bufferIsNumber = isNumber
+        }
+        if !buffer.isEmpty {
+            result = result + Text(buffer).foregroundColor(bufferIsNumber ? .brand : .primary)
+        }
+        return result
     }
 
     // MARK: - FAB

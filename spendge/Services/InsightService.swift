@@ -64,7 +64,7 @@ final class InsightService {
         // 3. 缺口（主语是系统，不是用户的过失）
         let coverage = try TransactionService(context: context, calendar: calendar)
             .coverage(forMonth: yearOf(now), month: monthOf(now))
-        let missing = coverage.daysInMonth - coverage.coveredDays
+        let missing = coverage.elapsedDays - coverage.coveredDays
         if missing >= 3 {
             return Insight(
                 title: "这 \(missing) 天我还没有你的记录",

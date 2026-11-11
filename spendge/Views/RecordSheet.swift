@@ -15,12 +15,11 @@ struct RecordSheet: View {
     @State private var selectedCategory: Category?
     @State private var selectedAccount: Account?
     @State private var inputYuan = 0
+    @State private var amountEdited = false
     @State private var suggestion: AmountSuggestion = .empty
     @State private var usedEstimate = false
     @State private var date = Date.now
     @State private var note = ""
-    @State private var isImpulse = false
-    @State private var showMore = false
     @State private var showKeypad = false
     @State private var detent: PresentationDetent = .medium
 
@@ -64,25 +63,32 @@ struct RecordSheet: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.top, 28)
             .onChange(of: kind) { _, _ in
+                amountEdited = false
                 select(categories.first)
             }
 
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     dateAxis
                     amountBlock
-                    categoryPills
-                    if showMore { moreSection }
+                    categoryFlow
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 16)
+                .padding(.top, 14)
                 .padding(.bottom, 12)
             }
             .scrollIndicators(.hidden)
 
-            saveButton
+            VStack(spacing: 10) {
+                noteField
+                if accounts.count > 1 { accountPicker }
+                saveButton
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
         }
         .background(Color(.systemBackground))
         .presentationDetents([.medium, .large], selection: $detent)
@@ -122,7 +128,7 @@ struct RecordSheet: View {
                     .font(.system(.subheadline, design: .rounded).weight(.semibold))
                     .foregroundStyle(selected ? .white : .primary)
             }
-            .frame(width: 40, height: 50)
+            .frame(width: 38, height: 46)
             .background(
                 selected ? Color.brand : Color(.secondarySystemGroupedBackground),
                 in: RoundedRectangle(cornerRadius: 13)
@@ -155,7 +161,14 @@ struct RecordSheet: View {
                 }
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, minHeight: 54)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .overlay(alignment: .bottom) {
+                // 让「可以点」有形状可依
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(height: 1)
+                    .padding(.horizontal, 40)
+            }
 
             if !suggestion.chips.isEmpty {
                 HStack(spacing: 8) {
@@ -163,6 +176,7 @@ struct RecordSheet: View {
                         Button {
                             inputYuan = Int(chip / 100)
                             usedEstimate = suggestion.style == .bucketsOnly
+                            amountEdited = true
                         } label: {
                             Text("¥\(chip / 100)")
                                 .font(.subheadline.weight(.medium))
@@ -191,9 +205,9 @@ struct RecordSheet: View {
             ForEach(["1", "2", "3", "4", "5", "6", "7", "8", "9"], id: \.self) { digit in
                 keyButton(digit) { append(digit) }
             }
-            keyButton("清零") { inputYuan = 0; usedEstimate = false }
+            keyButton("清零") { inputYuan = 0; usedEstimate = false; amountEdited = true }
             keyButton("0") { append("0") }
-            keyButton("⌫") { inputYuan /= 10 }
+            keyButton("⌫") { inputYuan /= 10; amountEdited = true }
         }
     }
 
@@ -211,89 +225,72 @@ struct RecordSheet: View {
         guard inputYuan < 100_000 else { return }
         inputYuan = inputYuan * 10 + (Int(digit) ?? 0)
         usedEstimate = false
+        amountEdited = true
     }
 
     // MARK: - 分类
 
-    private var categoryPills: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(categories) { category in
-                    let selected = selectedCategory?.id == category.id
-                    Button {
-                        select(category)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: category.iconName)
-                                .font(.system(size: 13, weight: .medium))
-                            Text(category.name)
-                                .font(.subheadline)
-                        }
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 9)
-                        .background(
-                            selected ? Color.brand : Color(.secondarySystemGroupedBackground),
-                            in: Capsule()
-                        )
-                        .foregroundStyle(selected ? .white : .primary)
-                    }
-                    .buttonStyle(.plain)
+    private var categoryFlow: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(categories) { category in
+                let selected = selectedCategory?.id == category.id
+                Button {
+                    select(category)
+                } label: {
+                    Text(category.name)
+                        .font(.system(size: 14))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    .background(
+                        selected ? Color.brand : Color(.secondarySystemGroupedBackground),
+                        in: Capsule()
+                    )
+                    .foregroundStyle(selected ? .white : .primary)
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.vertical, 1)
         }
     }
 
-    // MARK: - 更多
+    // MARK: - 备注 / 账户
 
-    private var moreSection: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Menu {
-                    ForEach(accounts) { account in
-                        Button {
-                            selectedAccount = account
-                        } label: {
-                            if account.id == selectedAccount?.id {
-                                Label(account.name, systemImage: "checkmark")
-                            } else {
-                                Text(account.name)
-                            }
-                        }
-                    }
+    private var noteField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "text.alignleft")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("备注（可选）", text: $note)
+                .font(.subheadline)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 46)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var accountPicker: some View {
+        Menu {
+            ForEach(accounts) { account in
+                Button {
+                    selectedAccount = account
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "wallet.pass.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(selectedAccount?.name ?? "账户")
-                            .font(.subheadline)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                    if account.id == selectedAccount?.id {
+                        Label(account.name, systemImage: "checkmark")
+                    } else {
+                        Text(account.name)
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 46)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                 }
-
-                Toggle(isOn: $isImpulse) {
-                    Text("冲动了")
-                        .font(.subheadline)
-                }
-                .tint(.brand)
-                .padding(.horizontal, 14)
-                .frame(height: 46)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
             }
-
+        } label: {
             HStack(spacing: 8) {
-                Image(systemName: "text.alignleft")
+                Image(systemName: "wallet.pass.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("备注（可选）", text: $note)
+                Text(selectedAccount?.name ?? "账户")
                     .font(.subheadline)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 14)
             .frame(height: 46)
@@ -304,34 +301,21 @@ struct RecordSheet: View {
     // MARK: - 保存
 
     private var saveButton: some View {
-        HStack(spacing: 10) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { showMore.toggle() }
-            } label: {
-                Image(systemName: showMore ? "chevron.down" : "ellipsis")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 52, height: 50)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                save()
-            } label: {
-                Text(usedEstimate ? "记下（约 \(AmountFormat.string(cents: amountCents))）" : "记下")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(canSave ? Color.brand : Color.gray.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSave)
+        Button {
+            save()
+        } label: {
+            Text(usedEstimate ? "记下（约 \(AmountFormat.string(cents: amountCents))）" : "记下")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(
+                    canSave ? Color.brand : Color.secondary.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 14)
+                )
+                .foregroundStyle(canSave ? Color.white : Color.secondary)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 20)
+        .buttonStyle(.plain)
+        .disabled(!canSave)
     }
 
     private var canSave: Bool {
@@ -345,16 +329,19 @@ struct RecordSheet: View {
         if selectedAccount == nil { selectedAccount = accounts.first }
     }
 
+    /// 切换分类时保留用户已经输入的金额，只在他没有手动改过时才应用预填。
     private func select(_ category: Category?) {
         selectedCategory = category
-        usedEstimate = false
         guard let category else {
             suggestion = .empty
-            inputYuan = 0
+            if !amountEdited { inputYuan = 0 }
             return
         }
         suggestion = (try? TransactionService(context: context).amountSuggestion(for: category)) ?? .empty
-        inputYuan = Int((suggestion.prefillCents ?? 0) / 100)
+        if !amountEdited {
+            inputYuan = Int((suggestion.prefillCents ?? 0) / 100)
+            usedEstimate = false
+        }
     }
 
     private func toggleKeypad() {
@@ -374,7 +361,6 @@ struct RecordSheet: View {
             date: date,
             note: trimmed.isEmpty ? nil : trimmed,
             isApproximateAmount: usedEstimate,
-            isImpulse: isImpulse ? true : nil,
             source: .manual,
             category: category,
             account: account

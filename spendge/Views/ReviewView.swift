@@ -11,7 +11,11 @@ struct ReviewView: View {
     @Query private var budgets: [Budget]
     @Query private var confirmations: [DayConfirmation]
 
+    @State private var monthAnchor = Date()
     @State private var coverage: MonthCoverage?
+    @State private var showMonthPicker = false
+
+    private let calendar = Calendar.current
 
     private struct DayStat: Identifiable {
         let id: Int
@@ -19,8 +23,20 @@ struct ReviewView: View {
         let hasRecord: Bool
     }
 
+    private var monthStart: Date {
+        calendar.dateInterval(of: .month, for: monthAnchor)?.start ?? monthAnchor
+    }
+
+    private var isCurrentMonth: Bool {
+        calendar.isDate(monthStart, equalTo: .now, toGranularity: .month)
+    }
+
+    private var monthTitle: String {
+        monthStart.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN")))
+    }
+
     private var monthTransactions: [Transaction] {
-        transactions.filter { Calendar.current.isDate($0.date, equalTo: .now, toGranularity: .month) }
+        transactions.filter { calendar.isDate($0.date, equalTo: monthStart, toGranularity: .month) }
     }
 
     private var expenseTransactions: [Transaction] {
@@ -28,9 +44,10 @@ struct ReviewView: View {
     }
 
     private var dayStats: [DayStat] {
-        let calendar = Calendar.current
-        // 只画到今天：未来的日期不是「缺口」，不该出现在图里
-        let dayCount = calendar.component(.day, from: .now)
+        let daysInMonth = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 30
+        // 当月只画到今天：未来的日期不是「缺口」
+        let dayCount = isCurrentMonth ? calendar.component(.day, from: .now) : daysInMonth
+
         var counts: [Int: Int] = [:]
         var recorded: Set<Int> = []
 
@@ -39,11 +56,11 @@ struct ReviewView: View {
             recorded.insert(day)
             counts[day, default: 0] += 1
         }
-        for item in confirmations where calendar.isDate(item.day, equalTo: .now, toGranularity: .month) {
+        for item in confirmations where calendar.isDate(item.day, equalTo: monthStart, toGranularity: .month) {
             recorded.insert(calendar.component(.day, from: item.day))
         }
 
-        return (1...dayCount).map { day in
+        return (1...max(dayCount, 1)).map { day in
             DayStat(id: day, count: counts[day] ?? 0, hasRecord: recorded.contains(day))
         }
     }
@@ -51,7 +68,7 @@ struct ReviewView: View {
     private var homemadeDays: Int {
         let days = expenseTransactions
             .filter { $0.category?.categoryCode == .grocery }
-            .map { Calendar.current.startOfDay(for: $0.date) }
+            .map { calendar.startOfDay(for: $0.date) }
         return Set(days).count
     }
 
@@ -74,7 +91,7 @@ struct ReviewView: View {
     }
 
     private var monthBudget: Budget? {
-        let comps = Calendar.current.dateComponents([.year, .month], from: .now)
+        let comps = calendar.dateComponents([.year, .month], from: monthStart)
         return budgets.first { $0.year == comps.year && $0.month == comps.month && $0.category == nil }
     }
 
@@ -86,27 +103,33 @@ struct ReviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 header
-                dietSection
-                domainSection
+                if !monthTransactions.isEmpty {
+                    dietSection
+                    if !domainRows.isEmpty { domainSection }
+                }
                 if monthBudget != nil { budgetSection }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 64)
-            .padding(.bottom, 48)
+            .padding(.top, 56)
+            .padding(.bottom, 96)
         }
         .scrollIndicators(.hidden)
         .background(Color(.systemGroupedBackground))
-        .overlay(alignment: .topLeading) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
+        .overlay(alignment: .bottomTrailing) {
+            monthButton
+        }
+        .sheet(isPresented: $showMonthPicker) {
+            MonthPickerSheet(selected: monthStart) { picked in
+                monthAnchor = picked
+                showMonthPicker = false
+            } onCancel: {
+                showMonthPicker = false
             }
-            .padding(.leading, 8)
-            .padding(.top, 8)
+            .presentationDetents([.medium])
+            .presentationCornerRadius(24)
         }
         .task { refresh() }
+        .onChange(of: monthAnchor) { _, _ in refresh() }
         .onChange(of: transactions.count) { _, _ in refresh() }
         .onChange(of: confirmations.count) { _, _ in refresh() }
     }
@@ -114,46 +137,88 @@ struct ReviewView: View {
     // MARK: - 这个月
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("这个月")
+        VStack(alignment: .leading, spacing: 10) {
+            Text(monthTitle)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-            if let coverage {
+            if let coverage, coverage.coveredDays > 0 {
                 Text("\(coverage.coveredDays) 天有你的记录")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                 Text("覆盖 \(Int(coverage.ratio * 100))%")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                Text("还没有数据")
+                Text("这个月还没有记录")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
             }
 
             sparkline
-                .padding(.top, 2)
+                .padding(.top, 6)
         }
     }
 
-    /// 静态柱状图：有记录的高度表示金额，缺口是 2pt 的细线。
+    /// 静态柱状图：柱高 = 当天几笔，缺口是 2pt 的细线。
     private var sparkline: some View {
-        HStack(alignment: .bottom, spacing: 1.5) {
-            ForEach(dayStats) { stat in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(stat.hasRecord ? Color.brand.opacity(0.8) : Color.secondary.opacity(0.16))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: barHeight(stat))
+        VStack(spacing: 6) {
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(dayStats) { stat in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(barColor(stat))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: barHeight(stat))
+                }
+            }
+            .frame(height: 32, alignment: .bottom)
+
+            HStack(spacing: 2) {
+                ForEach(dayStats) { stat in
+                    Text(dayLabel(stat.id))
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
-        .frame(height: 32, alignment: .bottom)
+    }
+
+    private func barColor(_ stat: DayStat) -> Color {
+        guard stat.hasRecord else { return Color.secondary.opacity(0.16) }
+        let isToday = isCurrentMonth && calendar.component(.day, from: .now) == stat.id
+        return Color.brand.opacity(isToday ? 1 : 0.6)
     }
 
     /// 柱高表示当天记了几笔——这根条讲的是记录密度，不是金额结构。
-    /// 金额会被房租这类固定大额压平，笔数不会。
     private func barHeight(_ stat: DayStat) -> CGFloat {
         guard stat.hasRecord else { return 2 }
         guard stat.count > 0 else { return 8 }
         return min(30, 8 + CGFloat(stat.count) * 7)
+    }
+
+    private func dayLabel(_ day: Int) -> String {
+        guard day == 1 || day % 5 == 0 else { return "" }
+        return "\(day)"
+    }
+
+    private var monthButton: some View {
+        Button {
+            showMonthPicker = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 13, weight: .medium))
+                Text(monthStart.formatted(.dateTime.month(.abbreviated).locale(Locale(identifier: "zh_CN"))))
+                    .font(.subheadline.weight(.medium))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .foregroundStyle(.primary)
+            .overlay(Capsule().stroke(Color.secondary.opacity(0.15), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 22)
+        .padding(.bottom, 26)
     }
 
     // MARK: - 吃的
@@ -202,7 +267,7 @@ struct ReviewView: View {
                 .font(.headline)
 
             if domainRows.isEmpty {
-                Text("本月还没有支出")
+                Text("这个月还没有支出")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
@@ -263,8 +328,49 @@ struct ReviewView: View {
     }
 
     private func refresh() {
-        let comps = Calendar.current.dateComponents([.year, .month], from: .now)
+        let comps = calendar.dateComponents([.year, .month], from: monthStart)
         coverage = try? TransactionService(context: context)
             .coverage(forMonth: comps.year ?? 2026, month: comps.month ?? 1)
+    }
+}
+
+/// 选择月份。只列最近 12 个月，够用且不用面对日历。
+private struct MonthPickerSheet: View {
+    let selected: Date
+    let onPick: (Date) -> Void
+    let onCancel: () -> Void
+
+    private var options: [Date] {
+        let calendar = Calendar.current
+        let base = calendar.startOfDay(for: .now)
+        return (0..<12).compactMap { calendar.date(byAdding: .month, value: -$0, to: base) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(options, id: \.self) { date in
+                Button {
+                    onPick(date)
+                } label: {
+                    HStack {
+                        Text(date.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN"))))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if Calendar.current.isDate(date, equalTo: selected, toGranularity: .month) {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.brand)
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("选择月份")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { onCancel() }
+                }
+            }
+        }
     }
 }
