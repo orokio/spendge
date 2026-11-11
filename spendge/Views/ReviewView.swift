@@ -14,6 +14,7 @@ struct ReviewView: View {
     @State private var monthAnchor = Date()
     @State private var coverage: MonthCoverage?
     @State private var showMonthPicker = false
+    @State private var selectedDomain: CategoryDomain?
 
     private let calendar = Calendar.current
 
@@ -99,9 +100,9 @@ struct ReviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 header
-                if !monthTransactions.isEmpty {
-                    dietSection
-                    if !domainRows.isEmpty { domainSection }
+                if !monthTransactions.isEmpty, !domainRows.isEmpty {
+                    domainSection
+                    domainDetailSection
                 }
                 if monthBudget != nil { budgetSection }
             }
@@ -118,7 +119,7 @@ struct ReviewView: View {
                 monthAnchor = picked
                 showMonthPicker = false
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.fraction(1.0 / 3.0)])
             .presentationCornerRadius(24)
             .presentationBackground(Color(.systemBackground))
         }
@@ -133,9 +134,9 @@ struct ReviewView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let coverage, coverage.coveredDays > 0 {
-                Text("\(coverage.coveredDays) 天有你的记录")
+                Text("有你 \(coverage.coveredDays) 天的记录")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
-                Text("覆盖 \(Int(coverage.ratio * 100))% · \(monthTitle)")
+                Text("\(monthTitle) · 覆盖 \(Int(coverage.ratio * 100))%")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
@@ -217,67 +218,65 @@ struct ReviewView: View {
 
     // MARK: - 吃的
 
-    private var dietSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("吃的")
-                .font(.headline)
-
-            HStack(spacing: 0) {
-                statColumn(value: "\(homemadeDays)", unit: "天", title: "买菜")
-                statColumn(value: "\(count(.takeout))", unit: "次", title: "外卖")
-                statColumn(value: "\(count(.dineout))", unit: "次", title: "下馆子")
-                statColumn(value: "\(count(.drink))", unit: "杯", title: "咖啡奶茶")
-            }
-        }
-    }
-
-    private func statColumn(value: String, unit: String, title: String) -> some View {
-        VStack(spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value)
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
-                Text(unit)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     // MARK: - 钱花在哪儿
 
     private var domainSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("钱花在哪儿")
                 .font(.headline)
 
-            if domainRows.isEmpty {
-                Text("这个月还没有支出")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                let maxCents = max(domainRows.first?.cents ?? 1, 1)
-                ForEach(domainRows, id: \.domain) { row in
+            let maxCents = max(domainRows.first?.cents ?? 1, 1)
+            ForEach(domainRows, id: \.domain) { row in
+                let selected = activeDomain == row.domain
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) { selectedDomain = row.domain }
+                } label: {
                     HStack(spacing: 12) {
                         Text(row.domain.displayName)
-                            .font(.subheadline)
+                            .font(.subheadline.weight(selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? Color.brand : Color.primary)
                             .frame(width: 44, alignment: .leading)
 
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
-                                Capsule().fill(Color.secondary.opacity(0.12))
+                                Capsule().fill(Color.secondary.opacity(0.10))
                                 Capsule()
-                                    .fill(Color.brand.opacity(0.75))
-                                    .frame(width: max(geo.size.width * Double(row.cents) / Double(maxCents), 6))
+                                    .fill(selected ? Color.brand : Color.brand.opacity(0.35))
+                                    .frame(width: max(geo.size.width * Double(row.cents) / Double(maxCents), 5))
                             }
                         }
                         .frame(height: 5)
 
                         Text(AmountFormat.string(cents: row.cents))
+                            .font(.caption.weight(selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? Color.brand : Color.secondary)
+                            .frame(width: 72, alignment: .trailing)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// 选中领域的细分：只有吃、用这类多分类的领域才有意义，单分类领域显示一条
+    private var domainDetailSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let activeDomain {
+                Text(activeDomain.displayName)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                ForEach(activeDomainStats) { stat in
+                    HStack {
+                        Text(stat.name)
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(stat.count) 次")
                             .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(AmountFormat.string(cents: stat.cents))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .frame(width: 72, alignment: .trailing)
                     }
@@ -286,7 +285,29 @@ struct ReviewView: View {
         }
     }
 
-    // MARK: - 预算
+    private var activeDomain: CategoryDomain? {
+        selectedDomain ?? domainRows.first?.domain
+    }
+
+    private var activeDomainStats: [CategoryStat] {
+        guard let activeDomain else { return [] }
+        var sums: [UUID: (name: String, count: Int, cents: Int64)] = [:]
+        for txn in expenseTransactions where (txn.category?.domain ?? .other) == activeDomain {
+            guard let category = txn.category else { continue }
+            let current = sums[category.id] ?? (category.name, 0, 0)
+            sums[category.id] = (current.name, current.count + 1, current.cents + txn.amountCents)
+        }
+        return sums
+            .map { CategoryStat(id: $0.key, name: $0.value.name, count: $0.value.count, cents: $0.value.cents) }
+            .sorted { $0.cents > $1.cents }
+    }
+
+    private struct CategoryStat: Identifiable {
+        let id: UUID
+        let name: String
+        let count: Int
+        let cents: Int64
+    }
 
     private var budgetSection: some View {
         VStack(alignment: .leading, spacing: 10) {
