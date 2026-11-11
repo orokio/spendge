@@ -24,7 +24,7 @@ struct RecordPage: View {
     @State private var showChips = false
     @StateObject private var transcriber = SpeechTranscriber()
     @State private var dragOffset: CGFloat = 0
-    @FocusState private var noteFocused: Bool
+    @State private var noteEditing = false
 
     private let calendar = Calendar.current
 
@@ -104,24 +104,8 @@ struct RecordPage: View {
                             .padding(.top, 24)
                         chipRow
                             .padding(.top, 10)
-                        // 输入备注时收起数字键盘，把位置让给系统键盘和备注框
-                        if noteFocused {
-                            HStack {
-                                Spacer()
-                                Button {
-                                    noteFocused = false
-                                } label: {
-                                    Text("完成")
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(Color.brand)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 8)
-                                        .background(Color.brand.opacity(0.1), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .frame(height: 44)
-                        } else {
+                        // 输入备注时收起数字键盘，把空间让给系统键盘和备注框
+                        if !noteEditing {
                             keypad
                         }
                         if let voiceHint {
@@ -146,7 +130,7 @@ struct RecordPage: View {
         .background(
             Color(.systemBackground)
                 .ignoresSafeArea()
-                .onTapGesture { noteFocused = false }
+                .onTapGesture { noteEditing = false }
         )
         .offset(x: max(0, dragOffset))
         .gesture(
@@ -394,22 +378,29 @@ struct RecordPage: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, 3)
-            TextField("备注（可选）", text: $note, axis: .vertical)
-                .font(.subheadline)
-                .lineLimit(2...8)
-                .focused($noteFocused)
-                .submitLabel(.done)
-                .onSubmit { noteFocused = false }
+
+            ZStack(alignment: .topLeading) {
+                if note.isEmpty {
+                    Text("备注（可选）")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                }
+                NoteTextView(text: $note, isEditing: $noteEditing)
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+        // 整块灰底都能点进输入，而不是只有第一行
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { noteEditing = true })
     }
 
     /// 语音入口：点一下开始，再点一下结束；说话内容实时写进备注。
     private var micButton: some View {
         Button {
-            noteFocused = false
+            noteEditing = false
             transcriber.toggle()
         } label: {
             Image(systemName: transcriber.isListening ? "waveform" : "mic.fill")
