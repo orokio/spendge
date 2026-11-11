@@ -17,23 +17,8 @@ struct TodayView: View {
         transactions.filter { Calendar.current.isDateInToday($0.date) }
     }
 
-    /// 今天没有记录时，显示最近一天，避免首页一片空白、让人以为数据丢了。
-    private var displayDay: Date {
-        if !todayTransactions.isEmpty { return Calendar.current.startOfDay(for: .now) }
-        guard let latest = transactions.first?.date else { return Calendar.current.startOfDay(for: .now) }
-        return Calendar.current.startOfDay(for: latest)
-    }
-
-    private var displayedTransactions: [Transaction] {
-        transactions.filter { Calendar.current.isDate($0.date, inSameDayAs: displayDay) }
-    }
-
-    private var isShowingToday: Bool {
-        Calendar.current.isDateInToday(displayDay)
-    }
-
     private var todayExpenseCents: Int64 {
-        displayedTransactions.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amountCents }
+        todayTransactions.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amountCents }
     }
 
     private var confirmedToday: Bool {
@@ -94,7 +79,7 @@ struct TodayView: View {
             // 一行：日期靠左，「今天没花钱」靠右
             HStack(alignment: .firstTextBaseline) {
                 HStack(spacing: 6) {
-                    Text(displayDay.formatted(
+                    Text(Date.now.formatted(
                         .dateTime.month(.abbreviated).day().weekday(.abbreviated)
                             .locale(Locale(identifier: "zh_CN"))
                     ))
@@ -108,7 +93,7 @@ struct TodayView: View {
 
                 Spacer(minLength: 12)
 
-                if isShowingToday, todayTransactions.isEmpty {
+                if todayTransactions.isEmpty {
                     Button {
                         toggleNoSpend()
                     } label: {
@@ -125,9 +110,9 @@ struct TodayView: View {
                 }
             }
 
-            if !displayedTransactions.isEmpty {
+            if !todayTransactions.isEmpty {
                 VStack(spacing: 16) {
-                    ForEach(displayedTransactions) { txn in
+                    ForEach(todayTransactions) { txn in
                         row(txn)
                     }
                 }
