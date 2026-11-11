@@ -57,20 +57,22 @@
    | code | 名称 | 内部领域 |
    | --- | --- | --- |
    | `takeout` | 点外卖 | 吃 |
+   | `dineout` | 下馆子 | 吃 |
    | `grocery` | 买菜食材 | 吃 |
    | `drink` | 奶咖茶饮 | 吃 |
    | `snack` | 零食水果 | 吃 |
-   | `outing` | 出行游玩 | 行 |
-   | `dineout` | 下馆子 | 吃 |
    | `daily` | 生活日用 | 用 |
-   | `housing` | 房租水电 | 住 |
    | `wear` | 衣帽鞋袜 | 用 |
-   | `subscription` | 订阅话费 | — |
-   | `social` | 人情往来 | 人情 |
-   | `health` | 医疗保健 | 健康 |
    | `gear` | 装备器材 | 用 |
    | `appliance` | 家具家电 | 住 |
+   | `health` | 医疗保健 | 健康 |
+   | `housing` | 房租水电 | 住 |
+   | `outing` | 出行游玩 | 行 |
+   | `subscription` | 订阅话费 | — |
+   | `social` | 人情往来 | 人情 |
    | `other_expense` | 其他 | — |
+
+   > 三段分组：吃吃喝喝 / 居家与穿戴 / 住行与账单；sortOrder 按 1x / 2x / 3x 分段落，段间画短横线。
 
    > 旧 `transport` + `fun` 迁移到 `outing`，旧 `shopping` 迁移到 `gear`；迁移函数保留已有账单，不删库。
 

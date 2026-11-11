@@ -1,9 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// 记一笔：半屏面板。
-/// 键盘常驻，分类做成左侧竖向标签列——输入金额不再多一步。
-struct RecordSheet: View {
+/// 记一笔：整页。键盘常驻，分类在左侧竖列；记下即返回，右滑也能返回。
+struct RecordPage: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -20,7 +19,7 @@ struct RecordSheet: View {
     @State private var usedEstimate = false
     @State private var date = Date.now
     @State private var note = ""
-    @State private var detent: PresentationDetent = .fraction(0.73)
+    @State private var dragOffset: CGFloat = 0
     @FocusState private var noteFocused: Bool
 
     private let calendar = Calendar.current
@@ -35,39 +34,80 @@ struct RecordSheet: View {
         allAccounts.filter { !$0.isArchived }
     }
 
+    /// 固定顺序：sortOrder 决定位置，每 10 个为一组，组间画一条短横线。
     private var categories: [Category] {
-        let start = calendar.date(byAdding: .day, value: -30, to: .now) ?? .now
-        var counts: [UUID: Int] = [:]
-        for txn in recentTransactions where txn.date >= start {
-            guard let id = txn.category?.id else { continue }
-            counts[id, default: 0] += 1
-        }
-        return allCategories
+        allCategories
             .filter { $0.kind == kind && !$0.isArchived }
-            .sorted { lhs, rhs in
-                let l = counts[lhs.id] ?? 0
-                let r = counts[rhs.id] ?? 0
-                return l == r ? lhs.sortOrder < rhs.sortOrder : l > r
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var railRows: [RailRow] {
+        var rows: [RailRow] = []
+        var lastGroup: Int?
+        for category in categories {
+            let group = category.sortOrder / 10
+            if let lastGroup, lastGroup != group {
+                rows.append(.divider)
             }
+            rows.append(.category(category))
+            lastGroup = group
+        }
+        return rows
+    }
+
+    private enum RailRow: Identifiable {
+        case category(Category)
+        case divider
+
+        var id: String {
+            switch self {
+            case .category(let category): return category.id.uuidString
+            case .divider: return "divider-(UUID().uuidString)"
+            }
+        }
     }
 
     private var amountCents: Int64 { Int64(inputYuan) * 100 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("类型", selection: $kind) {
-                Text("支出").tag(TransactionKind.expense)
-                Text("收入").tag(TransactionKind.income)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 20)
-            .padding(.top, 34)
-            .onChange(of: kind) { _, _ in
-                amountEdited = false
-                select(categories.first)
-            }
+        GeometryReader { geo in
+            // 显式算高度：让分类列真正铺到底，而不是被内容撑住
+            let columnHeight = max(260, geo.size.height - 372)
 
-            ScrollView {
+            VStack(spacing: 0) {
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, height: 40)
+                            .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+                    Text("记一笔")
+                        .font(.headline)
+                    Spacer()
+                    Color.clear.frame(width: 40, height: 40)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+
+                Picker("类型", selection: $kind) {
+                    Text("支出").tag(TransactionKind.expense)
+                    Text("收入").tag(TransactionKind.income)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 20)
+                .padding(.top, 28)
+                .onChange(of: kind) { _, _ in
+                    amountEdited = false
+                    select(categories.first)
+                }
+
                 VStack(spacing: 12) {
                     dateAxis
                     amountView
@@ -75,28 +115,39 @@ struct RecordSheet: View {
 
                     HStack(alignment: .top, spacing: 14) {
                         tagRail
-                        keypad
+                            .frame(height: columnHeight)
+
+                        VStack(spacing: 10) {
+                            keypad
+                            Spacer(minLength: 8)
+                            noteField
+                            saveButton
+                        }
+                        .frame(height: columnHeight, alignment: .top)
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
-                .padding(.bottom, 8)
-            }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
 
-            VStack(spacing: 10) {
-                noteField
-                saveButton
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 20)
         }
         .background(Color(.systemBackground))
-        .presentationDetents([.fraction(0.73), .large], selection: $detent)
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(28)
+        .offset(x: max(0, dragOffset))
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onChanged { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    dragOffset = max(0, value.translation.width)
+                }
+                .onEnded { value in
+                    if value.translation.width > 90 {
+                        dismiss()
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { dragOffset = 0 }
+                    }
+                }
+        )
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -155,30 +206,48 @@ struct RecordSheet: View {
 
     private var tagRail: some View {
         ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 6) {
-                ForEach(categories) { category in
-                    let selected = selectedCategory?.id == category.id
-                    Button {
-                        select(category)
-                    } label: {
-                        Text(category.name)
-                            .font(.system(size: 13))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(
-                                selected ? Color.brand : Color(.systemGray6),
-                                in: RoundedRectangle(cornerRadius: 9)
-                            )
-                            .foregroundStyle(selected ? .white : .primary)
+            VStack(spacing: 5) {
+                ForEach(Array(railRows.enumerated()), id: \.offset) { _, row in
+                    switch row {
+                    case .divider:
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(width: 28, height: 1)
+                            .padding(.vertical, 5)
+                    case .category(let category):
+                        let selected = selectedCategory?.id == category.id
+                        Button {
+                            select(category)
+                        } label: {
+                            Text(category.name)
+                                .font(.system(size: 13))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(
+                                    selected ? Color.brand : Color(.systemGray6),
+                                    in: RoundedRectangle(cornerRadius: 9)
+                                )
+                                .foregroundStyle(selected ? .white : .primary)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
         .frame(width: 96)
-        .frame(maxHeight: 216)
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            // 底部渐隐：暗示还可以往下滚
+            LinearGradient(
+                colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 18)
+            .allowsHitTesting(false)
+        }
     }
 
     // MARK: - 金额
@@ -193,11 +262,8 @@ struct RecordSheet: View {
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
                 .contentTransition(.numericText())
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var chipRow: some View {

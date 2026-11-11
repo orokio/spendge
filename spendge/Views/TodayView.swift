@@ -38,8 +38,8 @@ struct TodayView: View {
             fab
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $showSheet) {
-            RecordSheet()
+        .fullScreenCover(isPresented: $showSheet) {
+            RecordPage()
         }
         .task { refresh() }
         .onChange(of: transactions.count) { _, _ in refresh() }
