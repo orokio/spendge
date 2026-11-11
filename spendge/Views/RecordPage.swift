@@ -120,7 +120,26 @@ struct RecordPage: View {
                             .padding(.top, 24)
                         chipRow
                             .padding(.top, 10)
-                        keypad
+                        // 输入备注时收起数字键盘，把位置让给系统键盘和备注框
+                        if noteFocused {
+                            HStack {
+                                Spacer()
+                                Button {
+                                    noteFocused = false
+                                } label: {
+                                    Text("完成")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(Color.brand)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(Color.brand.opacity(0.1), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .frame(height: 44)
+                        } else {
+                            keypad
+                        }
                         if let voiceHint {
                             Text(voiceHint)
                                 .font(.caption2)
