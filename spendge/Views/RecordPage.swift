@@ -430,13 +430,16 @@ struct RecordPage: View {
         note = text
 
         let parsed = VoiceParser.parse(text)
-        guard let code = parsed.categoryCode,
-              let category = allCategories.first(where: { $0.categoryCode == code && $0.kind == kind }) else {
-            // 分类没认出来时，数字很可能是商品型号（如「苹果12」），不采信
-            return
-        }
-        select(category)
-        if let yuan = parsed.yuan {
+
+        // 认不出分类就落到「其他」，不留着上一次的选择让人误会
+        let matched = parsed.categoryCode.flatMap { code in
+            allCategories.first { $0.categoryCode == code && $0.kind == kind }
+        } ?? allCategories.first { $0.categoryCode == .otherExpense && $0.kind == kind }
+
+        if let matched { select(matched) }
+
+        // 金额：有正经分类就直接用；只落到「其他」时，必须句子里提到了钱
+        if let yuan = parsed.yuan, parsed.categoryCode != nil || parsed.hasMoneyCue {
             inputYuan = yuan
             amountEdited = true
         }
@@ -455,9 +458,9 @@ struct RecordPage: View {
         } else if parsed.categoryCode != nil {
             showHint("分类填好了，金额确认一下")
         } else if parsed.yuan != nil {
-            showHint("金额填好了，分类帮我点一下")
+            showHint("金额填好了，分类先放「其他」")
         } else {
-            showHint("没听出分类和金额，帮我点一下")
+            showHint("没听出来，分类先放「其他」，改一下")
         }
     }
 

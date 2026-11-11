@@ -6,6 +6,9 @@ enum VoiceParser {
     struct Result {
         var categoryCode: CategoryCode?
         var yuan: Int?
+        /// 句子里有没有明确的「钱」的线索（块 / 元 / 花 / 付…）。
+        /// 用来区分「苹果12」的 12 是型号、「花了50」的 50 是金额。
+        var hasMoneyCue = false
 
         var isEmpty: Bool { categoryCode == nil && yuan == nil }
     }
@@ -40,6 +43,7 @@ enum VoiceParser {
         }
 
         result.yuan = amount(from: normalized)
+        result.hasMoneyCue = ["块", "元", "钱", "花", "付"].contains { normalized.contains($0) }
         return result
     }
 
