@@ -84,16 +84,12 @@ struct TodayView: View {
     // MARK: - 今天
 
     private var todayList: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
+            dateHeader
+
             if todayTransactions.isEmpty {
                 emptyState
             } else {
-                if todayTransactions.count > 1 || todayExpenseCents > 0 {
-                    Text("今天 · \(AmountFormat.string(cents: todayExpenseCents))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
                 VStack(spacing: 16) {
                     ForEach(todayTransactions) { txn in
                         row(txn)
@@ -103,6 +99,22 @@ struct TodayView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
+    }
+
+    /// 日期与当天合计：灰色、与列表左对齐。
+    private var dateHeader: some View {
+        HStack(spacing: 6) {
+            Text(Date.now.formatted(
+                .dateTime.month(.abbreviated).day().weekday(.abbreviated)
+                    .locale(Locale(identifier: "zh_CN"))
+            ))
+            if todayExpenseCents > 0 {
+                Text("·")
+                Text(AmountFormat.string(cents: todayExpenseCents))
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
     }
 
     private func row(_ txn: Transaction) -> some View {
