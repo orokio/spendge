@@ -56,7 +56,7 @@ struct TodayView: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: 8) {
             highlighted(insight?.title ?? "正在看你的账本…")
-                .font(.system(size: 26, weight: .medium, design: .rounded))
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .fixedSize(horizontal: false, vertical: true)
                 .transition(.opacity.combined(with: .offset(y: 6)))
 
@@ -68,8 +68,8 @@ struct TodayView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
-        .padding(.top, 8)
-        .padding(.bottom, 32)
+        .padding(.top, 56)
+        .padding(.bottom, 28)
     }
 
     // MARK: - 今天
@@ -174,7 +174,7 @@ struct TodayView: View {
     // MARK: - FAB
 
     private var fab: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .bottom, spacing: 12) {
             // 回看入口：小一号、低对比，作为手势的兜底
             Button(action: onOpenReview) {
                 Image(systemName: "chart.bar.xaxis")
@@ -185,6 +185,7 @@ struct TodayView: View {
                     .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
+            .frame(height: 58, alignment: .bottom)
 
             Button {
                 openSheet()
