@@ -131,20 +131,19 @@ struct ReviewView: View {
     // MARK: - 这个月
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(monthTitle)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
+        VStack(alignment: .leading, spacing: 8) {
             if let coverage, coverage.coveredDays > 0 {
                 Text("\(coverage.coveredDays) 天有你的记录")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
-                Text("覆盖 \(Int(coverage.ratio * 100))%")
+                Text("覆盖 \(Int(coverage.ratio * 100))% · \(monthTitle)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 Text("这个月还没有记录")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
+                Text(monthTitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             sparkline

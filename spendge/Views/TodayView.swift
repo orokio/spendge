@@ -55,20 +55,6 @@ struct TodayView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Spacer()
-                Button(action: onOpenReview) {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, height: 40)
-                        .contentShape(Rectangle())
-                }
-                .padding(.top, 2)
-                .padding(.trailing, -10)
-            }
-            .padding(.bottom, -4)
-
             highlighted(insight?.title ?? "正在看你的账本…")
                 .font(.system(size: 26, weight: .medium, design: .rounded))
                 .fixedSize(horizontal: false, vertical: true)
@@ -188,15 +174,29 @@ struct TodayView: View {
     // MARK: - FAB
 
     private var fab: some View {
-        Button {
-            openSheet()
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background(Color.brand, in: Circle())
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+        HStack(spacing: 12) {
+            // 回看入口：小一号、低对比，作为手势的兜底
+            Button(action: onOpenReview) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 46, height: 46)
+                    .background(.regularMaterial, in: Circle())
+                    .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                openSheet()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(Color.brand, in: Circle())
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.trailing, 22)
         .padding(.bottom, 26)
