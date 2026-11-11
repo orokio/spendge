@@ -75,6 +75,11 @@ struct RecordPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Text("记一笔")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 14)
+
             HStack(spacing: 0) {
                 kindSegment(.expense, title: "支出")
                 kindSegment(.income, title: "收入")
@@ -82,7 +87,7 @@ struct RecordPage: View {
             .padding(3)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.top, 12)
 
             dateAxis
                 .padding(.horizontal, 20)
