@@ -1,9 +1,7 @@
 import Foundation
 import SwiftData
 
-/// 首屏那句话。
-/// 规则：事实 + 一个对比 + 一句轻判断。数字全部确定性计算，不经过模型。
-/// 只用描述句和邀请句，不用评判句和催促句。
+/// 首屏那句话：大句给情绪，小句给事实。
 struct Insight: Equatable {
     let title: String
     let detail: String?
@@ -20,58 +18,136 @@ final class InsightService {
     }
 
     func headline() throws -> Insight {
-        let now = Date.now
-        let monthStart = calendar.dateInterval(of: .month, for: now)?.start ?? now
-        let weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: weekStart) ?? weekStart
+        let today = try transactions(from: calendar.startOfDay(for: .now), to: .now)
+        let monthStart = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+        let totalCount = try context.fetchCount(FetchDescriptor<Transaction>())
 
-        // 还没有任何记录时，给一句开场，而不是报缺口
-        let monthTransactions = try context.fetch(FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= monthStart }
-        ))
-        if monthTransactions.isEmpty {
+        // 1. 今天有记录：按「今天发生了什么」说一句
+        if !today.isEmpty {
+            return todayInsight(today)
+        }
+
+        // 2. 今天确认过没花钱
+        if try isConfirmedToday() {
+            return Insight(title: "今天没花钱", detail: "也是一种过法")
+        }
+
+        // 3. 刚开始用：先别谈数据
+        if totalCount < 5 {
             return Insight(title: "从今天开始，它会越来越懂你", detail: nil)
         }
 
-        let takeoutThisWeek = try count(.takeout, from: weekStart, to: now)
-        let takeoutLastWeek = try count(.takeout, from: lastWeekStart, to: weekStart)
-        let homemadeDays = try distinctDays(.grocery, from: monthStart, to: now)
-        let drinkCount = try count(.drink, from: monthStart, to: now)
-
-        // 1. 本周 vs 上周（对比优先：用户自己记不住的量）
-        if takeoutLastWeek > 0 || takeoutThisWeek > 0 {
-            if takeoutThisWeek == 0, takeoutLastWeek > 0 {
-                return Insight(title: "这周你还没点外卖", detail: "上周是 \(takeoutLastWeek) 次")
-            }
-            if takeoutThisWeek > 0, takeoutThisWeek != takeoutLastWeek, takeoutLastWeek > 0 {
-                let diff = takeoutThisWeek - takeoutLastWeek
-                let word = diff > 0 ? "多" : "少"
-                return Insight(
-                    title: "这周点了 \(takeoutThisWeek) 次外卖，比上周\(word) \(abs(diff)) 次",
-                    detail: drinkCount > 0 ? "本月咖啡奶茶 \(drinkCount) 杯" : nil
-                )
-            }
+        // 4. 有缺口：说成"有些天没记上"，不报天数
+        let coverage = try coverage(forMonth: calendar.component(.month, from: .now),
+                                    year: calendar.component(.year, from: .now))
+        if coverage.elapsedDays - coverage.coveredDays >= 3 {
+            return Insight(title: "有些天没记上", detail: "想补的时候补一下就好")
         }
 
-        // 2. 缺口（主语是系统，不是用户的过失）
-        let coverage = try TransactionService(context: context, calendar: calendar)
-            .coverage(forMonth: yearOf(now), month: monthOf(now))
-        let missing = coverage.elapsedDays - coverage.coveredDays
-        if missing >= 3 {
+        // 5. 兜底：本周与上周的外卖对比，数字放在小字里
+        return try weeklyInsight(monthStart: monthStart)
+    }
+
+    // MARK: - 今天的句子
+
+    private func todayInsight(_ transactions: [Transaction]) -> Insight {
+        // 发薪日单独说
+        if transactions.contains(where: { $0.category?.categoryCode == .salary }) {
+            return Insight(title: "发薪日快乐", detail: "这个月慢慢花")
+        }
+
+        let takeoutCount = transactions.filter { $0.category?.categoryCode == .takeout }.count
+        if takeoutCount >= 2 {
+            return Insight(title: "今天点了 \(takeoutCount) 次外卖", detail: "偶尔这样，也没关系")
+        }
+
+        // 取今天最有「事」的一笔：优先非收入、有分类的
+        let candidate = transactions.first { $0.category != nil } ?? transactions[0]
+        guard let code = candidate.category?.categoryCode else {
+            return Insight(title: "记下了", detail: nil)
+        }
+        return copy(for: code)
+    }
+
+    /// 每个分类两句话，按日期轮换，避免连着几天说一模一样的话。
+    private func copy(for code: CategoryCode) -> Insight {
+        let options: [(String, String?)]
+        switch code {
+        case .takeout:
+            options = [("今天吃得简单", "偶尔这样也挺好"), ("这顿解决了，省下不少时间", nil)]
+        case .grocery:
+            options = [("买了菜", "厨房今晚有动静了"), ("提着菜回来的路上，日子挺具体", nil)]
+        case .dineout:
+            options = [("今天在外面吃了一顿", nil), ("下馆子的快乐，值得记一笔", nil)]
+        case .drink:
+            options = [("一杯在手，慢慢来", nil), ("今天的甜，是这杯给的", nil)]
+        case .snack:
+            options = [("给自己买了点甜", nil), ("嘴上有事做，心里就踏实些", nil)]
+        case .outing:
+            options = [("出门了", "路上总会遇到点新鲜事"), ("今天走的路比平时多", nil)]
+        case .housing:
+            options = [("该交的都交完了", "踏实"), ("这些钱，换的是安稳", nil)]
+        case .daily:
+            options = [("把日子一点点补齐", nil), ("这些小东西，撑起了日常", nil)]
+        case .wear:
+            options = [("添了件新东西", nil), ("穿起来应该不错", nil)]
+        case .gear:
+            options = [("又多了件趁手的家伙", nil), ("工具到位，事情就好办了", nil)]
+        case .appliance:
+            options = [("家里更像家了", nil), ("添置完，屋子会舒服一点", nil)]
+        case .subscription:
+            options = [("该续的都续上了", nil), ("这些是无声的开销", nil)]
+        case .social:
+            options = [("人情往来", "花出去的总会回来"), ("该到的心意到了", nil)]
+        case .health:
+            options = [("照顾好自己这件事，值得", nil), ("身体这笔账，先记上", nil)]
+        case .otherExpense:
+            options = [("记下了", nil), ("有些开销说不清，也没关系", nil)]
+        default:
+            options = [("有进账", "安心一点"), ("今天有笔收入", nil)]
+        }
+
+        let index = calendar.ordinality(of: .day, in: .year, for: .now) ?? 0
+        let choice = options[index % options.count]
+        return Insight(title: choice.0, detail: choice.1)
+    }
+
+    // MARK: - 兜底：本周与上周
+
+    private func weeklyInsight(monthStart: Date) throws -> Insight {
+        let now = Date.now
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: weekStart) ?? weekStart
+
+        let thisWeek = try count(.takeout, from: weekStart, to: now)
+        let lastWeek = try count(.takeout, from: lastWeekStart, to: weekStart)
+
+        if lastWeek > 0 {
+            let diff = thisWeek - lastWeek
+            if diff == 0 {
+                return Insight(title: "这周和上周一样，点了 \(thisWeek) 次外卖", detail: nil)
+            }
             return Insight(
-                title: "这 \(missing) 天我还没有你的记录",
-                detail: "本月覆盖 \(Int(coverage.ratio * 100))%"
+                title: "这周外卖比上周\(diff > 0 ? "多" : "少")了 \(abs(diff)) 次",
+                detail: "上周 \(lastWeek) 次，这周 \(thisWeek) 次"
             )
         }
 
-        // 4. 兜底：总量
-        return Insight(
-            title: "这个月你记了 \(monthTransactions.count) 笔",
-            detail: coverage.coveredDays > 0 ? "覆盖 \(coverage.coveredDays) 天" : nil
-        )
+        let monthCount = try context.fetchCount(FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.date >= monthStart }
+        ))
+        return Insight(title: "这个月记了 \(monthCount) 笔", detail: "慢慢来")
     }
 
     // MARK: - 查询
+
+    private func transactions(from start: Date, to end: Date) throws -> [Transaction] {
+        let descriptor = FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.date >= start && $0.date <= end },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        return try context.fetch(descriptor)
+    }
 
     private func count(_ code: CategoryCode, from start: Date, to end: Date) throws -> Int {
         let raw = code.rawValue
@@ -81,20 +157,17 @@ final class InsightService {
         return try context.fetchCount(descriptor)
     }
 
-    private func distinctDays(_ code: CategoryCode, from start: Date, to end: Date) throws -> Int {
-        let raw = code.rawValue
-        let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= start && $0.date < end && $0.category?.code == raw }
+    private func isConfirmedToday() throws -> Bool {
+        let start = calendar.startOfDay(for: .now)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return false }
+        let descriptor = FetchDescriptor<DayConfirmation>(
+            predicate: #Predicate { $0.day >= start && $0.day < end }
         )
-        let days = try context.fetch(descriptor).map { calendar.startOfDay(for: $0.date) }
-        return Set(days).count
+        return try context.fetchCount(descriptor) > 0
     }
 
-    private func yearOf(_ date: Date) -> Int {
-        calendar.component(.year, from: date)
-    }
-
-    private func monthOf(_ date: Date) -> Int {
-        calendar.component(.month, from: date)
+    private func coverage(forMonth month: Int, year: Int) throws -> MonthCoverage {
+        try TransactionService(context: context, calendar: calendar)
+            .coverage(forMonth: year, month: month)
     }
 }

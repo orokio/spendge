@@ -38,11 +38,12 @@ struct RootView: View {
         .background {
             LinearGradient(
                 stops: [
-                    .init(color: Color.brand.opacity(0.22), location: 0),
-                    .init(color: Color.brand.opacity(0.16), location: 0.12),
-                    .init(color: Color.brand.opacity(0.09), location: 0.26),
-                    .init(color: Color.brand.opacity(0.03), location: 0.40),
-                    .init(color: Color.brand.opacity(0), location: 0.52),
+                    .init(color: Color.brand.opacity(0.20), location: 0),
+                    .init(color: Color.brand.opacity(0.15), location: 0.10),
+                    .init(color: Color.brand.opacity(0.09), location: 0.24),
+                    .init(color: Color.brand.opacity(0.04), location: 0.40),
+                    .init(color: Color.brand.opacity(0.012), location: 0.58),
+                    .init(color: Color.brand.opacity(0), location: 0.74),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
