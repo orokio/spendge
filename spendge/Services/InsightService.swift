@@ -53,15 +53,7 @@ final class InsightService {
             }
         }
 
-        // 2. 生活结构
-        if homemadeDays > 0 {
-            return Insight(
-                title: "这个月你买了 \(homemadeDays) 天菜",
-                detail: takeoutThisWeek > 0 ? "这周还有 \(takeoutThisWeek) 次外卖" : nil
-            )
-        }
-
-        // 3. 缺口（主语是系统，不是用户的过失）
+        // 2. 缺口（主语是系统，不是用户的过失）
         let coverage = try TransactionService(context: context, calendar: calendar)
             .coverage(forMonth: yearOf(now), month: monthOf(now))
         let missing = coverage.elapsedDays - coverage.coveredDays
