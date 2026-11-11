@@ -172,6 +172,10 @@ struct RecordPage: View {
             guard kind != value else { return }
             amountEdited = false
             kind = value
+            // 支出与收入之间切换时，备注和语音提示都不再适用
+            note = ""
+            noteEditing = false
+            voiceHint = nil
             select(categories.first)
         } label: {
             Text(title)
