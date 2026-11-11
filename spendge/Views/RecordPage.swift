@@ -72,7 +72,7 @@ struct RecordPage: View {
     var body: some View {
         GeometryReader { geo in
             // 显式算高度：让分类列真正铺到底，而不是被内容撑住
-            let columnHeight = max(260, geo.size.height - 372)
+            let columnHeight: CGFloat? = nil
 
             VStack(spacing: 0) {
                 HStack {
@@ -113,23 +113,24 @@ struct RecordPage: View {
                     amountView
                     if !suggestion.chips.isEmpty { chipRow }
 
+                    Spacer(minLength: 8)
+
                     HStack(alignment: .top, spacing: 14) {
                         tagRail
-                            .frame(height: columnHeight)
-
                         VStack(spacing: 10) {
                             keypad
                             Spacer(minLength: 8)
                             noteField
                             saveButton
                         }
-                        .frame(height: columnHeight, alignment: .top)
                     }
+                    .frame(maxHeight: .infinity)
+
+                    Spacer(minLength: 8)
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
-
-                Spacer(minLength: 0)
             }
         }
         .background(Color(.systemBackground))

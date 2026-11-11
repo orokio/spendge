@@ -85,11 +85,41 @@ struct TodayView: View {
 
     private var todayList: some View {
         VStack(alignment: .leading, spacing: 16) {
-            dateHeader
+            // 一行：日期靠左，「今天没花钱」靠右
+            HStack(alignment: .firstTextBaseline) {
+                HStack(spacing: 6) {
+                    Text(Date.now.formatted(
+                        .dateTime.month(.abbreviated).day().weekday(.abbreviated)
+                            .locale(Locale(identifier: "zh_CN"))
+                    ))
+                    if todayExpenseCents > 0 {
+                        Text("·")
+                        Text(AmountFormat.string(cents: todayExpenseCents))
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
-            if todayTransactions.isEmpty {
-                emptyState
-            } else {
+                Spacer(minLength: 12)
+
+                if todayTransactions.isEmpty {
+                    Button {
+                        toggleNoSpend()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 15))
+                            Text("今天没花钱")
+                                .font(.footnote)
+                        }
+                        .foregroundStyle(confirmedToday ? Color.brand : Color.secondary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if !todayTransactions.isEmpty {
                 VStack(spacing: 16) {
                     ForEach(todayTransactions) { txn in
                         row(txn)
@@ -99,22 +129,6 @@ struct TodayView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
-    }
-
-    /// 日期与当天合计：灰色、与列表左对齐。
-    private var dateHeader: some View {
-        HStack(spacing: 6) {
-            Text(Date.now.formatted(
-                .dateTime.month(.abbreviated).day().weekday(.abbreviated)
-                    .locale(Locale(identifier: "zh_CN"))
-            ))
-            if todayExpenseCents > 0 {
-                Text("·")
-                Text(AmountFormat.string(cents: todayExpenseCents))
-            }
-        }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
     }
 
     private func row(_ txn: Transaction) -> some View {
@@ -143,27 +157,6 @@ struct TodayView: View {
                 .foregroundStyle(txn.kind == .income ? Color.income : .primary)
         }
         .contentShape(Rectangle())
-    }
-
-    /// 空状态只给一个动作，不再同时出现「今天还没记」和「今天没花钱」。
-    private var emptyState: some View {
-        Button {
-            toggleNoSpend()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18))
-                    .foregroundStyle(confirmedToday ? Color.brand : Color.secondary.opacity(0.45))
-                Text("今天没花钱")
-                    .font(.subheadline)
-                    .foregroundStyle(confirmedToday ? Color.brand : .secondary)
-                Spacer()
-            }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 2)
     }
 
     /// 数字用品牌色，句子本身保持中性。
