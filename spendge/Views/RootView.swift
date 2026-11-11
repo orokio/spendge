@@ -4,7 +4,8 @@ import SwiftData
 /// 两个页面，无 Tab：今天 ←→ 回看。
 /// 整页横向拖动切换；今天页右下角有一个显式入口，避免纯手势的发现性问题。
 struct RootView: View {
-    @State private var page: Int = 0
+    /// 0 设置 · 1 今天 · 2 回看
+    @State private var page: Int = 1
     @State private var dragOffset: CGFloat = 0
 
     /// 记录页挂在根上全屏呈现，不跟着翻页偏移走
@@ -20,14 +21,17 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geo in
             HStack(spacing: 0) {
+                SettingsView()
+                    .frame(width: geo.size.width, height: geo.size.height)
+
                 TodayView(
                     paging: isPaging,
                     onOpenRecord: openRecord,
-                    onOpenReview: { go(to: 1) }
+                    onOpenReview: { go(to: 2) }
                 )
                 .frame(width: geo.size.width, height: geo.size.height)
 
-                ReviewView(paging: isPaging, onBack: { go(to: 0) })
+                ReviewView(paging: isPaging, onBack: { go(to: 1) })
                     .frame(width: geo.size.width, height: geo.size.height)
             }
             .offset(x: -CGFloat(page) * geo.size.width + dragOffset)
@@ -46,9 +50,9 @@ struct RootView: View {
                         pageDragActive = true
                         beginPaging()
                         let width = value.translation.width
-                        // 第一页只允许左滑，最后一页只允许右滑，避免滑到头还回弹一下
+                        // 首尾页不往空白处滑，避免滑到头还回弹一下
                         if page == 0, width > 0 { dragOffset = 0; return }
-                        if page == 1, width < 0 { dragOffset = 0; return }
+                        if page == 2, width < 0 { dragOffset = 0; return }
                         dragOffset = width
                     }
                     .onEnded { value in
@@ -59,8 +63,8 @@ struct RootView: View {
                             return
                         }
                         if abs(value.translation.width) > abs(value.translation.height) {
-                            if value.translation.width < -60 { page = 1 }
-                            if value.translation.width > 60 { page = 0 }
+                            if value.translation.width < -60 { page = min(page + 1, 2) }
+                            if value.translation.width > 60 { page = max(page - 1, 0) }
                         }
                         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
                             dragOffset = 0

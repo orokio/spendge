@@ -33,9 +33,24 @@ struct TodayView: View {
                     hero
                     todayList
                 }
+                // 滚到底时最后一行要落在渐隐区之上
+                .padding(.bottom, 110)
             }
             .scrollIndicators(.hidden)
-            .padding(.bottom, 96)
+
+            // 底部渐隐：与回看页一致，行滚到 ＋ 号前淡出，不做硬裁切
+            LinearGradient(
+                stops: [
+                    .init(color: Color(.systemGroupedBackground).opacity(0), location: 0),
+                    .init(color: Color(.systemGroupedBackground), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 90)
+            .frame(maxWidth: .infinity)
+            .ignoresSafeArea(edges: .bottom)
+            .allowsHitTesting(false)
 
             fab
         }
