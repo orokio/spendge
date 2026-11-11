@@ -38,8 +38,16 @@ struct TodayView: View {
             fab
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .fullScreenCover(isPresented: $showSheet) {
-            RecordPage()
+        .overlay {
+            if showSheet {
+                RecordPage {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                        showSheet = false
+                    }
+                }
+                .transition(.move(edge: .trailing))
+                .zIndex(1)
+            }
         }
         .task { refresh() }
         .onChange(of: transactions.count) { _, _ in refresh() }
@@ -184,7 +192,9 @@ struct TodayView: View {
 
     private var fab: some View {
         Button {
-            showSheet = true
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                showSheet = true
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))

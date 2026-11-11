@@ -3,8 +3,9 @@ import SwiftData
 
 /// 记一笔：整页。键盘常驻，分类在左侧竖列；记下即返回，右滑也能返回。
 struct RecordPage: View {
+    let onClose: () -> Void
+
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
 
     @Query(sort: [SortDescriptor(\Category.sortOrder), SortDescriptor(\Category.name)])
     private var allCategories: [Category]
@@ -77,7 +78,7 @@ struct RecordPage: View {
             VStack(spacing: 0) {
                 HStack {
                     Button {
-                        dismiss()
+                        onClose()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .semibold))
@@ -110,14 +111,13 @@ struct RecordPage: View {
 
                 VStack(spacing: 12) {
                     dateAxis
-                    amountView
-                    if !suggestion.chips.isEmpty { chipRow }
 
-                    Spacer(minLength: 8)
-
-                    HStack(alignment: .top, spacing: 14) {
+                    HStack(alignment: .top, spacing: 16) {
                         tagRail
-                        VStack(spacing: 10) {
+
+                        VStack(spacing: 8) {
+                            amountView
+                            if !suggestion.chips.isEmpty { chipRow }
                             keypad
                             Spacer(minLength: 8)
                             noteField
@@ -125,15 +125,17 @@ struct RecordPage: View {
                         }
                     }
                     .frame(maxHeight: .infinity)
-
-                    Spacer(minLength: 8)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
             }
         }
-        .background(Color(.systemBackground))
+        .background(
+            Color(.systemBackground)
+                .ignoresSafeArea()
+                .onTapGesture { noteFocused = false }
+        )
         .offset(x: max(0, dragOffset))
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -143,18 +145,12 @@ struct RecordPage: View {
                 }
                 .onEnded { value in
                     if value.translation.width > 90 {
-                        dismiss()
+                        onClose()
                     } else {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { dragOffset = 0 }
                     }
                 }
         )
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("完成") { noteFocused = false }
-            }
-        }
         .task { bootstrap() }
     }
 
@@ -264,7 +260,7 @@ struct RecordPage: View {
                 .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
                 .contentTransition(.numericText())
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var chipRow: some View {
@@ -397,6 +393,6 @@ struct RecordPage: View {
             category: category,
             account: account
         )
-        dismiss()
+        onClose()
     }
 }
