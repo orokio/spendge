@@ -117,11 +117,10 @@ struct ReviewView: View {
             MonthPickerSheet(selected: monthStart) { picked in
                 monthAnchor = picked
                 showMonthPicker = false
-            } onCancel: {
-                showMonthPicker = false
             }
             .presentationDetents([.medium])
             .presentationCornerRadius(24)
+            .presentationBackground(Color(.systemBackground))
         }
         .task { refresh() }
         .onChange(of: monthAnchor) { _, _ in refresh() }
@@ -328,7 +327,6 @@ struct ReviewView: View {
 private struct MonthPickerSheet: View {
     let selected: Date
     let onPick: (Date) -> Void
-    let onCancel: () -> Void
 
     private var options: [Date] {
         let calendar = Calendar.current
@@ -354,13 +352,11 @@ private struct MonthPickerSheet: View {
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemBackground))
             .navigationTitle("选择月份")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { onCancel() }
-                }
-            }
         }
+        .background(Color(.systemBackground))
     }
 }

@@ -120,7 +120,7 @@ struct RecordPage: View {
 
                         VStack(spacing: 12) {
                             amountView
-                            if !suggestion.chips.isEmpty { chipRow }
+                            chipRow
                             keypad
                             Spacer(minLength: 16)
                             noteField
@@ -286,12 +286,15 @@ struct RecordPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 固定高度：常用金额是异步算出来的，占位可以避免出现时把键盘顶下去。
     private var chipRow: some View {
         HStack(spacing: 6) {
-            Text("常用")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.trailing, 2)
+            if !suggestion.chips.isEmpty {
+                Text("常用")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.trailing, 2)
+            }
             ForEach(suggestion.chips.prefix(4), id: \.self) { chip in
                 Button {
                     inputYuan = Int(chip / 100)
@@ -312,6 +315,7 @@ struct RecordPage: View {
             }
             Spacer(minLength: 0)
         }
+        .frame(height: 26, alignment: .leading)
     }
 
     private var keypad: some View {
