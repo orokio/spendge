@@ -49,6 +49,20 @@ enum SelfCheck {
             expect(coverage.coveredDays <= coverage.daysInMonth, "覆盖天数不应超过当月天数")
         }
 
+        // 3b. 当月天数按公历：二月 28/29，小月 30，大月 31
+        if let feb = calendar.date(from: DateComponents(year: 2028, month: 2, day: 1)) {
+            expect(calendar.dayCount(inMonthOf: feb) == 29, "2028 年 2 月应有 29 天")
+        }
+        if let feb = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) {
+            expect(calendar.dayCount(inMonthOf: feb) == 28, "2026 年 2 月应有 28 天")
+        }
+        if let april = calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)) {
+            expect(calendar.dayCount(inMonthOf: april) == 30, "4 月应有 30 天")
+        }
+        if let october = calendar.date(from: DateComponents(year: 2026, month: 10, day: 1)) {
+            expect(calendar.dayCount(inMonthOf: october) == 31, "10 月应有 31 天")
+        }
+
         // 4. 汇总与明细一致
         if let summary = try? transactionService.summary(forMonth: year, month: month) {
             let detailTotal = ((try? transactionService.transactions(from: nil, to: nil)) ?? [])

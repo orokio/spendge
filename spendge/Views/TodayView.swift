@@ -3,6 +3,9 @@ import SwiftData
 
 /// 今天：一句话 + 今天记了什么。只回答一个问题。
 struct TodayView: View {
+    /// 正在翻页：此时 ＋ 号不响应，避免同一个手势既翻页又开记录页
+    let paging: Bool
+    let onOpenRecord: () -> Void
     let onOpenReview: () -> Void
 
     @Environment(\.modelContext) private var context
@@ -10,8 +13,6 @@ struct TodayView: View {
     @Query private var confirmations: [DayConfirmation]
 
     @State private var insight: Insight?
-    @State private var showSheet = false
-    @State private var sheetOffset = UIScreen.main.bounds.width
 
     private var todayTransactions: [Transaction] {
         transactions.filter { Calendar.current.isDateInToday($0.date) }
@@ -32,20 +33,15 @@ struct TodayView: View {
                     hero
                     todayList
                 }
-                .padding(.bottom, 110)
             }
             .scrollIndicators(.hidden)
+            .padding(.bottom, 96)
 
             fab
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay {
-            if showSheet {
-                RecordPage(onClose: closeSheet)
-                    .offset(x: sheetOffset)
-                    .zIndex(1)
-            }
-        }
+        // 底部留白也算页面：不留形状的话那块透明区域点不中，翻页手势起不来
+        .contentShape(Rectangle())
         .task { refresh() }
         .onChange(of: transactions.count) { _, _ in refresh() }
         .onChange(of: confirmations.count) { _, _ in refresh() }
@@ -75,7 +71,8 @@ struct TodayView: View {
     // MARK: - 今天
 
     private var todayList: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // 与回看页一致：日期行到列表保持 22pt
+        VStack(alignment: .leading, spacing: 22) {
             // 一行：日期靠左，「今天没花钱」靠右
             HStack(alignment: .firstTextBaseline) {
                 HStack(spacing: 6) {
@@ -111,43 +108,13 @@ struct TodayView: View {
             }
 
             if !todayTransactions.isEmpty {
-                VStack(spacing: 16) {
-                    ForEach(todayTransactions) { txn in
-                        row(txn)
-                    }
+                TransactionList(transactions: todayTransactions) { txn in
+                    try? TransactionService(context: context).delete(txn)
                 }
             }
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
-    }
-
-    private func row(_ txn: Transaction) -> some View {
-        HStack(spacing: 14) {
-            CategoryIcon(
-                iconName: txn.category?.iconName ?? "tag",
-                colorHex: txn.category?.colorHex ?? "#9CA3AF",
-                size: 34
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(txn.category?.name ?? "未分类")
-                    .font(.body)
-                if let note = txn.note, !note.isEmpty {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            Text(AmountFormat.string(cents: signedCents(txn), showsSign: true))
-                .font(.system(.body, design: .rounded).weight(.medium))
-                .foregroundStyle(txn.kind == .income ? Color.income : .primary)
-        }
-        .contentShape(Rectangle())
     }
 
     /// 数字用品牌色，句子本身保持中性。
@@ -188,7 +155,8 @@ struct TodayView: View {
             .frame(height: 58, alignment: .bottom)
 
             Button {
-                openSheet()
+                guard !paging else { return }
+                onOpenRecord()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 24, weight: .semibold))
@@ -207,23 +175,6 @@ struct TodayView: View {
 
     private func signedCents(_ transaction: Transaction) -> Int64 {
         transaction.kind == .expense ? -transaction.amountCents : transaction.amountCents
-    }
-
-    /// 先把页面放到屏幕右侧，再动画拉进来：避免插入瞬间闪出一帧完整内容。
-    private func openSheet() {
-        sheetOffset = UIScreen.main.bounds.width
-        showSheet = true
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            sheetOffset = 0
-        }
-    }
-
-    private func closeSheet() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            sheetOffset = UIScreen.main.bounds.width
-        } completion: {
-            showSheet = false
-        }
     }
 
     /// 点一下确认，再点一下取消——勾选必须是可逆的。

@@ -2,24 +2,49 @@ import SwiftUI
 import SwiftData
 
 /// 两个页面，无 Tab：今天 ←→ 回看。
-/// 横向拖动切换；今天页右上角有一个显式入口，避免纯手势的发现性问题。
+/// 整页横向拖动切换；今天页右下角有一个显式入口，避免纯手势的发现性问题。
 struct RootView: View {
     @State private var page: Int = 0
     @State private var dragOffset: CGFloat = 0
 
+    /// 记录页挂在根上全屏呈现，不跟着翻页偏移走
+    @State private var showRecord = false
+    /// 翻页手势进行中（含结束后的回弹），期间不响应 ＋ 号和月份按钮
+    @State private var isPaging = false
+    @State private var pagingTask: Task<Void, Never>?
+    /// 本次拖动是否真的在翻页，避免松手时误判
+    @State private var pageDragActive = false
+    /// 页面内的横向控件（柱状图）优先于翻页
+    @State private var gate = InteractionGate()
+
     var body: some View {
         GeometryReader { geo in
             HStack(spacing: 0) {
-                TodayView(onOpenReview: { go(to: 1) })
-                    .frame(width: geo.size.width)
-                ReviewView(onBack: { go(to: 0) })
-                    .frame(width: geo.size.width)
+                TodayView(
+                    paging: isPaging,
+                    onOpenRecord: openRecord,
+                    onOpenReview: { go(to: 1) }
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
+
+                ReviewView(paging: isPaging, onBack: { go(to: 0) })
+                    .frame(width: geo.size.width, height: geo.size.height)
             }
             .offset(x: -CGFloat(page) * geo.size.width + dragOffset)
-            .gesture(
-                DragGesture(minimumDistance: 24)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
                     .onChanged { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        // 横向占绝对优势才算翻页，纵向留给列表滚动
+                        guard abs(value.translation.width) > abs(value.translation.height) * 1.8 else { return }
+                        // 横向控件（柱状图）正在滚动：这次不翻页。
+                        // 注意要把 pageDragActive 也撤掉，否则松手时仍会按位移翻页
+                        guard !gate.blockingPageSwipe else {
+                            pageDragActive = false
+                            dragOffset = 0
+                            return
+                        }
+                        pageDragActive = true
+                        beginPaging()
                         let width = value.translation.width
                         // 第一页只允许左滑，最后一页只允许右滑，避免滑到头还回弹一下
                         if page == 0, width > 0 { dragOffset = 0; return }
@@ -27,39 +52,68 @@ struct RootView: View {
                         dragOffset = width
                     }
                     .onEnded { value in
-                        let horizontal = abs(value.translation.width) > abs(value.translation.height)
-                        if horizontal {
+                        let wasPaging = pageDragActive
+                        pageDragActive = false
+                        guard wasPaging else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { dragOffset = 0 }
+                            return
+                        }
+                        if abs(value.translation.width) > abs(value.translation.height) {
                             if value.translation.width < -60 { page = 1 }
                             if value.translation.width > 60 { page = 0 }
                         }
                         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
                             dragOffset = 0
                         }
+                        endPaging()
                     }
             )
             .animation(.spring(response: 0.36, dampingFraction: 0.86), value: page)
         }
-        .background {
-            LinearGradient(
-                stops: [
-                    .init(color: Color.brand.opacity(0.20), location: 0),
-                    .init(color: Color.brand.opacity(0.15), location: 0.10),
-                    .init(color: Color.brand.opacity(0.09), location: 0.24),
-                    .init(color: Color.brand.opacity(0.04), location: 0.40),
-                    .init(color: Color.brand.opacity(0.012), location: 0.58),
-                    .init(color: Color.brand.opacity(0), location: 0.74),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.clear)
+        .environment(gate)
+        .overlay {
+            if showRecord {
+                RecordPage(onClose: closeRecord)
+                    // 转场期间冻结内部布局，页面整体作为一个图层滑入
+                    .geometryGroup()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(2)
+            }
         }
     }
 
     private func go(to index: Int) {
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             page = index
+        }
+    }
+
+    private func openRecord() {
+        guard !isPaging else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            showRecord = true
+        }
+    }
+
+    private func closeRecord() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            showRecord = false
+        }
+    }
+
+    private func beginPaging() {
+        pagingTask?.cancel()
+        if !isPaging { isPaging = true }
+    }
+
+    /// 回弹动画结束后再放开 ＋ 号和月份按钮
+    private func endPaging() {
+        pagingTask?.cancel()
+        pagingTask = Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            isPaging = false
         }
     }
 }

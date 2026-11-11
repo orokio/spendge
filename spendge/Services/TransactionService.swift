@@ -273,7 +273,7 @@ final class TransactionService {
         var confirmed: Set<Int> = []
         for item in confirmations { confirmed.insert(calendar.component(.day, from: item.day)) }
 
-        let daysInMonth = calendar.range(of: .day, in: .month, for: range.start)?.count ?? 30
+        let daysInMonth = calendar.dayCount(inMonthOf: range.start)
         let isCurrentMonth = calendar.isDate(range.start, equalTo: .now, toGranularity: .month)
         let elapsedDays = isCurrentMonth ? calendar.component(.day, from: .now) : daysInMonth
 

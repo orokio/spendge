@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
-/// 记一笔：整页。键盘常驻，分类在左侧竖列；记下即返回，右滑也能返回。
+/// 记一笔：整页。键盘常驻，分类在左侧竖列；记下后留在页面连着记，点「完成」或右滑返回。
 struct RecordPage: View {
     let onClose: () -> Void
 
@@ -14,7 +15,8 @@ struct RecordPage: View {
 
     @State private var kind: TransactionKind = .expense
     @State private var selectedCategory: Category?
-    @State private var inputYuan = 0
+    /// 已输入的金额文本（"26"、"26.5"），小数最多一位
+    @State private var amountText = ""
     @State private var amountEdited = false
     @State private var suggestion: AmountSuggestion = .empty
     @State private var usedEstimate = false
@@ -25,11 +27,12 @@ struct RecordPage: View {
     @StateObject private var transcriber = SpeechTranscriber()
     @State private var dragOffset: CGFloat = 0
     @State private var noteEditing = false
+    @State private var toast: String?
 
     private let calendar = Calendar.current
 
     private var days: [Date] {
-        (0..<14).reversed().compactMap {
+        (0..<7).reversed().compactMap {
             calendar.date(byAdding: .day, value: -$0, to: calendar.startOfDay(for: .now))
         }
     }
@@ -71,7 +74,35 @@ struct RecordPage: View {
         }
     }
 
-    private var amountCents: Int64 { Int64(inputYuan) * 100 }
+    private var amountCents: Int64 {
+        guard !amountText.isEmpty else { return 0 }
+        let parts = amountText.split(separator: ".", omittingEmptySubsequences: false)
+        let yuan = Int(parts.first ?? "0") ?? 0
+        let jiao = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+        return Int64(yuan) * 100 + Int64(jiao) * 10
+    }
+
+    /// 展示用：整数部分加千分位，空显示 0，刚点小数点时补成 "0."
+    private var amountDisplay: String {
+        guard !amountText.isEmpty else { return "0" }
+        let parts = amountText.split(separator: ".", omittingEmptySubsequences: false)
+        let integer = groupedDigits(String(parts.first ?? ""))
+        let base = integer.isEmpty ? "0" : integer
+        guard parts.count > 1 else { return base }
+        return base + "." + parts[1]
+    }
+
+    /// 1234567 → 1,234,567
+    private func groupedDigits(_ digits: String) -> String {
+        var result = ""
+        for (index, character) in digits.reversed().enumerated() {
+            if index > 0, index % 3 == 0 { result.append(",") }
+            result.append(character)
+        }
+        return String(result.reversed())
+    }
+
+    private var hasAmount: Bool { amountCents > 0 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -116,7 +147,7 @@ struct RecordPage: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .frame(height: 16)
                         noteField
-                        HStack(spacing: 10) {
+                        HStack(alignment: .bottom, spacing: 10) {
                             saveButton
                             micButton
                         }
@@ -127,12 +158,31 @@ struct RecordPage: View {
             }
             .padding(.top, 12)
         }
-        .padding(.bottom, 8)
+        // 与首页 ＋ 号距安全区底部的距离一致
+        .padding(.bottom, 26)
         .background(
             Color(.systemBackground)
                 .ignoresSafeArea()
                 .onTapGesture { noteEditing = false }
         )
+        // 顶部浮出，像一条系统通知
+        .overlay(alignment: .top) {
+            if let toast {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text(toast)
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.brand, in: Capsule())
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                .padding(.top, 6)
+                .allowsHitTesting(false)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .offset(x: max(0, dragOffset))
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -152,7 +202,7 @@ struct RecordPage: View {
             bootstrap()
             // 滑入动画结束后再露出常用金额，避免在滑入过程中突然出现
             try? await Task.sleep(for: .milliseconds(360))
-            withAnimation(.easeIn(duration: 0.15)) { showChips = true }
+            showChips = true
             transcriber.onFinish = { text in
                 finishVoice(text)
             }
@@ -191,19 +241,13 @@ struct RecordPage: View {
         .buttonStyle(.plain)
     }
 
+    /// 固定 7 天，不滚动。
     private var dateAxis: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(days, id: \.self) { day in
-                        dayCell(day)
-                            .id(day)
-                    }
-                }
-                .padding(.vertical, 1)
-                .padding(.trailing, 2)
+        HStack(spacing: 6) {
+            ForEach(days, id: \.self) { day in
+                dayCell(day)
+                    .frame(maxWidth: .infinity)
             }
-            .onAppear { proxy.scrollTo(days.last, anchor: .trailing) }
         }
     }
 
@@ -220,9 +264,12 @@ struct RecordPage: View {
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(selected ? .white : .primary)
             }
-            .frame(width: 36, height: 44)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            // 没有底色之后，整格要显式声明可点击范围
+            .contentShape(Rectangle())
             .background(
-                selected ? Color.brand : Color(.secondarySystemGroupedBackground),
+                selected ? Color.brand : Color.clear,
                 in: RoundedRectangle(cornerRadius: 12)
             )
         }
@@ -284,15 +331,8 @@ struct RecordPage: View {
 
     // MARK: - 金额
 
-    /// 位数越多字号越小，保持字重和比例，不做整体缩放。
-    private var amountFontSize: CGFloat {
-        switch String(inputYuan).count {
-        case 0...5: return 46
-        case 6: return 40
-        case 7: return 34
-        default: return 30
-        }
-    }
+    /// 字号固定 46pt，位数多了按宽度自适应缩小，不再一档一档跳
+    private let amountFontSize: CGFloat = 46
 
     private var amountView: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -300,10 +340,11 @@ struct RecordPage: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Text(inputYuan > 0 ? "\(inputYuan)" : "0")
+            Text(amountDisplay)
                 .font(.system(size: amountFontSize, weight: .bold, design: .rounded))
-                .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
+                .foregroundStyle(hasAmount ? Color.brand : Color.secondary.opacity(0.3))
                 .lineLimit(1)
+                .minimumScaleFactor(0.4)
                 .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -320,7 +361,7 @@ struct RecordPage: View {
             }
             ForEach(showChips ? Array(suggestion.chips.prefix(4)) : [], id: \.self) { chip in
                 Button {
-                    inputYuan = Int(chip / 100)
+                    amountText = String(chip / 100)
                     usedEstimate = suggestion.style == .bucketsOnly
                     amountEdited = true
                 } label: {
@@ -329,10 +370,10 @@ struct RecordPage: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
-                            inputYuan * 100 == chip ? Color.brand : Color(.systemGray6),
+                            amountCents == Int64(chip) ? Color.brand : Color(.systemGray6),
                             in: Capsule()
                         )
-                        .foregroundStyle(inputYuan * 100 == chip ? .white : .primary)
+                        .foregroundStyle(amountCents == Int64(chip) ? .white : .primary)
                 }
                 .buttonStyle(.plain)
             }
@@ -349,9 +390,9 @@ struct RecordPage: View {
             ForEach(["1", "2", "3", "4", "5", "6", "7", "8", "9"], id: \.self) { digit in
                 keyButton(digit) { append(digit) }
             }
-            keyButton("清零", small: true) { inputYuan = 0; usedEstimate = false; amountEdited = true }
+            keyButton(".") { appendDot() }
             keyButton("0") { append("0") }
-            keyButton("⌫") { inputYuan /= 10; amountEdited = true }
+            keyButton("清零", small: true) { clearAmount() }
         }
         .frame(maxWidth: .infinity)
     }
@@ -367,10 +408,28 @@ struct RecordPage: View {
     }
 
     private func append(_ digit: String) {
-        // 判断「加上这一位之后」的数值，避免多进一位
-        let next = inputYuan * 10 + (Int(digit) ?? 0)
-        guard next < 100_000_000 else { return }
-        inputYuan = next
+        if let dotIndex = amountText.firstIndex(of: ".") {
+            // 小数点后只允许一位（到毛）
+            guard amountText.distance(from: dotIndex, to: amountText.endIndex) < 2 else { return }
+            amountText.append(digit)
+        } else {
+            // 判断「加上这一位之后」的数值，避免多进一位；整数最多七位
+            let next = (Int(amountText) ?? 0) * 10 + (Int(digit) ?? 0)
+            guard next <= 9_999_999 else { return }
+            amountText = String(next)
+        }
+        usedEstimate = false
+        amountEdited = true
+    }
+
+    private func appendDot() {
+        guard !amountText.contains(".") else { return }
+        amountText = amountText.isEmpty ? "0." : amountText + "."
+        amountEdited = true
+    }
+
+    private func clearAmount() {
+        amountText = ""
         usedEstimate = false
         amountEdited = true
     }
@@ -452,12 +511,12 @@ struct RecordPage: View {
         selectedCategory = category
         guard let category else {
             suggestion = .empty
-            if !amountEdited { inputYuan = 0 }
+            if !amountEdited { amountText = "" }
             return
         }
         suggestion = (try? TransactionService(context: context).amountSuggestion(for: category)) ?? .empty
         if !amountEdited {
-            inputYuan = Int((suggestion.prefillCents ?? 0) / 100)
+            amountText = (suggestion.prefillCents ?? 0) > 0 ? String((suggestion.prefillCents ?? 0) / 100) : ""
             usedEstimate = false
         }
     }
@@ -478,7 +537,7 @@ struct RecordPage: View {
 
         // 金额：有正经分类就直接用；只落到「其他」时，必须句子里提到了钱
         if let yuan = parsed.yuan, parsed.categoryCode != nil || parsed.hasMoneyCue {
-            inputYuan = yuan
+            amountText = String(yuan)
             amountEdited = true
         }
     }
@@ -524,6 +583,24 @@ struct RecordPage: View {
             category: category,
             account: account
         )
-        onClose()
+
+        // 留在页面上连着记：给一句确认，然后清空这笔的内容，分类和日期保留
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        showToast("已记下 \(AmountFormat.string(cents: amountCents)) · \(category.name)")
+        amountText = ""
+        amountEdited = false
+        usedEstimate = false
+        note = ""
+        noteEditing = false
+        voiceHint = nil
+    }
+
+    private func showToast(_ text: String) {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { toast = text }
+        Task {
+            try? await Task.sleep(for: .seconds(1.8))
+            guard toast == text else { return }
+            withAnimation(.easeIn(duration: 0.25)) { toast = nil }
+        }
     }
 }

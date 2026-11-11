@@ -41,7 +41,7 @@ final class InsightService {
         let coverage = try coverage(forMonth: calendar.component(.month, from: .now),
                                     year: calendar.component(.year, from: .now))
         if coverage.elapsedDays - coverage.coveredDays >= 3 {
-            return Insight(title: "有些天没记上", detail: "想补的时候补一下就好")
+            return Insight(title: "有些事没记上", detail: "想补的时候补一下就好")
         }
 
         // 5. 兜底：本周与上周的外卖对比，数字放在小字里
