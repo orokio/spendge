@@ -115,14 +115,16 @@ struct RecordPage: View {
                     dateAxis
 
                     HStack(alignment: .top, spacing: 16) {
+
                         tagRail
 
-                        VStack(spacing: 8) {
+                        VStack(spacing: 12) {
                             amountView
                             if !suggestion.chips.isEmpty { chipRow }
                             keypad
+                            Spacer(minLength: 16)
                             noteField
-                                .frame(maxHeight: .infinity)
+                                .frame(height: 92)
                             if let voiceHint {
                                 Text(voiceHint)
                                     .font(.caption2)
@@ -135,7 +137,7 @@ struct RecordPage: View {
                             }
                         }
                     }
-                    .frame(maxHeight: .infinity)
+                    .frame(height: max(300, geo.size.height - 252), alignment: .top)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
                 .padding(.horizontal, 20)
@@ -224,7 +226,7 @@ struct RecordPage: View {
 
     private var tagRail: some View {
         ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 5) {
+            VStack(spacing: 9) {
                 ForEach(Array(railRows.enumerated()), id: \.offset) { _, row in
                     switch row {
                     case .divider:
@@ -242,7 +244,7 @@ struct RecordPage: View {
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
+                                .padding(.vertical, 9)
                                 .background(
                                     selected ? Color.brand : Color(.systemGray6),
                                     in: RoundedRectangle(cornerRadius: 9)
@@ -331,7 +333,7 @@ struct RecordPage: View {
         Button(action: action) {
             Text(label)
                 .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 46)
+                .frame(maxWidth: .infinity, minHeight: 60)
                 .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
@@ -360,7 +362,7 @@ struct RecordPage: View {
                 .onSubmit { noteFocused = false }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
     }
 
