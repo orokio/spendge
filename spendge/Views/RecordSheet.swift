@@ -13,7 +13,6 @@ struct RecordSheet: View {
 
     @State private var kind: TransactionKind = .expense
     @State private var selectedCategory: Category?
-    @State private var selectedAccount: Account?
     @State private var inputYuan = 0
     @State private var amountEdited = false
     @State private var suggestion: AmountSuggestion = .empty
@@ -83,7 +82,6 @@ struct RecordSheet: View {
 
             VStack(spacing: 10) {
                 noteField
-                if accounts.count > 1 { accountPicker }
                 saveButton
             }
             .padding(.horizontal, 20)
@@ -150,7 +148,7 @@ struct RecordSheet: View {
                 toggleKeypad()
             } label: {
                 if inputYuan > 0 {
-                    Text(AmountFormat.string(cents: amountCents))
+                    Text(AmountFormat.string(cents: amountCents, approximate: true))
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                         .contentTransition(.numericText())
@@ -267,44 +265,13 @@ struct RecordSheet: View {
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var accountPicker: some View {
-        Menu {
-            ForEach(accounts) { account in
-                Button {
-                    selectedAccount = account
-                } label: {
-                    if account.id == selectedAccount?.id {
-                        Label(account.name, systemImage: "checkmark")
-                    } else {
-                        Text(account.name)
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "wallet.pass.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(selectedAccount?.name ?? "账户")
-                    .font(.subheadline)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 46)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
     // MARK: - 保存
 
     private var saveButton: some View {
         Button {
             save()
         } label: {
-            Text(usedEstimate ? "记下（约 \(AmountFormat.string(cents: amountCents))）" : "记下")
+            Text("记下")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
@@ -319,14 +286,13 @@ struct RecordSheet: View {
     }
 
     private var canSave: Bool {
-        amountCents > 0 && selectedCategory != nil && (selectedAccount ?? accounts.first) != nil
+        amountCents > 0 && selectedCategory != nil && !accounts.isEmpty
     }
 
     // MARK: - 动作
 
     private func bootstrap() {
         if selectedCategory == nil { select(categories.first) }
-        if selectedAccount == nil { selectedAccount = accounts.first }
     }
 
     /// 切换分类时保留用户已经输入的金额，只在他没有手动改过时才应用预填。
@@ -352,7 +318,7 @@ struct RecordSheet: View {
     private func save() {
         guard canSave,
               let category = selectedCategory,
-              let account = selectedAccount ?? accounts.first else { return }
+              let account = accounts.first else { return }
 
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         _ = try? TransactionService(context: context).add(
