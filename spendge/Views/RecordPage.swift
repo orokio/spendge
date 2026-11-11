@@ -165,11 +165,13 @@ struct RecordPage: View {
         .task {
             bootstrap()
             transcriber.onFinish = { text in
-                applyVoice(text)
+                finishVoice(text)
             }
         }
         .onChange(of: transcriber.transcript) { _, text in
-            if transcriber.isListening { note = text }
+            // 每次都重新解析：识别结果会在结束时被修正一次，
+            // 只在结束时解析会让备注和金额对不上。
+            applyVoice(text)
         }
     }
 
@@ -284,6 +286,10 @@ struct RecordPage: View {
 
     private var chipRow: some View {
         HStack(spacing: 6) {
+            Text("常用")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.trailing, 2)
             ForEach(suggestion.chips.prefix(4), id: \.self) { chip in
                 Button {
                     inputYuan = Int(chip / 100)
@@ -418,22 +424,40 @@ struct RecordPage: View {
         }
     }
 
-    /// 语音结束后：只填有把握的字段，填不到就保持原样。
+    /// 边听边填：备注与金额始终来自同一段文本。
     private func applyVoice(_ text: String) {
         guard !text.isEmpty else { return }
         note = text
 
         let parsed = VoiceParser.parse(text)
-        if let code = parsed.categoryCode,
-           let category = allCategories.first(where: { $0.categoryCode == code && $0.kind == kind }) {
-            select(category)
+        guard let code = parsed.categoryCode,
+              let category = allCategories.first(where: { $0.categoryCode == code && $0.kind == kind }) else {
+            // 分类没认出来时，数字很可能是商品型号（如「苹果12」），不采信
+            return
         }
+        select(category)
         if let yuan = parsed.yuan {
             inputYuan = yuan
             amountEdited = true
         }
-        if !parsed.isEmpty {
-            showHint("已按你说的填好，改一下就行")
+    }
+
+    /// 说完给一句明确的反馈：填了什么、没填什么。
+    private func finishVoice(_ text: String) {
+        guard !text.isEmpty else {
+            showHint("没听到内容，再说一次")
+            return
+        }
+        let parsed = VoiceParser.parse(text)
+
+        if parsed.categoryCode != nil, parsed.yuan != nil {
+            showHint("已按你说的填好")
+        } else if parsed.categoryCode != nil {
+            showHint("分类填好了，金额确认一下")
+        } else if parsed.yuan != nil {
+            showHint("金额填好了，分类帮我点一下")
+        } else {
+            showHint("没听出分类和金额，帮我点一下")
         }
     }
 

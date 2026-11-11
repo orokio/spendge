@@ -72,6 +72,9 @@ enum SelfCheck {
         expect(VoiceParser.parse("打车25块").yuan == 25, "语音应识别出阿拉伯数字金额")
         expect(VoiceParser.parse("打车25块").categoryCode == .outing, "语音应识别出出行")
         expect(VoiceParser.parse("随便说点什么").isEmpty, "没有把握时不应猜分类或金额")
+        expect(VoiceParser.parse("买了个充电宝50").categoryCode == .gear, "充电宝应归到装备器材")
+        expect(VoiceParser.parse("外卖３０").yuan == 30, "全角数字也应能解析")
+        expect(VoiceParser.parse("买了苹果12").categoryCode == nil, "认不出分类时不应硬归")
 
         report(passed: passed, failures: failures)
     }
