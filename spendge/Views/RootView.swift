@@ -35,7 +35,21 @@ struct RootView: View {
             )
             .animation(.spring(response: 0.36, dampingFraction: 0.86), value: page)
         }
-        .background(Color(.systemGroupedBackground))
+        .background {
+            LinearGradient(
+                stops: [
+                    .init(color: Color.brand.opacity(0.22), location: 0),
+                    .init(color: Color.brand.opacity(0.16), location: 0.12),
+                    .init(color: Color.brand.opacity(0.09), location: 0.26),
+                    .init(color: Color.brand.opacity(0.03), location: 0.40),
+                    .init(color: Color.brand.opacity(0), location: 0.52),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        }
     }
 
     private func go(to index: Int) {

@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// 记一笔：半屏面板。上半屏仍是今天的流水，所以「记的时候看得见今天」。
+/// 记一笔：半屏面板。
+/// 键盘常驻，分类做成左侧竖向标签列——输入金额不再多一步。
 struct RecordSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -19,12 +20,11 @@ struct RecordSheet: View {
     @State private var usedEstimate = false
     @State private var date = Date.now
     @State private var note = ""
-    @State private var showKeypad = false
-    @State private var detent: PresentationDetent = .medium
+    @State private var detent: PresentationDetent = .fraction(0.73)
+    @FocusState private var noteFocused: Bool
 
     private let calendar = Calendar.current
 
-    /// 最近 14 天，今天在最右。
     private var days: [Date] {
         (0..<14).reversed().compactMap {
             calendar.date(byAdding: .day, value: -$0, to: calendar.startOfDay(for: .now))
@@ -35,7 +35,6 @@ struct RecordSheet: View {
         allAccounts.filter { !$0.isArchived }
     }
 
-    /// 最近 30 天用得最多的分类排在前面。
     private var categories: [Category] {
         let start = calendar.date(byAdding: .day, value: -30, to: .now) ?? .now
         var counts: [UUID: Int] = [:]
@@ -62,23 +61,29 @@ struct RecordSheet: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 20)
-            .padding(.top, 28)
+            .padding(.top, 34)
             .onChange(of: kind) { _, _ in
                 amountEdited = false
                 select(categories.first)
             }
 
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     dateAxis
-                    amountBlock
-                    categoryFlow
+                    amountView
+                    if !suggestion.chips.isEmpty { chipRow }
+
+                    HStack(alignment: .top, spacing: 14) {
+                        tagRail
+                        keypad
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
-                .padding(.bottom, 12)
+                .padding(.bottom, 8)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
 
             VStack(spacing: 10) {
                 noteField
@@ -89,9 +94,15 @@ struct RecordSheet: View {
             .padding(.bottom, 20)
         }
         .background(Color(.systemBackground))
-        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDetents([.fraction(0.73), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { noteFocused = false }
+            }
+        }
         .task { bootstrap() }
     }
 
@@ -118,18 +129,18 @@ struct RecordSheet: View {
         return Button {
             withAnimation(.snappy(duration: 0.2)) { date = day }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Text(weekdayLabel(day))
-                    .font(.caption2)
+                    .font(.system(size: 10))
                     .foregroundStyle(selected ? Color.white.opacity(0.85) : .secondary)
                 Text("\(calendar.component(.day, from: day))")
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(selected ? .white : .primary)
             }
-            .frame(width: 38, height: 46)
+            .frame(width: 36, height: 44)
             .background(
                 selected ? Color.brand : Color(.secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 13)
+                in: RoundedRectangle(cornerRadius: 12)
             )
         }
         .buttonStyle(.plain)
@@ -140,81 +151,100 @@ struct RecordSheet: View {
         return ["日", "一", "二", "三", "四", "五", "六"][index - 1]
     }
 
+    // MARK: - 分类（左侧竖列）
+
+    private var tagRail: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 6) {
+                ForEach(categories) { category in
+                    let selected = selectedCategory?.id == category.id
+                    Button {
+                        select(category)
+                    } label: {
+                        Text(category.name)
+                            .font(.system(size: 13))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                selected ? Color.brand : Color(.systemGray6),
+                                in: RoundedRectangle(cornerRadius: 9)
+                            )
+                            .foregroundStyle(selected ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(width: 96)
+        .frame(maxHeight: 216)
+    }
+
     // MARK: - 金额
 
-    private var amountBlock: some View {
-        VStack(spacing: 12) {
-            Button {
-                toggleKeypad()
-            } label: {
-                if inputYuan > 0 {
-                    Text(AmountFormat.string(cents: amountCents, approximate: true))
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .contentTransition(.numericText())
-                } else {
-                    Text(suggestion.style == .bucketsOnly ? "选一个大概的金额" : "点这里输入金额")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .overlay(alignment: .bottom) {
-                // 让「可以点」有形状可依
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.18))
-                    .frame(height: 1)
-                    .padding(.horizontal, 40)
-            }
+    private var amountView: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("≈")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
 
-            if !suggestion.chips.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(suggestion.chips, id: \.self) { chip in
-                        Button {
-                            inputYuan = Int(chip / 100)
-                            usedEstimate = suggestion.style == .bucketsOnly
-                            amountEdited = true
-                        } label: {
-                            Text("¥\(chip / 100)")
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(
-                                    inputYuan * 100 == chip ? Color.brand : Color(.secondarySystemGroupedBackground),
-                                    in: Capsule()
-                                )
-                                .foregroundStyle(inputYuan * 100 == chip ? .white : .primary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+            Text(inputYuan > 0 ? "\(inputYuan)" : "0")
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
+                .contentTransition(.numericText())
 
-            if showKeypad { keypad }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
+    }
+
+    private var chipRow: some View {
+        HStack(spacing: 6) {
+            ForEach(suggestion.chips.prefix(4), id: \.self) { chip in
+                Button {
+                    inputYuan = Int(chip / 100)
+                    usedEstimate = suggestion.style == .bucketsOnly
+                    amountEdited = true
+                } label: {
+                    Text("\(chip / 100)")
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            inputYuan * 100 == chip ? Color.brand : Color(.secondarySystemGroupedBackground),
+                            in: Capsule()
+                        )
+                        .foregroundStyle(inputYuan * 100 == chip ? .white : .primary)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
         }
     }
 
     private var keypad: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-            spacing: 8
+            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+            spacing: 5
         ) {
             ForEach(["1", "2", "3", "4", "5", "6", "7", "8", "9"], id: \.self) { digit in
                 keyButton(digit) { append(digit) }
             }
-            keyButton("清零") { inputYuan = 0; usedEstimate = false; amountEdited = true }
+            keyButton("清零", small: true) { inputYuan = 0; usedEstimate = false; amountEdited = true }
             keyButton("0") { append("0") }
             keyButton("⌫") { inputYuan /= 10; amountEdited = true }
         }
+        .frame(maxWidth: .infinity)
     }
 
-    private func keyButton(_ label: String, action: @escaping () -> Void) -> some View {
+    private func keyButton(_ label: String, small: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.title3.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
     }
@@ -226,31 +256,7 @@ struct RecordSheet: View {
         amountEdited = true
     }
 
-    // MARK: - 分类
-
-    private var categoryFlow: some View {
-        FlowLayout(spacing: 8) {
-            ForEach(categories) { category in
-                let selected = selectedCategory?.id == category.id
-                Button {
-                    select(category)
-                } label: {
-                    Text(category.name)
-                        .font(.system(size: 14))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                    .background(
-                        selected ? Color.brand : Color(.secondarySystemGroupedBackground),
-                        in: Capsule()
-                    )
-                    .foregroundStyle(selected ? .white : .primary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // MARK: - 备注 / 账户
+    // MARK: - 备注 / 保存
 
     private var noteField: some View {
         HStack(spacing: 8) {
@@ -259,13 +265,14 @@ struct RecordSheet: View {
                 .foregroundStyle(.secondary)
             TextField("备注（可选）", text: $note)
                 .font(.subheadline)
+                .focused($noteFocused)
+                .submitLabel(.done)
+                .onSubmit { noteFocused = false }
         }
         .padding(.horizontal, 14)
-        .frame(height: 46)
+        .frame(height: 44)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
-
-    // MARK: - 保存
 
     private var saveButton: some View {
         Button {
@@ -274,7 +281,7 @@ struct RecordSheet: View {
             Text("记下")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
-                .frame(height: 50)
+                .frame(height: 48)
                 .background(
                     canSave ? Color.brand : Color.secondary.opacity(0.12),
                     in: RoundedRectangle(cornerRadius: 14)
@@ -295,7 +302,6 @@ struct RecordSheet: View {
         if selectedCategory == nil { select(categories.first) }
     }
 
-    /// 切换分类时保留用户已经输入的金额，只在他没有手动改过时才应用预填。
     private func select(_ category: Category?) {
         selectedCategory = category
         guard let category else {
@@ -310,15 +316,8 @@ struct RecordSheet: View {
         }
     }
 
-    private func toggleKeypad() {
-        detent = .large
-        withAnimation(.easeInOut(duration: 0.18)) { showKeypad.toggle() }
-    }
-
     private func save() {
-        guard canSave,
-              let category = selectedCategory,
-              let account = accounts.first else { return }
+        guard canSave, let category = selectedCategory, let account = accounts.first else { return }
 
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         _ = try? TransactionService(context: context).add(

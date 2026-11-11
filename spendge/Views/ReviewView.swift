@@ -110,7 +110,6 @@ struct ReviewView: View {
             .padding(.bottom, 96)
         }
         .scrollIndicators(.hidden)
-        .background(Color(.systemGroupedBackground))
         .overlay(alignment: .bottomTrailing) {
             monthButton
         }
@@ -203,14 +202,15 @@ struct ReviewView: View {
             HStack(spacing: 6) {
                 Image(systemName: "calendar")
                     .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.brand)
                 Text(monthStart.formatted(.dateTime.month(.abbreviated).locale(Locale(identifier: "zh_CN"))))
                     .font(.subheadline.weight(.medium))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(.regularMaterial, in: Capsule())
-            .foregroundStyle(.primary)
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.15), lineWidth: 0.5))
+            .foregroundStyle(Color.brand)
+            .overlay(Capsule().stroke(Color.brand.opacity(0.25), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
         .padding(.trailing, 22)

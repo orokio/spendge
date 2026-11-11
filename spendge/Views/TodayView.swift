@@ -26,21 +26,6 @@ struct TodayView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // 渐变作为独立图层铺满整屏，不要放进 background 里算尺寸
-            LinearGradient(
-                stops: [
-                    .init(color: Color.brand.opacity(0.20), location: 0),
-                    .init(color: Color.brand.opacity(0.15), location: 0.12),
-                    .init(color: Color.brand.opacity(0.08), location: 0.28),
-                    .init(color: Color.brand.opacity(0.03), location: 0.42),
-                    .init(color: Color.brand.opacity(0), location: 0.55),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     hero
@@ -53,7 +38,6 @@ struct TodayView: View {
             fab
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
         .sheet(isPresented: $showSheet) {
             RecordSheet()
         }
@@ -152,7 +136,7 @@ struct TodayView: View {
     /// 空状态只给一个动作，不再同时出现「今天还没记」和「今天没花钱」。
     private var emptyState: some View {
         Button {
-            if !confirmedToday { confirmNoSpend() }
+            toggleNoSpend()
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
@@ -167,7 +151,6 @@ struct TodayView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(confirmedToday)
         .padding(.top, 2)
     }
 
@@ -215,8 +198,14 @@ struct TodayView: View {
         transaction.kind == .expense ? -transaction.amountCents : transaction.amountCents
     }
 
-    private func confirmNoSpend() {
-        try? DayConfirmationService(context: context).confirmNoSpend()
+    /// 点一下确认，再点一下取消——勾选必须是可逆的。
+    private func toggleNoSpend() {
+        let service = DayConfirmationService(context: context)
+        if confirmedToday {
+            try? service.remove(on: .now)
+        } else {
+            try? service.confirmNoSpend()
+        }
     }
 
     private func refresh() {
