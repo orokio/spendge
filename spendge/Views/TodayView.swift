@@ -11,6 +11,7 @@ struct TodayView: View {
 
     @State private var insight: Insight?
     @State private var showSheet = false
+    @State private var sheetOffset = UIScreen.main.bounds.width
 
     private var todayTransactions: [Transaction] {
         transactions.filter { Calendar.current.isDateInToday($0.date) }
@@ -40,13 +41,9 @@ struct TodayView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay {
             if showSheet {
-                RecordPage {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                        showSheet = false
-                    }
-                }
-                .transition(.move(edge: .trailing))
-                .zIndex(1)
+                RecordPage(onClose: closeSheet)
+                    .offset(x: sheetOffset)
+                    .zIndex(1)
             }
         }
         .task { refresh() }
@@ -192,9 +189,7 @@ struct TodayView: View {
 
     private var fab: some View {
         Button {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                showSheet = true
-            }
+            openSheet()
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))
@@ -211,6 +206,23 @@ struct TodayView: View {
 
     private func signedCents(_ transaction: Transaction) -> Int64 {
         transaction.kind == .expense ? -transaction.amountCents : transaction.amountCents
+    }
+
+    /// 先把页面放到屏幕右侧，再动画拉进来：避免插入瞬间闪出一帧完整内容。
+    private func openSheet() {
+        sheetOffset = UIScreen.main.bounds.width
+        showSheet = true
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            sheetOffset = 0
+        }
+    }
+
+    private func closeSheet() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            sheetOffset = UIScreen.main.bounds.width
+        } completion: {
+            showSheet = false
+        }
     }
 
     /// 点一下确认，再点一下取消——勾选必须是可逆的。
