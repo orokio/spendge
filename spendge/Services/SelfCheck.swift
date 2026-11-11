@@ -66,6 +66,13 @@ enum SelfCheck {
             expect((try? accountService.totalAssetsCents()) == expected, "总资产应等于各账户余额之和")
         }
 
+        // 语音文本解析：只认高置信度的组合
+        expect(VoiceParser.parse("外卖三十").categoryCode == .takeout, "语音应识别出外卖")
+        expect(VoiceParser.parse("外卖三十").yuan == 30, "语音应识别出中文金额")
+        expect(VoiceParser.parse("打车25块").yuan == 25, "语音应识别出阿拉伯数字金额")
+        expect(VoiceParser.parse("打车25块").categoryCode == .outing, "语音应识别出出行")
+        expect(VoiceParser.parse("随便说点什么").isEmpty, "没有把握时不应猜分类或金额")
+
         report(passed: passed, failures: failures)
     }
 

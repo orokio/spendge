@@ -20,6 +20,8 @@ struct RecordPage: View {
     @State private var usedEstimate = false
     @State private var date = Date.now
     @State private var note = ""
+    @State private var voiceHint: String?
+    @StateObject private var transcriber = SpeechTranscriber()
     @State private var dragOffset: CGFloat = 0
     @FocusState private var noteFocused: Bool
 
@@ -119,9 +121,18 @@ struct RecordPage: View {
                             amountView
                             if !suggestion.chips.isEmpty { chipRow }
                             keypad
-                            Spacer(minLength: 8)
                             noteField
-                            saveButton
+                                .frame(maxHeight: .infinity)
+                            if let voiceHint {
+                                Text(voiceHint)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            HStack(spacing: 10) {
+                                saveButton
+                                micButton
+                            }
                         }
                     }
                     .frame(maxHeight: .infinity)
@@ -151,7 +162,15 @@ struct RecordPage: View {
                     }
                 }
         )
-        .task { bootstrap() }
+        .task {
+            bootstrap()
+            transcriber.onFinish = { text in
+                applyVoice(text)
+            }
+        }
+        .onChange(of: transcriber.transcript) { _, text in
+            if transcriber.isListening { note = text }
+        }
     }
 
     // MARK: - 日期轴
@@ -322,19 +341,39 @@ struct RecordPage: View {
     // MARK: - 备注 / 保存
 
     private var noteField: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             Image(systemName: "text.alignleft")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            TextField("备注（可选）", text: $note)
+                .padding(.top, 3)
+            TextField("备注（可选）", text: $note, axis: .vertical)
                 .font(.subheadline)
+                .lineLimit(2...8)
                 .focused($noteFocused)
                 .submitLabel(.done)
                 .onSubmit { noteFocused = false }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// 语音入口：点一下开始，再点一下结束；说话内容实时写进备注。
+    private var micButton: some View {
+        Button {
+            noteFocused = false
+            transcriber.toggle()
+        } label: {
+            Image(systemName: transcriber.isListening ? "waveform" : "mic.fill")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(transcriber.isListening ? Color.white : Color.brand)
+                .frame(width: 48, height: 48)
+                .background(
+                    transcriber.isListening ? Color.brand : Color.brand.opacity(0.12),
+                    in: Circle()
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var saveButton: some View {
@@ -376,6 +415,33 @@ struct RecordPage: View {
         if !amountEdited {
             inputYuan = Int((suggestion.prefillCents ?? 0) / 100)
             usedEstimate = false
+        }
+    }
+
+    /// 语音结束后：只填有把握的字段，填不到就保持原样。
+    private func applyVoice(_ text: String) {
+        guard !text.isEmpty else { return }
+        note = text
+
+        let parsed = VoiceParser.parse(text)
+        if let code = parsed.categoryCode,
+           let category = allCategories.first(where: { $0.categoryCode == code && $0.kind == kind }) {
+            select(category)
+        }
+        if let yuan = parsed.yuan {
+            inputYuan = yuan
+            amountEdited = true
+        }
+        if !parsed.isEmpty {
+            showHint("已按你说的填好，改一下就行")
+        }
+    }
+
+    private func showHint(_ text: String) {
+        voiceHint = text
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if voiceHint == text { voiceHint = nil }
         }
     }
 
