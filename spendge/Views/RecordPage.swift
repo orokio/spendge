@@ -21,6 +21,7 @@ struct RecordPage: View {
     @State private var date = Date.now
     @State private var note = ""
     @State private var voiceHint: String?
+    @State private var showChips = false
     @StateObject private var transcriber = SpeechTranscriber()
     @State private var dragOffset: CGFloat = 0
     @FocusState private var noteFocused: Bool
@@ -166,6 +167,9 @@ struct RecordPage: View {
         )
         .task {
             bootstrap()
+            // 滑入动画结束后再露出常用金额，避免在滑入过程中突然出现
+            try? await Task.sleep(for: .milliseconds(360))
+            withAnimation(.easeIn(duration: 0.15)) { showChips = true }
             transcriber.onFinish = { text in
                 finishVoice(text)
             }
@@ -289,13 +293,13 @@ struct RecordPage: View {
     /// 固定高度：常用金额是异步算出来的，占位可以避免出现时把键盘顶下去。
     private var chipRow: some View {
         HStack(spacing: 6) {
-            if !suggestion.chips.isEmpty {
+            if showChips, !suggestion.chips.isEmpty {
                 Text("常用")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.trailing, 2)
             }
-            ForEach(suggestion.chips.prefix(4), id: \.self) { chip in
+            ForEach(showChips ? Array(suggestion.chips.prefix(4)) : [], id: \.self) { chip in
                 Button {
                     inputYuan = Int(chip / 100)
                     usedEstimate = suggestion.style == .bucketsOnly
