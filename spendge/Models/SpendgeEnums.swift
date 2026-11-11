@@ -67,13 +67,19 @@ enum CategoryDomain: String, Codable, CaseIterable, Sendable {
 enum CategoryCode: String, CaseIterable, Sendable {
     // 支出
     case grocery = "grocery"
+    case snack = "snack"
     case takeout = "takeout"
     case dineout = "dineout"
     case drink = "drink"
-    case transport = "transport"
+    /// 交通 + 娱乐出行合并
+    case outing = "outing"
     case housing = "housing"
-    case shopping = "shopping"
-    case fun = "fun"
+    case daily = "daily"
+    /// 穿的：衣帽鞋袜、配饰
+    case wear = "wear"
+    /// 用的：家具家电、数码、耐用品
+    case gear = "gear"
+    case subscription = "subscription"
     case social = "social"
     case health = "health"
     case otherExpense = "other_expense"

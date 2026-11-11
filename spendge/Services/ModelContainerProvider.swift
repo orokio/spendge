@@ -18,6 +18,7 @@ enum ModelContainerProvider {
 
         if let container = try? ModelContainer(for: schema, configurations: [configuration]) {
             let context = ModelContext(container)
+            DefaultData.migrateCategoriesIfNeeded(context: context)
             DefaultData.seedIfNeeded(context: context)
             return container
         }
@@ -28,6 +29,7 @@ enum ModelContainerProvider {
             removeStoreFiles()
             if let container = try? ModelContainer(for: schema, configurations: [configuration]) {
                 let context = ModelContext(container)
+                DefaultData.migrateCategoriesIfNeeded(context: context)
                 DefaultData.seedIfNeeded(context: context)
                 return container
             }
