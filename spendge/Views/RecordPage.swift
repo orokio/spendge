@@ -108,12 +108,13 @@ struct RecordPage: View {
                         if !noteEditing {
                             keypad
                         }
-                        if let voiceHint {
-                            Text(voiceHint)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        // 固定占位：提示出现时不会把下面的备注顶动
+                        Text(voiceHint ?? " ")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(height: 16)
                         noteField
                         HStack(spacing: 10) {
                             saveButton
