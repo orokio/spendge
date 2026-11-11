@@ -225,7 +225,7 @@ struct ReviewView: View {
                 .font(.headline)
 
             HStack(spacing: 0) {
-                statColumn(value: "\(homemadeDays)", unit: "天", title: "自己做饭")
+                statColumn(value: "\(homemadeDays)", unit: "天", title: "买菜")
                 statColumn(value: "\(count(.takeout))", unit: "次", title: "外卖")
                 statColumn(value: "\(count(.dineout))", unit: "次", title: "下馆子")
                 statColumn(value: "\(count(.drink))", unit: "杯", title: "咖啡奶茶")

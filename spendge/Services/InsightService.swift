@@ -56,7 +56,7 @@ final class InsightService {
         // 2. 生活结构
         if homemadeDays > 0 {
             return Insight(
-                title: "这个月你下厨 \(homemadeDays) 天",
+                title: "这个月你买了 \(homemadeDays) 天菜",
                 detail: takeoutThisWeek > 0 ? "这周还有 \(takeoutThisWeek) 次外卖" : nil
             )
         }

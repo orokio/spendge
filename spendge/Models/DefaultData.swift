@@ -19,7 +19,7 @@ enum DefaultData {
     static let expenseCategorySeeds: [CategorySeed] = [
         .init(code: .takeout, name: "点外卖", iconName: "takeoutbag.and.cup.and.straw.fill",
               colorHex: "#FB923C", kind: .expense, domain: .food, sortOrder: 1),
-        .init(code: .grocery, name: "买菜做饭", iconName: "cart.fill",
+        .init(code: .grocery, name: "买菜", iconName: "cart.fill",
               colorHex: "#F97316", kind: .expense, domain: .food, sortOrder: 2),
         .init(code: .drink, name: "咖啡奶茶", iconName: "cup.and.saucer.fill",
               colorHex: "#B45309", kind: .expense, domain: .food, sortOrder: 3),
@@ -64,11 +64,11 @@ enum DefaultData {
     /// 与结构变更不同，这里不删库——账单归属是用户数据。
     static func migrateCategoriesIfNeeded(context: ModelContext) {
         let key = "spendge.categoryMigration"
-        guard UserDefaults.standard.integer(forKey: key) < 6 else { return }
+        guard UserDefaults.standard.integer(forKey: key) < 7 else { return }
 
         let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
         guard !categories.isEmpty else {
-            UserDefaults.standard.set(6, forKey: key)
+            UserDefaults.standard.set(7, forKey: key)
             return
         }
 
@@ -119,7 +119,7 @@ enum DefaultData {
         }
 
         try? context.save()
-        UserDefaults.standard.set(6, forKey: key)
+        UserDefaults.standard.set(7, forKey: key)
     }
 
     /// 幂等：已有数据时不重复写入。
