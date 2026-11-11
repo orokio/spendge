@@ -74,77 +74,73 @@ struct RecordPage: View {
     private var amountCents: Int64 { Int64(inputYuan) * 100 }
 
     var body: some View {
-        GeometryReader { geo in
-            // 显式算高度：让分类列真正铺到底，而不是被内容撑住
-            let columnHeight: CGFloat? = nil
-
-            VStack(spacing: 0) {
-                HStack {
-                    Button {
-                        onClose()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 40, height: 40)
-                            .background(Color(.secondarySystemGroupedBackground), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-
-                    Spacer()
-                    Text("记一笔")
-                        .font(.headline)
-                    Spacer()
-                    Color.clear.frame(width: 40, height: 40)
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, height: 40)
+                        .background(Color(.systemGray6), in: Circle())
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .buttonStyle(.plain)
 
-                Picker("类型", selection: $kind) {
-                    Text("支出").tag(TransactionKind.expense)
-                    Text("收入").tag(TransactionKind.income)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 20)
-                .padding(.top, 28)
-                .onChange(of: kind) { _, _ in
-                    amountEdited = false
-                    select(categories.first)
-                }
+                Spacer()
+                Text("记一笔")
+                    .font(.headline)
+                Spacer()
+                Color.clear.frame(width: 40, height: 40)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
 
-                VStack(spacing: 12) {
-                    dateAxis
+            HStack(spacing: 0) {
+                kindSegment(.expense, title: "支出")
+                kindSegment(.income, title: "收入")
+            }
+            .padding(3)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
 
-                    HStack(alignment: .top, spacing: 16) {
-
-                        tagRail
-
-                        VStack(spacing: 12) {
-                            amountView
-                            chipRow
-                            keypad
-                            Spacer(minLength: 16)
-                            noteField
-                                .frame(height: 92)
-                            if let voiceHint {
-                                Text(voiceHint)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            HStack(spacing: 10) {
-                                saveButton
-                                micButton
-                            }
-                        }
-                    }
-                    .frame(height: max(300, geo.size.height - 252), alignment: .top)
-                }
-                .frame(maxHeight: .infinity, alignment: .top)
+            dateAxis
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
+
+            // 剩余空间全交给两列，底部自然贴屏幕
+            GeometryReader { inner in
+                HStack(alignment: .top, spacing: 16) {
+                    tagRail
+                        .frame(height: inner.size.height)
+
+                    VStack(spacing: 12) {
+                        amountView
+                        chipRow
+                            .padding(.top, 14)
+                        keypad
+                        noteField
+                            .frame(height: 92)
+                        Spacer(minLength: 12)
+                        if let voiceHint {
+                            Text(voiceHint)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        HStack(spacing: 10) {
+                            saveButton
+                            micButton
+                        }
+                    }
+                    .frame(height: inner.size.height, alignment: .top)
+                }
+                .padding(.horizontal, 20)
             }
+            .padding(.top, 12)
         }
+        .padding(.bottom, 8)
         .background(
             Color(.systemBackground)
                 .ignoresSafeArea()
@@ -182,6 +178,27 @@ struct RecordPage: View {
     }
 
     // MARK: - 日期轴
+
+    private func kindSegment(_ value: TransactionKind, title: String) -> some View {
+        let selected = kind == value
+        return Button {
+            guard kind != value else { return }
+            amountEdited = false
+            kind = value
+            select(categories.first)
+        } label: {
+            Text(title)
+                .font(.subheadline.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Color.primary : Color.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 32)
+                .background(
+                    selected ? Color(.systemBackground) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+        }
+        .buttonStyle(.plain)
+    }
 
     private var dateAxis: some View {
         ScrollViewReader { proxy in
@@ -283,7 +300,7 @@ struct RecordPage: View {
                 .foregroundStyle(.secondary)
 
             Text(inputYuan > 0 ? "\(inputYuan)" : "0")
-                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .font(.system(size: 46, weight: .bold, design: .rounded))
                 .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
                 .contentTransition(.numericText())
         }
@@ -310,7 +327,7 @@ struct RecordPage: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
-                            inputYuan * 100 == chip ? Color.brand : Color(.secondarySystemGroupedBackground),
+                            inputYuan * 100 == chip ? Color.brand : Color(.systemGray6),
                             in: Capsule()
                         )
                         .foregroundStyle(inputYuan * 100 == chip ? .white : .primary)
@@ -342,7 +359,7 @@ struct RecordPage: View {
             Text(label)
                 .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
                 .frame(maxWidth: .infinity, minHeight: 60)
-                .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 9))
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
     }
