@@ -76,10 +76,6 @@ struct ReviewView: View {
         expenseTransactions.filter { $0.category?.categoryCode == code }.count
     }
 
-    private var impulseCount: Int {
-        monthTransactions.filter { $0.isImpulse == true }.count
-    }
-
     private var domainRows: [(domain: CategoryDomain, cents: Int64)] {
         var totals: [CategoryDomain: Int64] = [:]
         for txn in expenseTransactions {
@@ -233,12 +229,6 @@ struct ReviewView: View {
                 statColumn(value: "\(count(.takeout))", unit: "次", title: "外卖")
                 statColumn(value: "\(count(.dineout))", unit: "次", title: "下馆子")
                 statColumn(value: "\(count(.drink))", unit: "杯", title: "咖啡奶茶")
-            }
-
-            if impulseCount > 0 {
-                Text("其中有 \(impulseCount) 笔被你标为「冲动了」。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
         }
     }

@@ -12,8 +12,6 @@ final class Transaction {
     var note: String?
     /// 金额是否为估计值（档位选择产生）。参与求和，但叙事与覆盖率需要区分。
     var isApproximateAmount: Bool = false
-    /// 轻量行为信号。nil 表示未标记，避免历史数据被当成「不冲动」。
-    var isImpulse: Bool?
     /// 来源：手动 / 补记。
     var sourceRawValue: String = TransactionSource.manual.rawValue
     /// 内部横切标签，用户不可见，由推断填充。
@@ -34,7 +32,6 @@ final class Transaction {
         date: Date = .now,
         note: String? = nil,
         isApproximateAmount: Bool = false,
-        isImpulse: Bool? = nil,
         source: TransactionSource = .manual,
         category: Category? = nil,
         account: Account,
@@ -47,7 +44,6 @@ final class Transaction {
         self.date = date
         self.note = note
         self.isApproximateAmount = isApproximateAmount
-        self.isImpulse = isImpulse
         self.sourceRawValue = source.rawValue
         self.category = category
         self.account = account

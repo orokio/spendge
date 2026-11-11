@@ -144,7 +144,6 @@ final class TransactionService {
         date: Date = .now,
         note: String? = nil,
         isApproximateAmount: Bool = false,
-        isImpulse: Bool? = nil,
         source: TransactionSource = .manual,
         category: Category? = nil,
         account: Account
@@ -156,7 +155,6 @@ final class TransactionService {
             date: date,
             note: note,
             isApproximateAmount: isApproximateAmount,
-            isImpulse: isImpulse,
             source: source,
             category: category,
             account: account
