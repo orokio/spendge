@@ -75,27 +75,6 @@ struct RecordPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button {
-                    onClose()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, height: 40)
-                        .background(Color(.systemGray6), in: Circle())
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-                Text("记一笔")
-                    .font(.headline)
-                Spacer()
-                Color.clear.frame(width: 40, height: 40)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-
             HStack(spacing: 0) {
                 kindSegment(.expense, title: "支出")
                 kindSegment(.income, title: "收入")
@@ -103,7 +82,7 @@ struct RecordPage: View {
             .padding(3)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 20)
-            .padding(.top, 28)
+            .padding(.top, 16)
 
             dateAxis
                 .padding(.horizontal, 20)
