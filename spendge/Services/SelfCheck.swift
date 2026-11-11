@@ -23,7 +23,7 @@ enum SelfCheck {
         // 1. 种子完整性
         let categories = (try? categoryService.categories()) ?? []
         let expenses = categories.filter { $0.kind == .expense }
-        expect(expenses.count == 14, "种子应有 14 个支出分类，实际 \(expenses.count)")
+        expect(expenses.count == 15, "种子应有 15 个支出分类，实际 \(expenses.count)")
         expect(categories.allSatisfy { $0.categoryCode != nil }, "每个分类都应有 code")
         expect(expenses.filter { $0.domain == .food }.count == 5, "吃的领域应有 5 个分类")
         expect(categories.contains { $0.categoryCode == .salary }, "应有工资分类")

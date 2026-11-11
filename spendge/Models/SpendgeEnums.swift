@@ -77,8 +77,10 @@ enum CategoryCode: String, CaseIterable, Sendable {
     case daily = "daily"
     /// 穿的：衣帽鞋袜、配饰
     case wear = "wear"
-    /// 用的：家具家电、数码、耐用品
+    /// 个人设备与工具：数码、器材、配件
     case gear = "gear"
+    /// 给家里添置的固定设施：家具、家电
+    case appliance = "appliance"
     case subscription = "subscription"
     case social = "social"
     case health = "health"

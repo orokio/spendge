@@ -37,12 +37,14 @@ enum DefaultData {
               colorHex: "#EC4899", kind: .expense, domain: .goods, sortOrder: 9),
         .init(code: .gear, name: "装备器材", iconName: "wrench.and.screwdriver.fill",
               colorHex: "#DB2777", kind: .expense, domain: .goods, sortOrder: 10),
+        .init(code: .appliance, name: "家具家电", iconName: "sofa.fill",
+              colorHex: "#C026D3", kind: .expense, domain: .housing, sortOrder: 11),
         .init(code: .subscription, name: "订阅话费", iconName: "creditcard.fill",
-              colorHex: "#0EA5E9", kind: .expense, domain: .other, sortOrder: 11),
+              colorHex: "#0EA5E9", kind: .expense, domain: .other, sortOrder: 12),
         .init(code: .social, name: "人情往来", iconName: "gift.fill",
-              colorHex: "#EF4444", kind: .expense, domain: .social, sortOrder: 12),
+              colorHex: "#EF4444", kind: .expense, domain: .social, sortOrder: 13),
         .init(code: .health, name: "医疗保健", iconName: "cross.case.fill",
-              colorHex: "#10B981", kind: .expense, domain: .health, sortOrder: 13),
+              colorHex: "#10B981", kind: .expense, domain: .health, sortOrder: 14),
         .init(code: .otherExpense, name: "其他", iconName: "ellipsis.circle",
               colorHex: "#9CA3AF", kind: .expense, domain: .other, sortOrder: 99),
     ]
@@ -62,11 +64,11 @@ enum DefaultData {
     /// 与结构变更不同，这里不删库——账单归属是用户数据。
     static func migrateCategoriesIfNeeded(context: ModelContext) {
         let key = "spendge.categoryMigration"
-        guard UserDefaults.standard.integer(forKey: key) < 4 else { return }
+        guard UserDefaults.standard.integer(forKey: key) < 5 else { return }
 
         let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
         guard !categories.isEmpty else {
-            UserDefaults.standard.set(4, forKey: key)
+            UserDefaults.standard.set(5, forKey: key)
             return
         }
 
@@ -117,7 +119,7 @@ enum DefaultData {
         }
 
         try? context.save()
-        UserDefaults.standard.set(4, forKey: key)
+        UserDefaults.standard.set(5, forKey: key)
     }
 
     /// 幂等：已有数据时不重复写入。

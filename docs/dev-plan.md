@@ -66,6 +66,7 @@
    | `daily` | 生活日用 | 用 |
    | `wear` | 衣帽鞋袜 | 用 |
    | `gear` | 装备器材 | 用 |
+   | `appliance` | 家具家电 | 住 |
    | `subscription` | 订阅话费 | — |
    | `social` | 人情往来 | 人情 |
    | `health` | 医疗保健 | 健康 |
