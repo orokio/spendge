@@ -117,18 +117,18 @@ struct RecordPage: View {
 
                     VStack(spacing: 12) {
                         amountView
+                            .padding(.top, 24)
                         chipRow
-                            .padding(.top, 14)
+                            .padding(.top, 10)
                         keypad
-                        noteField
-                            .frame(height: 92)
-                        Spacer(minLength: 12)
                         if let voiceHint {
                             Text(voiceHint)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        noteField
+                            .frame(maxHeight: .infinity)
                         HStack(spacing: 10) {
                             saveButton
                             micButton
@@ -302,6 +302,8 @@ struct RecordPage: View {
             Text(inputYuan > 0 ? "\(inputYuan)" : "0")
                 .font(.system(size: 46, weight: .bold, design: .rounded))
                 .foregroundStyle(inputYuan > 0 ? Color.brand : Color.secondary.opacity(0.3))
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
                 .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -365,7 +367,7 @@ struct RecordPage: View {
     }
 
     private func append(_ digit: String) {
-        guard inputYuan < 100_000 else { return }
+        guard inputYuan < 100_000_000 else { return }
         inputYuan = inputYuan * 10 + (Int(digit) ?? 0)
         usedEstimate = false
         amountEdited = true

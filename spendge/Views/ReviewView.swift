@@ -323,7 +323,7 @@ struct ReviewView: View {
     }
 }
 
-/// 选择月份。只列最近 12 个月，够用且不用面对日历。
+/// 选择月份。不用导航栏，避免滚动时顶部出现半透明效果。
 private struct MonthPickerSheet: View {
     let selected: Date
     let onPick: (Date) -> Void
@@ -335,27 +335,37 @@ private struct MonthPickerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List(options, id: \.self) { date in
-                Button {
-                    onPick(date)
-                } label: {
-                    HStack {
-                        Text(date.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN"))))
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if Calendar.current.isDate(date, equalTo: selected, toGranularity: .month) {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.brand)
+        VStack(spacing: 0) {
+            Text("选择月份")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 22)
+                .padding(.bottom, 14)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(options, id: \.self) { date in
+                        Button {
+                            onPick(date)
+                        } label: {
+                            HStack {
+                                Text(date.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN"))))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if Calendar.current.isDate(date, equalTo: selected, toGranularity: .month) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.brand)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .frame(height: 50)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.bottom, 16)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Color(.systemBackground))
-            .navigationTitle("选择月份")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .background(Color(.systemBackground))
     }
