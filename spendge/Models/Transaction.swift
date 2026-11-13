@@ -10,8 +10,6 @@ final class Transaction {
     var kindRawValue: String
     var date: Date
     var note: String?
-    /// 金额是否为估计值（档位选择产生）。参与求和，但叙事与覆盖率需要区分。
-    var isApproximateAmount: Bool = false
     /// 来源：手动 / 补记。
     var sourceRawValue: String = TransactionSource.manual.rawValue
     /// 内部横切标签，用户不可见，由推断填充。
@@ -31,7 +29,6 @@ final class Transaction {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
-        isApproximateAmount: Bool = false,
         source: TransactionSource = .manual,
         category: Category? = nil,
         account: Account,
@@ -43,7 +40,6 @@ final class Transaction {
         self.kindRawValue = kind.rawValue
         self.date = date
         self.note = note
-        self.isApproximateAmount = isApproximateAmount
         self.sourceRawValue = source.rawValue
         self.category = category
         self.account = account

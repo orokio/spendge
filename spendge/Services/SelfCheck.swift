@@ -28,16 +28,10 @@ enum SelfCheck {
         expect(expenses.filter { $0.domain == .food }.count == 5, "吃的领域应有 5 个分类")
         expect(categories.contains { $0.categoryCode == .salary }, "应有工资分类")
 
-        // 2. 金额建议随方差分层（纯函数，不依赖库里的历史）
-        let lowVariance = AmountSuggestion.make(from: [3_000, 2_500, 2_500, 2_500])
-        expect(lowVariance.style == .mode, "低方差应使用众数预填")
-        expect(lowVariance.prefillCents == 2_500, "众数应取出现最多的金额")
-
-        let highVariance = AmountSuggestion.make(from: [2_000, 10_000, 18_000, 26_000])
-        expect(highVariance.style == .bucketsOnly, "高方差应只给档位")
-        expect(highVariance.prefillCents == nil, "高方差分类不得预填历史值")
-        expect(!highVariance.chips.isEmpty, "档位不应为空")
-        expect(AmountSuggestion.make(from: [2_000, 3_000]).style == .none, "样本不足时不应预填")
+        // 2. 金额快填只记忆不猜测：最近金额去重后最多 3 个
+        let recent = (try? transactionService.recentAmounts()) ?? []
+        expect(recent.count <= 3, "最近金额最多 3 个")
+        expect(Set(recent).count == recent.count, "最近金额不应重复")
 
         // 3. 覆盖率自洽
         let calendar = Calendar.current
@@ -47,6 +41,18 @@ enum SelfCheck {
         if let coverage = try? transactionService.coverage(forMonth: year, month: month) {
             expect(coverage.ratio >= 0 && coverage.ratio <= 1, "覆盖率应在 0–1 之间")
             expect(coverage.coveredDays <= coverage.daysInMonth, "覆盖天数不应超过当月天数")
+        }
+
+        // 3a. 导出与备份可用
+        let backupService = BackupService(context: context)
+        if let csvText = try? backupService.csv(scope: .all) {
+            expect(csvText.hasPrefix("\u{FEFF}日期,类型,分类,金额,备注"), "CSV 应带 BOM 与表头")
+        }
+        if let backupData = try? backupService.backupData(),
+           let decoded = try? backupService.decodeBackup(backupData) {
+            let txnCount = ((try? transactionService.transactions(from: nil, to: nil)) ?? []).count
+            expect(decoded.transactions.count == txnCount, "备份应包含全部账单")
+            expect(decoded.categories.count > 0, "备份应包含分类")
         }
 
         // 3b. 当月天数按公历：二月 28/29，小月 30，大月 31

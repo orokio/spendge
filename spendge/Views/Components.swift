@@ -34,8 +34,8 @@ extension Color {
 // MARK: - 金额格式化
 
 enum AmountFormat {
-    /// 分 → "¥1,234.5" 形式；approximate 时加「≈」前缀。
-    static func string(cents: Int64, showsSign: Bool = false, approximate: Bool = false) -> String {
+    /// 分 → "¥1,234.5" 形式
+    static func string(cents: Int64, showsSign: Bool = false) -> String {
         let yuan = Money.yuan(from: abs(cents))
         let number = yuan.formatted(
             .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "zh_CN"))
@@ -50,7 +50,7 @@ enum AmountFormat {
         } else {
             sign = ""
         }
-        return "\(approximate ? "≈" : "")\(sign)¥\(number)"
+        return "\(sign)¥\(number)"
     }
 }
 

@@ -20,8 +20,8 @@ struct RecordPage: View {
     /// 已输入的金额文本（"26"、"26.5"），小数最多一位
     @State private var amountText = ""
     @State private var amountEdited = false
-    @State private var suggestion: AmountSuggestion = .empty
-    @State private var usedEstimate = false
+    /// 最近用过的不同金额（全分类共享）
+    @State private var recentAmounts: [Int64] = []
     @State private var date = Date.now
     @State private var note = ""
     @State private var voiceHint: String?
@@ -194,24 +194,8 @@ struct RecordPage: View {
                 .ignoresSafeArea()
                 .onTapGesture { noteEditing = false }
         )
-        // 顶部浮出，像一条系统通知
-        .overlay(alignment: .top) {
-            if let toast {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text(toast)
-                }
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.brand, in: Capsule())
-                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-                .padding(.top, 6)
-                .allowsHitTesting(false)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
+        // 顶部浮出，像一条系统通知；与「我的」页共用同一套样式
+        .toast($toast)
         .offset(x: max(0, dragOffset))
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -379,30 +363,29 @@ struct RecordPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 固定高度：常用金额是异步算出来的，占位可以避免出现时把键盘顶下去。
+    /// 最近用过的 3 个不同金额：只记忆，不猜测；点一下即填。
     private var chipRow: some View {
         HStack(spacing: 6) {
-            if showChips, !suggestion.chips.isEmpty {
-                Text("常用")
+            if showChips, !recentAmounts.isEmpty {
+                Text("最近")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.trailing, 2)
             }
-            ForEach(showChips ? Array(suggestion.chips.prefix(4)) : [], id: \.self) { chip in
+            ForEach(showChips ? recentAmounts : [], id: \.self) { chip in
                 Button {
-                    amountText = String(chip / 100)
-                    usedEstimate = suggestion.style == .bucketsOnly
+                    amountText = Self.text(fromCents: chip)
                     amountEdited = true
                 } label: {
-                    Text("\(chip / 100)")
+                    Text(Self.text(fromCents: chip))
                         .font(.system(size: 13, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
-                            amountCents == Int64(chip) ? Color.brand : Color.surface,
+                            amountCents == chip ? Color.brand : Color.surface,
                             in: Capsule()
                         )
-                        .foregroundStyle(amountCents == Int64(chip) ? .white : .primary)
+                        .foregroundStyle(amountCents == chip ? .white : .primary)
                 }
                 .buttonStyle(.plain)
             }
@@ -447,7 +430,6 @@ struct RecordPage: View {
             guard next <= 9_999_999 else { return }
             amountText = String(next)
         }
-        usedEstimate = false
         amountEdited = true
     }
 
@@ -459,7 +441,6 @@ struct RecordPage: View {
 
     private func clearAmount() {
         amountText = ""
-        usedEstimate = false
         amountEdited = true
     }
 
@@ -534,20 +515,15 @@ struct RecordPage: View {
 
     private func bootstrap() {
         if selectedCategory == nil { select(categories.first) }
+        loadRecentAmounts()
+    }
+
+    private func loadRecentAmounts() {
+        recentAmounts = (try? TransactionService(context: context).recentAmounts()) ?? []
     }
 
     private func select(_ category: Category?) {
         selectedCategory = category
-        guard let category else {
-            suggestion = .empty
-            if !amountEdited { amountText = "" }
-            return
-        }
-        suggestion = (try? TransactionService(context: context).amountSuggestion(for: category)) ?? .empty
-        if !amountEdited {
-            amountText = (suggestion.prefillCents ?? 0) > 0 ? String((suggestion.prefillCents ?? 0) / 100) : ""
-            usedEstimate = false
-        }
     }
 
     /// 边听边填：备注与金额始终来自同一段文本。
@@ -624,7 +600,6 @@ struct RecordPage: View {
             kind: kind,
             date: date,
             note: trimmed.isEmpty ? nil : trimmed,
-            isApproximateAmount: usedEstimate,
             source: .manual,
             category: category,
             account: account
@@ -632,21 +607,13 @@ struct RecordPage: View {
 
         // 留在页面上连着记：给一句确认，然后清空这笔的内容，分类和日期保留
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        showToast("已记下 \(AmountFormat.string(cents: amountCents)) · \(category.name)")
+        Toast.show("已记下 \(AmountFormat.string(cents: amountCents)) · \(category.name)", into: $toast)
         amountText = ""
         amountEdited = false
-        usedEstimate = false
         note = ""
         noteEditing = false
         voiceHint = nil
+        loadRecentAmounts()
     }
 
-    private func showToast(_ text: String) {
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { toast = text }
-        Task {
-            try? await Task.sleep(for: .seconds(1.8))
-            guard toast == text else { return }
-            withAnimation(.easeIn(duration: 0.25)) { toast = nil }
-        }
-    }
 }
