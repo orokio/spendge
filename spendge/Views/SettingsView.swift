@@ -28,10 +28,7 @@ struct SettingsView: View {
 
     @Environment(\.modelContext) private var context
 
-    @State private var cloudSync = false
-    @State private var localVoice = true
-    @State private var stayAfterSave = true
-    @State private var dailyReminder = false
+    @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
 
     @State private var sharedFile: SharedFile?
     @State private var toast: String?
@@ -47,15 +44,11 @@ struct SettingsView: View {
                     .padding(.top, 56)
 
                 group([
-                    Item(icon: "icloud", title: "iCloud 云同步", detail: cloudSync ? "已开启" : "未开启",
-                         isOn: Binding(get: { cloudSync }, set: { _ in cloudSync.toggle() })),
-                    Item(icon: "clock.arrow.circlepath", title: "上次同步", detail: "—"),
+                    Item(icon: "icloud", title: "iCloud 云同步", detail: "暂未接入", isOn: nil),
                 ])
 
                 group([
-                    Item(icon: "mic", title: "语音识别优先本地", detail: "", isOn: $localVoice),
                     Item(icon: "square.and.pencil", title: "记下后留在记录页", detail: "", isOn: $stayAfterSave),
-                    Item(icon: "bell", title: "每日提醒", detail: "", isOn: $dailyReminder),
                 ])
 
                 dataGroup
@@ -64,11 +57,6 @@ struct SettingsView: View {
                     Item(icon: "info.circle", title: "关于", detail: "0.1"),
                 ])
 
-                Text("云同步与提醒暂未接入实现")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 4)
             }
             .padding(.horizontal, PageLayout.pageInset)
             .padding(.bottom, 110)
@@ -244,18 +232,12 @@ struct SettingsView: View {
                 Toggle("", isOn: isOn)
                     .labelsHidden()
                     .tint(Color.brand)
-                    .disabled(true)   // 占位：还不影响真实行为
             } else if !item.detail.isEmpty {
                 Text(item.detail)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
-            if item.isOn == nil {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
         }
         .padding(.horizontal, 16)
         .frame(height: 50)

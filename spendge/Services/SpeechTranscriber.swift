@@ -70,6 +70,7 @@ final class SpeechTranscriber: ObservableObject {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // 端侧优先：设备支持时音频不离开手机；不支持时由系统决定
         if recognizer.supportsOnDeviceRecognition {
             request.requiresOnDeviceRecognition = true
         }

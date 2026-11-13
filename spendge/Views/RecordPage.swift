@@ -28,6 +28,7 @@ struct RecordPage: View {
     @State private var showChips = false
     @StateObject private var transcriber = SpeechTranscriber()
     @State private var dragOffset: CGFloat = 0
+    @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
     @State private var noteEditing = false
     @State private var toast: String?
 
@@ -604,6 +605,13 @@ struct RecordPage: View {
             category: category,
             account: account
         )
+
+        // 偏好：记完就回去（默认留在页面连着记）
+        if !stayAfterSave {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onClose()
+            return
+        }
 
         // 留在页面上连着记：给一句确认，然后清空这笔的内容，分类和日期保留
         UIImpactFeedbackGenerator(style: .light).impactOccurred()

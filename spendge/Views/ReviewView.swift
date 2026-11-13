@@ -466,7 +466,8 @@ struct ReviewView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
 
                 if let budget = monthBudget, budget.amountCents > 0 {
-                    ProgressView(value: min(Double(totalExpenseCents) / Double(budget.amountCents), 1))
+                    // 进度条表示「还剩多少」：预算 3000、花了 600 → 绿色 80%（2400）
+                    ProgressView(value: max(0, 1 - Double(totalExpenseCents) / Double(budget.amountCents)))
                         .tint(Color.brand)
                 }
             }
