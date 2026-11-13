@@ -254,6 +254,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "海绵记账";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用语音填写备注时需要麦克风";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "把你说的话转成备注文字";
@@ -301,6 +302,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "海绵记账";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用语音填写备注时需要麦克风";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "把你说的话转成备注文字";

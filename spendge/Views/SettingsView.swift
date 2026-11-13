@@ -23,6 +23,7 @@ struct SettingsView: View {
         let title: String
         let message: String
         var isConfirm = false
+        var confirmTitle = "继续"
         var onConfirm: (() -> Void)?
     }
 
@@ -81,8 +82,8 @@ struct SettingsView: View {
                 return Alert(
                     title: Text(notice.title),
                     message: Text(notice.message),
-                    primaryButton: .destructive(Text("覆盖恢复")) {
-                        if let data = pendingRestore { performRestore(data) }
+                    primaryButton: .destructive(Text(notice.confirmTitle)) {
+                        notice.onConfirm?()
                     },
                     secondaryButton: .cancel(Text("取消")) { pendingRestore = nil }
                 )
@@ -106,6 +107,16 @@ struct SettingsView: View {
             actionRow(icon: "arrow.down.doc", title: "从备份恢复", detail: "") {
                 showImporter = true
             }
+            divider
+            actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
+                notice = Notice(
+                    title: "清除全部记录？",
+                    message: "会删除所有账单、预算和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
+                    isConfirm: true,
+                    confirmTitle: "清除",
+                    onConfirm: { clearAllData() }
+                )
+            }
         }
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -117,15 +128,16 @@ struct SettingsView: View {
             .padding(.leading, 48)
     }
 
-    private func actionRow(icon: String, title: String, detail: String, action: @escaping () -> Void) -> some View {
+    private func actionRow(icon: String, title: String, detail: String, destructive: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.brand)
+                    .foregroundStyle(destructive ? Color.red : Color.brand)
                     .frame(width: 24)
                 Text(title)
                     .font(.subheadline)
+                    .foregroundStyle(destructive ? Color.red : Color.primary)
                 Spacer(minLength: 12)
                 if !detail.isEmpty {
                     Text(detail)
@@ -180,7 +192,10 @@ struct SettingsView: View {
             title: "从备份恢复？",
             message: "会用备份里的内容替换当前所有记录、预算和「没花钱」确认。建议先导出一份当前备份。",
             isConfirm: true,
-            onConfirm: nil
+            confirmTitle: "覆盖恢复",
+            onConfirm: {
+                if let data = pendingRestore { performRestore(data) }
+            }
         )
     }
 
@@ -192,6 +207,19 @@ struct SettingsView: View {
         } catch {
             pendingRestore = nil
             notice = Notice(title: "恢复失败", message: "\(error)")
+        }
+    }
+
+    /// 清空用户数据，保留分类与账户（否则记录页没有可选项）
+    private func clearAllData() {
+        do {
+            for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
+            for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
+            for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
+            try context.save()
+            Toast.show("已清空全部记录", into: $toast)
+        } catch {
+            notice = Notice(title: "清除失败", message: "(error)")
         }
     }
 

@@ -12,7 +12,7 @@
 | 数据模型 | Account / Category / Transaction / Budget / DayConfirmation 齐全，Category 带 code + domain，金额存 Int64 分 | 可用，缺 Goal 与 merchant |
 | 服务层 | Transaction / Account / Category / Budget / Insight / DayConfirmation / VoiceParser 齐全 | 基本收口；仅 `BudgetService.setBudget` 与 `TransactionService.update` 没有调用方 |
 | UI 层 | 三页：设置 · 今天 · 回看；记录页为整页选择式（分类竖列 + 常驻键盘 + 连续记账） | 可用，缺「编辑一笔」与「预算入口」 |
-| 工程 | 无 test target；DEBUG 启动跑 SelfCheck（30 项）；编译需 DEVELOPER_DIR 指向 Xcode.app | 回归靠 SelfCheck，属技术债 |
+| 工程 | 无 test target；DEBUG 下带 `-selfcheck` 参数启动才跑 SelfCheck（29 项）；编译需 DEVELOPER_DIR 指向 Xcode.app | 回归靠 SelfCheck，属技术债 |
 
 已知断点（2026-11-12 复核）：
 
@@ -86,7 +86,9 @@
 
 ### M0-3 测试基线
 
-采用最轻的形式，**不新建 test target**：`Services/SelfCheck.swift`（#if DEBUG）用内存容器跑核心不变量，启动时打印结果。
+采用最轻的形式，**不新建 test target**：`Services/SelfCheck.swift`（#if DEBUG）用内存容器跑核心不变量。
+
+运行方式：只在启动参数带 `-selfcheck` 时执行（`xcrun simctl launch <device> com.orokio.spendge -selfcheck`），结果写到 Documents/selfcheck.log。这样日常调试启动不再每次都跑一遍。
 
 - 覆盖：种子完整性（11 支出分类 / 全部有 code / 吃的领域 4 个）、记账与月度汇总、余额联动、预算进度、删除保护、删除分类后置空且仍计入总额、按 code 取分类。
 - 失败只在控制台打印 `[SelfCheck] FAIL: ...`，不阻断运行；用户手动试用时也能顺带看到。
@@ -121,7 +123,7 @@
 | M1-1 | 预算设置入口 | 回看页预算区可点 → Sheet → 设置本月总预算（月度总额）；只展示「已花 / 还剩」陈述句，不做告警、不做超支变色。分类预算等 M3 Goal | **已完成** |
 | M1-7 | 数据导出与恢复 | CSV（全部/本月，UTF-8 BOM，走分享面板）+ JSON 备份 + 恢复（覆盖式，二次确认，恢复账单/分类/预算/没花钱确认） | **已完成** |
 | M1-8 | 设置页开关接线 | 「记下后留在记录页」用 AppStorage 持久化并真实生效；云同步行改为「暂未接入」的状态行，去掉没有实现的「每日提醒」；**语音本地/联网开关已移除**——端侧优先写死，避免被误解成会员的云端解析 | **已完成** |
-| M1-5 | 空态与首屏 | 首次打开、当天无记录、当月无预算三处的文案与引导 | 待做 |
+| M1-5 | 空态与首屏 | 冷启动开屏由系统启动屏承载（`UILaunchScreen`：薄荷底色 + 居中 logo），首帧与启动屏同位置的 logo 交叉淡出、界面同时淡入，不加延迟；今天页空态保持原样式（日期行 + 今天没花钱 + ＋），页面内不放 logo | **已完成** |
 | M1-6 | 设置页壳 | 三页结构：设置（0）← 今天（1）→ 回看（2），启动停在今天，首页右滑进设置；四组入口静态占位 | **已完成** |
 | M1-10 | 主题 token 层 | 颜色收敛为 `Palette`（accent / surface / canvas / income / 领域色 / 渐变），视图不再写死 hex；`Palette.warm` 按暖色 logo 的奶油桃配色备好，暂不启用；切换机制留待真正做主题时补环境注入 | **已完成** |
 | M1-9 | 本地化基础设施（中 / 英） | 目前界面文案写死在 Swift 里，只改了显示名。下一步引入 String Catalog（工程已开 `SWIFT_EMIT_LOC_STRINGS`），界面文案走 `String(localized:)`；App 名称用 `InfoPlist.strings` 本地化：中文「海绵记账」、英文「Spendge」 | 待做 |
