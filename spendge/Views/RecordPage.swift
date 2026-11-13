@@ -145,7 +145,7 @@ struct RecordPage: View {
                 kindSegment(.income, title: "收入")
             }
             .padding(3)
-            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 20)
             .padding(.top, 12)
 
@@ -190,7 +190,7 @@ struct RecordPage: View {
         // 与首页 ＋ 号距安全区底部的距离一致
         .padding(.bottom, 26)
         .background(
-            Color(.systemBackground)
+            Color.surfaceElevated
                 .ignoresSafeArea()
                 .onTapGesture { noteEditing = false }
         )
@@ -263,7 +263,7 @@ struct RecordPage: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
                 .background(
-                    selected ? Color(.systemBackground) : Color.clear,
+                    selected ? Color.surfaceElevated : Color.clear,
                     in: RoundedRectangle(cornerRadius: 8)
                 )
         }
@@ -334,7 +334,7 @@ struct RecordPage: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 9)
                                 .background(
-                                    selected ? Color.brand : Color(.systemGray6),
+                                    selected ? Color.brand : Color.surface,
                                     in: RoundedRectangle(cornerRadius: 9)
                                 )
                                 .foregroundStyle(selected ? .white : .primary)
@@ -349,7 +349,7 @@ struct RecordPage: View {
         .overlay(alignment: .bottom) {
             // 底部渐隐：暗示还可以往下滚
             LinearGradient(
-                colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
+                colors: [Color.surfaceElevated.opacity(0), Color.surfaceElevated],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -399,7 +399,7 @@ struct RecordPage: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
-                            amountCents == Int64(chip) ? Color.brand : Color(.systemGray6),
+                            amountCents == Int64(chip) ? Color.brand : Color.surface,
                             in: Capsule()
                         )
                         .foregroundStyle(amountCents == Int64(chip) ? .white : .primary)
@@ -431,7 +431,7 @@ struct RecordPage: View {
             Text(label)
                 .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
                 .frame(maxWidth: .infinity, minHeight: 60)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 9))
+                .background(Color.surface, in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
     }
@@ -484,7 +484,7 @@ struct RecordPage: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.surface, in: RoundedRectangle(cornerRadius: 12))
         // 整块灰底都能点进输入，而不是只有第一行
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded { noteEditing = true })

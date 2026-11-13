@@ -70,7 +70,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func row(_ item: Item) -> some View {

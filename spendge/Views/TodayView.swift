@@ -42,8 +42,8 @@ struct TodayView: View {
             // 底部渐隐：与回看页一致，行滚到 ＋ 号前淡出，不做硬裁切
             LinearGradient(
                 stops: [
-                    .init(color: Color(.systemGroupedBackground).opacity(0), location: 0),
-                    .init(color: Color(.systemGroupedBackground), location: 1),
+                    .init(color: Color.canvas.opacity(0), location: 0),
+                    .init(color: Color.canvas, location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom

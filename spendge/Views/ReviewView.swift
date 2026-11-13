@@ -141,8 +141,8 @@ struct ReviewView: View {
             // 底部渐隐：行滚到月份控件前淡出，不做硬裁切
             LinearGradient(
                 stops: [
-                    .init(color: Color(.systemGroupedBackground).opacity(0), location: 0),
-                    .init(color: Color(.systemGroupedBackground), location: 1),
+                    .init(color: Color.canvas.opacity(0), location: 0),
+                    .init(color: Color.canvas, location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -164,7 +164,7 @@ struct ReviewView: View {
             }
             .presentationDetents([.fraction(1.0 / 3.0)])
             .presentationCornerRadius(24)
-            .presentationBackground(Color(.systemBackground))
+            .presentationBackground(Color.surfaceElevated)
         }
         .task { refresh() }
         .onChange(of: monthAnchor) { _, _ in refresh() }
@@ -421,17 +421,9 @@ struct ReviewView: View {
         return "\(Int((Double(cents) / Double(pieTotalCents) * 100).rounded()))%"
     }
 
+    /// 领域配色由主题提供，换主题时饼图与图例一起变
     private func color(for domain: CategoryDomain) -> Color {
-        switch domain {
-        case .food: return Color(hex: "#F97316")
-        case .transport: return Color(hex: "#3B82F6")
-        case .housing: return Color(hex: "#14B8A6")
-        case .goods: return Color(hex: "#A855F7")
-        case .play: return Color(hex: "#8B5CF6")
-        case .social: return Color(hex: "#EF4444")
-        case .health: return Color(hex: "#10B981")
-        case .other: return Color(hex: "#9CA3AF")
-        }
+        Palette.current.domainColor(domain)
     }
 
     // MARK: - 某一天的明细
@@ -575,6 +567,6 @@ private struct MonthPickerSheet: View {
                 .padding(.bottom, 16)
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.surfaceElevated)
     }
 }

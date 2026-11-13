@@ -3,10 +3,21 @@ import SwiftUI
 // MARK: - Color
 
 extension Color {
-    /// 品牌主色：海绵青
-    static let brand = Color(hex: "#14B8A6")
-    /// 收入绿
-    static let income = Color(hex: "#10B981")
+    /// 品牌主色（语义 token，实际取值见 Palette）
+    static var brand: Color { Palette.current.accent }
+    /// 强调色的浅色版
+    static var brandSoft: Color { Palette.current.accentSoft }
+    /// 收入色
+    static var income: Color { Palette.current.income }
+    /// 页面底色
+    static var canvas: Color { Palette.current.background }
+    /// 表面色：键盘、输入框、分段控件底
+    static var surface: Color { Palette.current.surface }
+    /// 整页容器 / 卡片色
+    static var surfaceElevated: Color { Palette.current.surfaceElevated }
+    /// 正文与次要文字
+    static var textPrimary: Color { Palette.current.text }
+    static var textSecondary: Color { Palette.current.textSecondary }
 
     init(hex: String) {
         let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
@@ -151,7 +162,7 @@ struct MonthStepper: View {
                 Image(systemName: "chevron.left")
                     .font(.subheadline.weight(.semibold))
                     .frame(width: 36, height: 36)
-                    .background(Color(.systemGray6), in: Circle())
+                    .background(Color.surface, in: Circle())
             }
             .buttonStyle(.plain)
 
@@ -167,7 +178,7 @@ struct MonthStepper: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
                     .frame(width: 36, height: 36)
-                    .background(Color(.systemGray6), in: Circle())
+                    .background(Color.surface, in: Circle())
             }
             .buttonStyle(.plain)
         }
