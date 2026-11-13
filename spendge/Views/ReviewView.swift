@@ -6,8 +6,6 @@ import SwiftData
 /// 一种时间尺度（月份），不掺日视角的交互。
 struct ReviewView: View {
     /// 正在翻页：月份切换不响应，避免滑动途中弹出月份面板
-    let paging: Bool
-    let onBack: () -> Void
     let onEdit: (Transaction) -> Void
 
     @Environment(\.modelContext) private var context
@@ -21,10 +19,12 @@ struct ReviewView: View {
     @State private var selectedDomain: CategoryDomain?
     @State private var selectedDay: Date?
     @State private var pieKind: TransactionKind = .expense
+    @State private var showBudgetEditor = false
+    /// 页面正在滚动：此时不响应点击，避免滚动途中误开半屏
+    @State private var isScrolling = false
 
     private let calendar = Calendar.current
 
-    @Environment(InteractionGate.self) private var interaction
     /// 一屏正好露出 12 天；一个月的柱子在屏幕上放不下，横向滚动查看
     private let barGap: CGFloat = 3
     private let daysPerScreen: CGFloat = 12
@@ -120,23 +120,28 @@ struct ReviewView: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 30) {
+                VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                     header
+                    budgetSection
                     if !monthTransactions.isEmpty {
-                        if let selectedDay {
-                            daySection(for: selectedDay)
-                        } else {
-                            pieSection
+                        Group {
+                            if let selectedDay {
+                                daySection(for: selectedDay)
+                            } else {
+                                pieSection
+                            }
                         }
+                        // 预算块到内容块之间再松一档：28 + 12 = 40
+                        .padding(.top, PageLayout.blockGap)
                     }
-                    if monthBudget != nil { budgetSection }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageLayout.pageInset)
                 .padding(.top, 56)
                 // 滚到底时最后一行要落在渐隐区之上
                 .padding(.bottom, 110)
             }
             .scrollIndicators(.hidden)
+            .modifier(ScrollPhaseGate { scrolling in isScrolling = scrolling })
 
             // 底部渐隐：行滚到月份控件前淡出，不做硬裁切
             LinearGradient(
@@ -175,7 +180,7 @@ struct ReviewView: View {
     // MARK: - 这个月
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
             if let coverage, coverage.coveredDays > 0 {
                 Text("有你 \(coverage.coveredDays) 天的记录")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
@@ -191,7 +196,8 @@ struct ReviewView: View {
             }
 
             sparkline
-                .padding(.top, 6)
+                // 副标题到时间轴：行内 8 + 这里 4 = 块内 12
+                .padding(.top, PageLayout.blockGap - PageLayout.inlineGap)
         }
     }
 
@@ -231,10 +237,6 @@ struct ReviewView: View {
                 }
                 .onAppear { scrollToEnd(proxy, animated: false) }
                 .onChange(of: monthAnchor) { _, _ in scrollToEnd(proxy, animated: false) }
-                // 只要图表在滚，翻页就让路
-                .modifier(ScrollPhaseGate { scrolling in
-                    interaction.blockingPageSwipe = scrolling
-                })
             }
         }
         .frame(height: 82)
@@ -297,7 +299,6 @@ struct ReviewView: View {
 
     private var monthButton: some View {
         Button {
-            guard !paging else { return }
             showMonthPicker = true
         } label: {
             HStack(spacing: 6) {
@@ -313,7 +314,7 @@ struct ReviewView: View {
             .overlay(Capsule().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .padding(.trailing, 22)
+        .padding(.trailing, PageLayout.pageInset)
         .padding(.bottom, 26)
     }
 
@@ -335,16 +336,15 @@ struct ReviewView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 16)
-                    .padding(.horizontal, 18)
+                    .padding(.top, PageLayout.blockGap)
             } else {
+                // 与标题同一条边线：不再额外内缩
                 pieLegend
-                    .padding(.top, 16)
-                    .padding(.horizontal, 18)
+                    .padding(.top, PageLayout.blockGap)
             }
 
             pieChart
-                .padding(.top, pieRows.isEmpty ? 18 : 20)
+                .padding(.top, PageLayout.blockGap)
         }
     }
 
@@ -430,7 +430,7 @@ struct ReviewView: View {
 
     private func daySection(for day: Date) -> some View {
         let items = transactions(on: day)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: PageLayout.blockGap) {
             Text(day.formatted(.dateTime.month(.abbreviated).day().weekday(.wide).locale(Locale(identifier: "zh_CN"))))
                 .font(.headline)
 
@@ -445,37 +445,73 @@ struct ReviewView: View {
                     onDelete: { txn in try? TransactionService(context: context).delete(txn) },
                     onTap: onEdit
                 )
-                // 标题与列表之间多留一点
-                .padding(.top, 10)
             }
         }
     }
 
     private var budgetSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        Button {
+            // 滚动途中不响应，避免手指划过时误开面板
+            guard !isScrolling else { return }
+            showBudgetEditor = true
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("预算")
                     .font(.headline)
-                Spacer()
-                Text(budgetDescription())
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
 
-            if let budget = monthBudget {
-                ProgressView(value: min(Double(totalExpenseCents) / Double(max(budget.amountCents, 1)), 1))
-                    .tint(Color.brand)
+                Text(budgetDescription())
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                if let budget = monthBudget, budget.amountCents > 0 {
+                    ProgressView(value: min(Double(totalExpenseCents) / Double(budget.amountCents), 1))
+                        .tint(Color.brand)
+                }
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showBudgetEditor) {
+            BudgetEditorSheet(
+                monthTitle: monthTitle,
+                initialCents: monthBudget?.amountCents,
+                onSave: saveBudget,
+                onClear: clearBudget
+            )
+            // 与月份选择面板保持一致的半层高度
+            .presentationDetents([.fraction(1.0 / 3.0)])
+            .presentationCornerRadius(24)
+            .presentationBackground(Color.surfaceElevated)
         }
     }
 
+    /// 陈述句，不做红黄绿告警
     private func budgetDescription() -> String {
-        guard let budget = monthBudget else { return "" }
+        guard let budget = monthBudget else {
+            return "设置一个数，用来对照这个月花到哪儿了"
+        }
         let remaining = budget.amountCents - totalExpenseCents
         if remaining >= 0 {
-            return "还剩 \(AmountFormat.string(cents: remaining))"
+            return "已花 \(AmountFormat.string(cents: totalExpenseCents)) · 还剩 \(AmountFormat.string(cents: remaining))"
         }
-        return "比预算多花了 \(AmountFormat.string(cents: -remaining))"
+        return "已花 \(AmountFormat.string(cents: totalExpenseCents)) · 比计划多 \(AmountFormat.string(cents: -remaining))"
+    }
+
+    private func saveBudget(_ cents: Int64) {
+        let comps = calendar.dateComponents([.year, .month], from: monthStart)
+        try? BudgetService(context: context).setBudget(
+            category: nil,
+            amountCents: cents,
+            year: comps.year ?? 2026,
+            month: comps.month ?? 1
+        )
+    }
+
+    private func clearBudget() {
+        guard let budget = monthBudget else { return }
+        try? BudgetService(context: context).deleteBudget(budget)
     }
 
     /// 点柱子看那天的流水；再点同一根回到月度饼图。
@@ -523,6 +559,86 @@ private struct ScrollPhaseGate: ViewModifier {
     }
 }
 
+/// 设置某个月的预算：只做一个总额，不提醒、不变色。
+private struct BudgetEditorSheet: View {
+    let monthTitle: String
+    let initialCents: Int64?
+    let onSave: (Int64) -> Void
+    let onClear: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
+
+    init(monthTitle: String,
+         initialCents: Int64?,
+         onSave: @escaping (Int64) -> Void,
+         onClear: @escaping () -> Void) {
+        self.monthTitle = monthTitle
+        self.initialCents = initialCents
+        self.onSave = onSave
+        self.onClear = onClear
+        _text = State(initialValue: initialCents.map { Self.text(fromCents: $0) } ?? "")
+    }
+
+    private static func text(fromCents cents: Int64) -> String {
+        cents % 100 == 0 ? String(cents / 100) : String(format: "%.2f", Double(cents) / 100)
+    }
+
+    private var cents: Int64? {
+        guard let value = Double(text.replacingOccurrences(of: ",", with: "")), value > 0 else { return nil }
+        return Int64((value * 100).rounded())
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 16) {
+                Text("\(monthTitle)预算")
+                    .font(.headline)
+
+                Spacer()
+
+                if initialCents != nil {
+                    Button {
+                        onClear()
+                        dismiss()
+                    } label: {
+                        Text("清除预算")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    if let cents {
+                        onSave(cents)
+                        dismiss()
+                    }
+                } label: {
+                    Text("保存")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(cents == nil ? Color.secondary : Color.brand)
+                }
+                .buttonStyle(.plain)
+                .disabled(cents == nil)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("¥")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                TextField("0", text: $text)
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.brand)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+    }
+}
+
 /// 选择月份。不用导航栏，避免滚动时顶部出现半透明效果。
 private struct MonthPickerSheet: View {
     let selected: Date
@@ -557,7 +673,7 @@ private struct MonthPickerSheet: View {
                                         .foregroundStyle(Color.brand)
                                 }
                             }
-                            .padding(.horizontal, 24)
+                            .padding(.horizontal, PageLayout.pageInset)
                             .frame(height: 50)
                             .contentShape(Rectangle())
                         }

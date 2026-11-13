@@ -17,8 +17,8 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                Text("设置")
+            VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
+                Text("我的")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .padding(.top, 56)
 
@@ -49,7 +49,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 4)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageLayout.pageInset)
             .padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)

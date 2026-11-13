@@ -65,7 +65,8 @@ erDiagram
 5. **分类软删除**（`isArchived`），历史账单与统计不受影响。
 6. **服务层 `@MainActor` + `ModelContext`**：UI 层直接调用服务方法，未来如需后台写入再引入 actor。
 7. **不做独立账号**：不注册、不要手机号邮箱；同步身份直接用 iCloud，未登录也能完整使用。设置页展示的是 iCloud 状态，不是登录表单。
-8. **颜色只认语义 token**：视图用 `Color.brand / surface / surfaceElevated / canvas / income` 与 `Palette.current.domainColor(_:)`，不直接写 hex 或系统灰。换主题只改 `Palette.current`；`Palette.warm` 已按奶油桃配色备好但未启用。注意 `current` 是静态值，真正做切换时要改成环境注入才能触发刷新。
+8. **间距只有三级**：`PageLayout` 提供 `pageInset`（24）、`sectionGap`（32）、`blockGap`（12）、`inlineGap`（8）。页面容器只加一次，组件内部不再手填数字微调——之前图例多缩进 18、区块间距 26/30/48 各写一套，就是这样散出来的。
+9. **颜色只认语义 token**：视图用 `Color.brand / surface / surfaceElevated / canvas / income` 与 `Palette.current.domainColor(_:)`，不直接写 hex 或系统灰。换主题只改 `Palette.current`；`Palette.warm` 已按奶油桃配色备好但未启用。注意 `current` 是静态值，真正做切换时要改成环境注入才能触发刷新。
 
 ## 功能流程
 

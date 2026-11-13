@@ -146,11 +146,11 @@ struct RecordPage: View {
             }
             .padding(3)
             .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal, 20)
+            .padding(.horizontal, PageLayout.pageInset)
             .padding(.top, 12)
 
             dateAxis
-                .padding(.horizontal, 20)
+                .padding(.horizontal, PageLayout.pageInset)
                 .padding(.top, 14)
 
             // 剩余空间全交给两列，底部自然贴屏幕
@@ -183,7 +183,7 @@ struct RecordPage: View {
                     }
                     .frame(height: inner.size.height, alignment: .top)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, PageLayout.pageInset)
             }
             .padding(.top, 12)
         }

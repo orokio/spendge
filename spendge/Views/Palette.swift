@@ -30,6 +30,24 @@ struct Palette {
     }
 }
 
+/// 全局背景：底色 + 顶部渐变，三个 tab 各自铺一层，
+/// 因为 TabView 的页面容器自带不透明底色，根部的渐变会被盖住。
+struct AppBackground: View {
+    var body: some View {
+        ZStack {
+            Color.canvas
+            LinearGradient(
+                stops: Palette.current.gradientStops.map {
+                    Gradient.Stop(color: $0.color, location: $0.location)
+                },
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
 extension Palette {
     /// 薄荷：当前启用的主题
     static let mint = Palette(

@@ -3,10 +3,7 @@ import SwiftData
 
 /// 今天：一句话 + 今天记了什么。只回答一个问题。
 struct TodayView: View {
-    /// 正在翻页：此时 ＋ 号不响应，避免同一个手势既翻页又开记录页
-    let paging: Bool
     let onOpenRecord: () -> Void
-    let onOpenReview: () -> Void
     let onEdit: (Transaction) -> Void
 
     @Environment(\.modelContext) private var context
@@ -66,7 +63,7 @@ struct TodayView: View {
     // MARK: - hero
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
             highlighted(insight?.title ?? "正在看你的账本…")
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .fixedSize(horizontal: false, vertical: true)
@@ -79,16 +76,15 @@ struct TodayView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, PageLayout.pageInset)
         .padding(.top, 56)
-        .padding(.bottom, 28)
     }
 
     // MARK: - 今天
 
     private var todayList: some View {
         // 与回看页一致：日期行到列表保持 22pt
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: PageLayout.blockGap) {
             // 一行：日期靠左，「今天没花钱」靠右
             HStack(alignment: .firstTextBaseline) {
                 HStack(spacing: 6) {
@@ -131,8 +127,9 @@ struct TodayView: View {
                 )
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 20)
+        .padding(.horizontal, PageLayout.pageInset)
+        // 情绪块到列表：比普通区块再松一档（28 + 12 = 40），与回看页一致
+        .padding(.top, PageLayout.sectionGap + PageLayout.blockGap)
     }
 
     /// 数字用品牌色，句子本身保持中性。
@@ -159,32 +156,17 @@ struct TodayView: View {
     // MARK: - FAB
 
     private var fab: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            // 回看入口：小一号、低对比，作为手势的兜底
-            Button(action: onOpenReview) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 46, height: 46)
-                    .background(.regularMaterial, in: Circle())
-                    .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
-            }
-            .buttonStyle(.plain)
-            .frame(height: 58, alignment: .bottom)
-
-            Button {
-                guard !paging else { return }
-                onOpenRecord()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 58, height: 58)
-                    .background(Color.brand, in: Circle())
-                    .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
-            }
-            .buttonStyle(.plain)
+        Button {
+            onOpenRecord()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background(Color.brand, in: Circle())
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
         }
+        .buttonStyle(.plain)
         .padding(.trailing, 22)
         .padding(.bottom, 26)
     }
