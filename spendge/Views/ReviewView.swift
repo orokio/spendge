@@ -102,8 +102,9 @@ struct ReviewView: View {
             .sorted { $0.cents > $1.cents }
     }
 
+    /// 与饼图同源：没有数据时就是 0，不会出现「空环但中间有钱」
     private var pieTotalCents: Int64 {
-        pieTransactions.reduce(0) { $0 + $1.amountCents }
+        pieRows.reduce(0) { $0 + $1.cents }
     }
 
     private var monthBudget: Budget? {
@@ -326,73 +327,90 @@ struct ReviewView: View {
             Text(pieKind == .expense ? "钱花在哪儿" : "钱从哪来")
                 .font(.headline)
 
+            // 先列占比，再看饼图：数字比扇形面积更容易比较
+            // 没有数据时，这句提示占据图例的位置
             if pieRows.isEmpty {
                 Text(pieKind == .expense ? "这个月还没有支出" : "这个月还没有收入")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 16)
+                    .padding(.horizontal, 18)
             } else {
-                Chart(pieRows, id: \.domain) { row in
-                    SectorMark(
-                        angle: .value("金额", row.cents),
-                        innerRadius: .ratio(0.6),
-                        angularInset: 1.5
-                    )
-                    .foregroundStyle(color(for: row.domain))
-                    .cornerRadius(3)
-                }
-                .frame(height: 170)
-                .chartLegend(.hidden)
-                // overlay 必须在 padding 之前：否则它的居中是「图表 + 上边距」的居中，
-                // 金额会比圆心高出一截
-                .overlay {
-                    // 点中心切换支出 / 收入；金额严格居中，标签挂在下方
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            pieKind = pieKind == .expense ? .income : .expense
-                        }
-                    } label: {
-                        ZStack {
-                            Text(AmountFormat.string(cents: pieTotalCents))
-                                .font(.system(.title3, design: .rounded).weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text(pieKind == .expense ? "支出" : "收入")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .offset(y: 26)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.top, 22)
+                pieLegend
+                    .padding(.top, 16)
+                    .padding(.horizontal, 18)
+            }
 
-                VStack(spacing: 12) {
-                    ForEach(pieRows, id: \.domain) { row in
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(color(for: row.domain))
-                                .frame(width: 10, height: 10)
-                            Text(row.domain.displayName)
-                                .font(.body)
-                            Spacer()
-                            Text(percentText(row.cents))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            // 百分比与金额之间的一条灰色短横线，前面留出更宽的间隔
-                            Text("—")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary.opacity(0.45))
-                                .padding(.leading, 26)
-                            Text(AmountFormat.string(cents: row.cents))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 84, alignment: .trailing)
-                        }
-                    }
+            pieChart
+                .padding(.top, pieRows.isEmpty ? 18 : 20)
+        }
+    }
+
+    /// 饼图本身。某一类为空也照常画（空环）：中心按钮必须一直在，否则切过去就回不来了
+    /// 没有数据时给一个灰色的整圈占位，形状与有数据时一致
+    private var chartRows: [(domain: CategoryDomain, cents: Int64)] {
+        pieRows.isEmpty ? [(domain: .other, cents: 1)] : pieRows
+    }
+
+    private var pieChart: some View {
+        Chart(chartRows, id: \.domain) { row in
+            SectorMark(
+                angle: .value("金额", row.cents),
+                innerRadius: .ratio(0.6),
+                angularInset: 1.5
+            )
+            .foregroundStyle(color(for: row.domain))
+            .cornerRadius(3)
+        }
+        .frame(height: 170)
+        .chartLegend(.hidden)
+        // overlay 必须在 padding 之前：否则它的居中是「图表 + 上边距」的居中，金额会比圆心高出一截
+        .overlay {
+            // 点中心切换支出 / 收入；金额严格居中，标签挂在下方
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    pieKind = pieKind == .expense ? .income : .expense
                 }
-                .padding(.top, 26)
-                .padding(.horizontal, 18)
+            } label: {
+                ZStack {
+                    Text(AmountFormat.string(cents: pieTotalCents))
+                        .font(.system(.title3, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(pieKind == .expense ? "支出" : "收入")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .offset(y: 26)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var pieLegend: some View {
+        VStack(spacing: 12) {
+            ForEach(pieRows, id: \.domain) { row in
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(color(for: row.domain))
+                        .frame(width: 10, height: 10)
+                    Text(row.domain.displayName)
+                        .font(.body)
+                    Spacer()
+                    Text(percentText(row.cents))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    // 百分比与金额之间的一条灰色短横线，前面留出更宽的间隔
+                    Text("—")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary.opacity(0.45))
+                        .padding(.leading, 26)
+                    Text(AmountFormat.string(cents: row.cents))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 84, alignment: .trailing)
+                }
             }
         }
     }

@@ -91,6 +91,8 @@ enum SelfCheck {
         expect(VoiceParser.parse("买了苹果12").categoryCode == nil, "认不出分类时不应硬归")
         expect(VoiceParser.parse("买了苹果12").hasMoneyCue == false, "「苹果12」不是金额线索")
         expect(VoiceParser.parse("花了50").hasMoneyCue, "「花了50」是金额线索")
+        expect(VoiceParser.parse("今天买了一瓶香水500块").yuan == 500, "量词后面的数字不应被当金额")
+        expect(VoiceParser.parse("一杯咖啡30").yuan == 30, "多个数字时取最大的")
 
         report(passed: passed, failures: failures)
     }

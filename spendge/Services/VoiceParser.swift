@@ -61,31 +61,98 @@ enum VoiceParser {
 
     // MARK: - 金额
 
-    private static func amount(from text: String) -> Int? {
-        if let value = firstArabicNumber(in: text), (1...99_999).contains(value) {
-            return value
-        }
-        if let value = firstChineseNumber(in: text), (1...99_999).contains(value) {
-            return value
-        }
-        return nil
+    private struct Candidate {
+        let value: Int
+        let end: String.Index
     }
 
-    /// 取第一段连续数字（允许小数），忽略其余字符。
-    private static func firstArabicNumber(in text: String) -> Int? {
-        var digits = ""
-        var started = false
+    /// 句子里可能有好几个数字：「一瓶香水500块」里的 1 是量词，500 才是金额。
+    /// 优先取紧跟「块 / 元 / 钱」的，其次取最大的。
+    private static func amount(from text: String) -> Int? {
+        let candidates = numberCandidates(in: text).filter { (1...9_999_999).contains($0.value) }
+        guard !candidates.isEmpty else { return nil }
 
-        for character in text {
-            if character.isNumber || (character == "." && started) {
-                digits.append(character)
-                started = true
-            } else if started {
-                break
+        if let last = candidates.last(where: { isFollowedByMoneyUnit($0.end, in: text) }) {
+            return last.value
+        }
+        // 没有钱单位时取最大的：一份、两杯、三次这类量词通常比金额小
+        return candidates.map(\.value).max()
+    }
+
+    /// 扫描所有数字（阿拉伯与中文），记录每个数字结束的位置
+    private static func numberCandidates(in text: String) -> [Candidate] {
+        var results: [Candidate] = []
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            let character = text[index]
+
+            // 只把半角阿拉伯数字当「阿拉伯数字」：汉字数字（三、十）的 isNumber 也是 true
+            if character.isASCII, character.isNumber {
+                var end = index
+                var digits = ""
+                var sawDot = false
+                while end < text.endIndex {
+                    let current = text[end]
+                    if current.isASCII, current.isNumber {
+                        digits.append(current)
+                        end = text.index(after: end)
+                    } else if current == ".", !sawDot, !digits.isEmpty {
+                        sawDot = true
+                        digits.append(current)
+                        end = text.index(after: end)
+                    } else {
+                        break
+                    }
+                }
+                if let value = Double(digits) {
+                    results.append(Candidate(value: Int(value.rounded()), end: end))
+                }
+                index = end
+            } else if digitMap[character] != nil || unitMap[character] != nil {
+                var end = index
+                var total = 0
+                var current: Int?
+                while end < text.endIndex {
+                    let next = text[end]
+                    if let digit = digitMap[next] {
+                        current = digit
+                        end = text.index(after: end)
+                    } else if let unit = unitMap[next] {
+                        total += (current ?? 1) * unit
+                        current = 0
+                        end = text.index(after: end)
+                    } else {
+                        break
+                    }
+                }
+                total += current ?? 0
+                if total > 0 {
+                    results.append(Candidate(value: total, end: end))
+                }
+                index = end
+            } else {
+                index = text.index(after: index)
             }
         }
-        guard !digits.isEmpty, let value = Double(digits) else { return nil }
-        return Int(value.rounded())
+
+        return results
+    }
+
+    /// 数字后面紧跟「块 / 元 / 钱 / 毛 / 角」就认为它是金额
+    private static func isFollowedByMoneyUnit(_ index: String.Index, in text: String) -> Bool {
+        var cursor = index
+        var steps = 0
+        while cursor < text.endIndex, steps < 2 {
+            let character = text[cursor]
+            if character == " " {
+                cursor = text.index(after: cursor)
+                steps += 1
+                continue
+            }
+            return ["块", "元", "钱", "毛", "角"].contains(String(character))
+        }
+        return false
     }
 
     private static let digitMap: [Character: Int] = [
@@ -95,31 +162,4 @@ enum VoiceParser {
 
     private static let unitMap: [Character: Int] = ["十": 10, "百": 100, "千": 1_000]
 
-    /// 只处理「三十」「一百二」「两千五」这类常见口语，不支持万以上。
-    private static func firstChineseNumber(in text: String) -> Int? {
-        var total = 0
-        var current: Int?
-        var matched = false
-
-        for character in text {
-            if let digit = digitMap[character] {
-                current = digit
-                matched = true
-            } else if let unit = unitMap[character] {
-                total += (current ?? 1) * unit
-                current = 0
-                matched = true
-            } else if matched, current != nil {
-                total += current ?? 0
-                return total > 0 ? total : nil
-            } else if matched {
-                // 数字后直接跟汉字（如「三十块」），收尾返回
-                total += current ?? 0
-                return total > 0 ? total : nil
-            }
-        }
-
-        if matched { total += current ?? 0 }
-        return total > 0 ? total : nil
-    }
 }
