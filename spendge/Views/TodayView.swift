@@ -7,6 +7,7 @@ struct TodayView: View {
     let paging: Bool
     let onOpenRecord: () -> Void
     let onOpenReview: () -> Void
+    let onEdit: (Transaction) -> Void
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
@@ -123,9 +124,11 @@ struct TodayView: View {
             }
 
             if !todayTransactions.isEmpty {
-                TransactionList(transactions: todayTransactions) { txn in
-                    try? TransactionService(context: context).delete(txn)
-                }
+                TransactionList(
+                    transactions: todayTransactions,
+                    onDelete: { txn in try? TransactionService(context: context).delete(txn) },
+                    onTap: onEdit
+                )
             }
         }
         .padding(.horizontal, 24)

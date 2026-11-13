@@ -47,6 +47,7 @@ struct TransactionList: View {
     let transactions: [Transaction]
     var spacing: CGFloat = 16
     let onDelete: (Transaction) -> Void
+    var onTap: ((Transaction) -> Void)?
 
     var body: some View {
         VStack(spacing: spacing) {
@@ -55,6 +56,7 @@ struct TransactionList: View {
                     onDelete(txn)
                 } content: {
                     TransactionRow(transaction: txn)
+                        .onTapGesture { onTap?(txn) }
                 }
             }
         }

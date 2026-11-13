@@ -10,6 +10,8 @@ struct RootView: View {
 
     /// 记录页挂在根上全屏呈现，不跟着翻页偏移走
     @State private var showRecord = false
+    /// 正在编辑的那一笔；非空时弹出编辑页
+    @State private var editingTransaction: Transaction?
     /// 翻页手势进行中（含结束后的回弹），期间不响应 ＋ 号和月份按钮
     @State private var isPaging = false
     @State private var pagingTask: Task<Void, Never>?
@@ -27,11 +29,12 @@ struct RootView: View {
                 TodayView(
                     paging: isPaging,
                     onOpenRecord: openRecord,
-                    onOpenReview: { go(to: 2) }
+                    onOpenReview: { go(to: 2) },
+                    onEdit: openEdit
                 )
                 .frame(width: geo.size.width, height: geo.size.height)
 
-                ReviewView(paging: isPaging, onBack: { go(to: 1) })
+                ReviewView(paging: isPaging, onBack: { go(to: 1) }, onEdit: openEdit)
                     .frame(width: geo.size.width, height: geo.size.height)
             }
             .offset(x: -CGFloat(page) * geo.size.width + dragOffset)
@@ -84,6 +87,13 @@ struct RootView: View {
                     .transition(.move(edge: .trailing))
                     .zIndex(2)
             }
+
+            if let editingTransaction {
+                RecordPage(editing: editingTransaction, onClose: closeEdit)
+                    .geometryGroup()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(3)
+            }
         }
     }
 
@@ -97,6 +107,19 @@ struct RootView: View {
         guard !isPaging else { return }
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             showRecord = true
+        }
+    }
+
+    private func openEdit(_ transaction: Transaction) {
+        guard !isPaging else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            editingTransaction = transaction
+        }
+    }
+
+    private func closeEdit() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            editingTransaction = nil
         }
     }
 

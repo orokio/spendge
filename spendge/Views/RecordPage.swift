@@ -5,6 +5,8 @@ import UIKit
 /// 记一笔：整页。键盘常驻，分类在左侧竖列；记下后留在页面连着记，点「完成」或右滑返回。
 struct RecordPage: View {
     let onClose: () -> Void
+    /// 非空表示在编辑这一笔：预填它的内容，保存走 update
+    private let editing: Transaction?
 
     @Environment(\.modelContext) private var context
 
@@ -31,10 +33,37 @@ struct RecordPage: View {
 
     private let calendar = Calendar.current
 
+    init(editing: Transaction? = nil, onClose: @escaping () -> Void) {
+        self.editing = editing
+        self.onClose = onClose
+        guard let transaction = editing else { return }
+        _kind = State(initialValue: transaction.kind)
+        _selectedCategory = State(initialValue: transaction.category)
+        _amountText = State(initialValue: Self.text(fromCents: transaction.amountCents))
+        _amountEdited = State(initialValue: true)
+        _date = State(initialValue: transaction.date)
+        _note = State(initialValue: transaction.note ?? "")
+    }
+
+    /// 日期轴默认以今天为终点；编辑超过 7 天的老账单时以那一笔为终点，保证它可见
     private var days: [Date] {
-        (0..<7).reversed().compactMap {
-            calendar.date(byAdding: .day, value: -$0, to: calendar.startOfDay(for: .now))
+        let today = calendar.startOfDay(for: .now)
+        var anchor = today
+        if let recordDay = editing.map({ calendar.startOfDay(for: $0.date) }),
+           let windowStart = calendar.date(byAdding: .day, value: -6, to: today),
+           recordDay < windowStart {
+            anchor = recordDay
         }
+        return (0..<7).reversed().compactMap {
+            calendar.date(byAdding: .day, value: -$0, to: anchor)
+        }
+    }
+
+    /// 2650 分 → "26.5"
+    private static func text(fromCents cents: Int64) -> String {
+        let yuan = cents / 100
+        let jiao = (cents % 100) / 10
+        return jiao == 0 ? String(yuan) : "\(yuan).\(jiao)"
     }
 
     private var accounts: [Account] {
@@ -106,7 +135,7 @@ struct RecordPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("记一笔")
+            Text(editing == nil ? "记一笔" : "编辑")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
@@ -483,7 +512,7 @@ struct RecordPage: View {
         Button {
             save()
         } label: {
-            Text("记下")
+            Text(editing == nil ? "记下" : "保存")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
@@ -573,6 +602,23 @@ struct RecordPage: View {
         guard canSave, let category = selectedCategory, let account = accounts.first else { return }
 
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 编辑：改完就返回，不做连续记账
+        if let editing {
+            try? TransactionService(context: context).update(
+                editing,
+                amountCents: amountCents,
+                kind: kind,
+                date: date,
+                note: trimmed,
+                category: category,
+                account: account
+            )
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onClose()
+            return
+        }
+
         _ = try? TransactionService(context: context).add(
             amountCents: amountCents,
             kind: kind,

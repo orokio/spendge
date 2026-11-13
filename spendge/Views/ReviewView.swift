@@ -8,6 +8,7 @@ struct ReviewView: View {
     /// 正在翻页：月份切换不响应，避免滑动途中弹出月份面板
     let paging: Bool
     let onBack: () -> Void
+    let onEdit: (Transaction) -> Void
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
@@ -446,9 +447,12 @@ struct ReviewView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                TransactionList(transactions: items, spacing: 14) { txn in
-                    try? TransactionService(context: context).delete(txn)
-                }
+                TransactionList(
+                    transactions: items,
+                    spacing: 14,
+                    onDelete: { txn in try? TransactionService(context: context).delete(txn) },
+                    onTap: onEdit
+                )
                 // 标题与列表之间多留一点
                 .padding(.top, 10)
             }
