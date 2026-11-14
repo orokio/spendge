@@ -44,7 +44,7 @@ struct ReviewView: View {
     }
 
     private var monthTitle: String {
-        monthStart.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN")))
+        monthStart.formatted(.dateTime.year().month(.wide).locale(.autoupdatingCurrent))
     }
 
     private var monthTransactions: [Transaction] {
@@ -182,9 +182,9 @@ struct ReviewView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
             if let coverage, coverage.coveredDays > 0 {
-                Text("有你 \(coverage.coveredDays) 天的记录")
+                Text(String(format: String(localized: "review.recordedDays"), coverage.coveredDays))
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
-                Text("\(monthTitle) · 覆盖 \(Int(coverage.ratio * 100))%")
+                Text(String(format: String(localized: "review.subtitle"), monthTitle, Int(coverage.ratio * 100)))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
@@ -304,7 +304,7 @@ struct ReviewView: View {
             HStack(spacing: 6) {
                 Image(systemName: "calendar")
                     .font(.system(size: 13, weight: .medium))
-                Text(monthStart.formatted(.dateTime.month(.abbreviated).locale(Locale(identifier: "zh_CN"))))
+                Text(monthStart.formatted(.dateTime.month(.abbreviated).locale(.autoupdatingCurrent)))
                     .font(.subheadline.weight(.medium))
             }
             .padding(.horizontal, 14)
@@ -396,7 +396,7 @@ struct ReviewView: View {
                     Circle()
                         .fill(color(for: row.domain))
                         .frame(width: 10, height: 10)
-                    Text(row.domain.displayName)
+                    Text(LocalizedStringKey(row.domain.displayName))
                         .font(.body)
                     Spacer()
                     Text(percentText(row.cents))
@@ -431,7 +431,7 @@ struct ReviewView: View {
     private func daySection(for day: Date) -> some View {
         let items = transactions(on: day)
         return VStack(alignment: .leading, spacing: PageLayout.blockGap) {
-            Text(day.formatted(.dateTime.month(.abbreviated).day().weekday(.wide).locale(Locale(identifier: "zh_CN"))))
+            Text(day.formatted(.dateTime.month(.abbreviated).day().weekday(.wide).locale(.autoupdatingCurrent)))
                 .font(.headline)
 
             if items.isEmpty {
@@ -495,9 +495,17 @@ struct ReviewView: View {
         }
         let remaining = budget.amountCents - totalExpenseCents
         if remaining >= 0 {
-            return "已花 \(AmountFormat.string(cents: totalExpenseCents)) · 还剩 \(AmountFormat.string(cents: remaining))"
+            return String(
+                format: String(localized: "review.spentLeft"),
+                AmountFormat.string(cents: totalExpenseCents),
+                AmountFormat.string(cents: remaining)
+            )
         }
-        return "已花 \(AmountFormat.string(cents: totalExpenseCents)) · 比计划多 \(AmountFormat.string(cents: -remaining))"
+        return String(
+            format: String(localized: "review.spentOver"),
+            AmountFormat.string(cents: totalExpenseCents),
+            AmountFormat.string(cents: -remaining)
+        )
     }
 
     private func saveBudget(_ cents: Int64) {
@@ -593,7 +601,7 @@ private struct BudgetEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 16) {
-                Text("\(monthTitle)预算")
+                Text(String(format: String(localized: "review.budgetTitle"), monthTitle))
                     .font(.headline)
 
                 Spacer()
@@ -666,7 +674,7 @@ private struct MonthPickerSheet: View {
                             onPick(date)
                         } label: {
                             HStack {
-                                Text(date.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN"))))
+                                Text(date.formatted(.dateTime.year().month(.wide).locale(.autoupdatingCurrent)))
                                     .foregroundStyle(.primary)
                                 Spacer()
                                 if Calendar.current.isDate(date, equalTo: selected, toGranularity: .month) {

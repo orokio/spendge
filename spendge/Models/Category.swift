@@ -1,6 +1,14 @@
 import Foundation
 import SwiftData
 
+extension Category {
+    /// 展示名：种子分类按存的中文名去 String Catalog 查当前语言的译文；
+    /// 用户改过名的分类查不到，直接回落到自己写的名字。
+    var displayName: String {
+        String(localized: String.LocalizationValue(name))
+    }
+}
+
 /// 分类：支出 / 收入。删除分类不会删除账单，账单的分类会被置空。
 @Model
 final class Category {

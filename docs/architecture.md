@@ -66,7 +66,10 @@ erDiagram
 6. **服务层 `@MainActor` + `ModelContext`**：UI 层直接调用服务方法，未来如需后台写入再引入 actor。
 7. **不做独立账号**：不注册、不要手机号邮箱；同步身份直接用 iCloud，未登录也能完整使用。设置页展示的是 iCloud 状态，不是登录表单。
 8. **品牌素材与开屏**：logo 原图与去水印版在 `design/logo/`。开屏由系统启动屏承载：`Config/Info.plist` 的 `UILaunchScreen` 指定 `LaunchBackground` 色板（`#E9F1F4`，避免白底）与 `LaunchLogo` 图片（logo-2 泛洪去背景，230pt 宽，1x/2x/3x 三档）。App 首帧与启动屏同位置的 logo 做 0.4 秒交叉淡出、界面同时淡入，**不加任何延迟**。改启动屏资源后模拟器需重启才能刷新快照缓存。
-9. **间距只有三级**：`PageLayout` 提供 `pageInset`（24）、`sectionGap`（32）、`blockGap`（12）、`inlineGap`（8）。页面容器只加一次，组件内部不再手填数字微调——之前图例多缩进 18、区块间距 26/30/48 各写一套，就是这样散出来的。
+9. **语言切换**：设置页写 `UserDefaults` 的 `AppleLanguages`，重启后整包生效——`String(localized:)` 读的是 Bundle 语言，运行时切换只能靠重启。插值文案一律走语义键 + `String(format:)`，不要依赖编译器生成的格式串。
+10. **分类改名的语言约定**：分类名存在数据库里，系统分类按中文名查表得到译文，用户改过名的直接显示原名。**在英文环境下改名只允许输入英文**，否则中英混排的条目无法被翻译，切回中文时也会显得脏。
+11. **文案只认 String Catalog**：`Localizable.xcstrings` 源语言 zh-Hans，英文是译文；App 名称走 `InfoPlist.xcstrings`。`Text("字面量")` 自动本地化，作为 `String` 拼出来的文案（洞察句、提示、弹窗）要用 `String(localized:)` 或 `Text(LocalizedStringKey(_:))`，否则永远是中文。日期与数字不要写死 locale。
+12. **间距只有三级**：`PageLayout` 提供 `pageInset`（24）、`sectionGap`（32）、`blockGap`（12）、`inlineGap`（8）。页面容器只加一次，组件内部不再手填数字微调——之前图例多缩进 18、区块间距 26/30/48 各写一套，就是这样散出来的。
 9. **颜色只认语义 token**：视图用 `Color.brand / surface / surfaceElevated / canvas / income` 与 `Palette.current.domainColor(_:)`，不直接写 hex 或系统灰。换主题只改 `Palette.current`；`Palette.warm` 已按奶油桃配色备好但未启用。注意 `current` 是静态值，真正做切换时要改成环境注入才能触发刷新。
 
 ## 功能流程

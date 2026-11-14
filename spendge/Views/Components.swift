@@ -38,7 +38,7 @@ enum AmountFormat {
     static func string(cents: Int64, showsSign: Bool = false) -> String {
         let yuan = Money.yuan(from: abs(cents))
         let number = yuan.formatted(
-            .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "zh_CN"))
+            .number.precision(.fractionLength(0...2)).locale(.autoupdatingCurrent)
         )
         let sign: String
         if !showsSign {
@@ -142,7 +142,7 @@ struct CategoryBadge: View {
                             .padding(-4)
                     }
                 }
-            Text(category.name)
+            Text(category.displayName)
                 .font(.caption)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -186,7 +186,7 @@ struct MonthStepper: View {
     }
 
     private var title: String {
-        month.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN")))
+        month.formatted(.dateTime.year().month(.wide).locale(.autoupdatingCurrent))
     }
 
     private func shift(by value: Int) {

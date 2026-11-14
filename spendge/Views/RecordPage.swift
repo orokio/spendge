@@ -242,7 +242,7 @@ struct RecordPage: View {
             voiceHint = nil
             select(categories.first)
         } label: {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.subheadline.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Color.primary : Color.secondary)
                 .frame(maxWidth: .infinity)
@@ -290,9 +290,11 @@ struct RecordPage: View {
         .buttonStyle(.plain)
     }
 
+    /// 星期首字：跟随系统语言（中文「一二三」，英文「MTW」）
     private func weekdayLabel(_ day: Date) -> String {
-        let index = calendar.component(.weekday, from: day)
-        return ["日", "一", "二", "三", "四", "五", "六"][index - 1]
+        let index = calendar.component(.weekday, from: day) - 1
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        return symbols.indices.contains(index) ? symbols[index] : ""
     }
 
     // MARK: - 分类（左侧竖列）
@@ -312,9 +314,12 @@ struct RecordPage: View {
                         Button {
                             select(category)
                         } label: {
-                            Text(category.name)
+                            Text(category.displayName)
                                 .font(.system(size: 13))
-                                .lineLimit(1)
+                                // 英文分类名更长：允许两行并轻微缩小，避免被截成 …
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
+                                .multilineTextAlignment(.leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 9)
@@ -412,7 +417,7 @@ struct RecordPage: View {
 
     private func keyButton(_ label: String, small: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
+            Text(LocalizedStringKey(label))
                 .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
                 .frame(maxWidth: .infinity, minHeight: 60)
                 .background(Color.surface, in: RoundedRectangle(cornerRadius: 9))
@@ -615,7 +620,11 @@ struct RecordPage: View {
 
         // 留在页面上连着记：给一句确认，然后清空这笔的内容，分类和日期保留
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        Toast.show("已记下 \(AmountFormat.string(cents: amountCents)) · \(category.name)", into: $toast)
+        Toast.show(
+            String(format: String(localized: "toast.saved"),
+                   AmountFormat.string(cents: amountCents), category.displayName),
+            into: $toast
+        )
         amountText = ""
         amountEdited = false
         note = ""

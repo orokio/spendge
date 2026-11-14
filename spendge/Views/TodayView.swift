@@ -90,7 +90,7 @@ struct TodayView: View {
                 HStack(spacing: 6) {
                     Text(Date.now.formatted(
                         .dateTime.month(.abbreviated).day().weekday(.abbreviated)
-                            .locale(Locale(identifier: "zh_CN"))
+                            .locale(.autoupdatingCurrent)
                     ))
                     if todayExpenseCents > 0 {
                         Text("·")
