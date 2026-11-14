@@ -39,7 +39,7 @@ struct BudgetEditorSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 16) {
                 Text("\(monthTitle)预算")
-                    .font(.headline)
+                    .font(Typography.sectionTitle)
 
                 Spacer()
 
@@ -49,7 +49,7 @@ struct BudgetEditorSheet: View {
                         dismiss()
                     } label: {
                         Text("清除预算")
-                            .font(.footnote)
+                            .font(Typography.label)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -62,7 +62,7 @@ struct BudgetEditorSheet: View {
                     }
                 } label: {
                     Text("保存")
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.bodyStrong)
                         .foregroundStyle(cents == nil ? Color.secondary : Color.brand)
                 }
                 .buttonStyle(.plain)
@@ -71,11 +71,11 @@ struct BudgetEditorSheet: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("¥")
-                    .font(.title3)
+                    .font(Typography.number)
                     .foregroundStyle(.secondary)
                 TextField("0", text: $text)
                     .keyboardType(.decimalPad)
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(Typography.amountInput)
                     .foregroundStyle(Color.brand)
             }
 
@@ -84,10 +84,10 @@ struct BudgetEditorSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: recurring ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
+                        .font(Typography.body)
                         .foregroundStyle(recurring ? Color.brand : Color.secondary)
                     Text("循环应用到下个月")
-                        .font(.footnote)
+                        .font(Typography.label)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
@@ -116,7 +116,7 @@ struct MonthPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Text("选择月份")
-                .font(.headline)
+                .font(Typography.sectionTitle)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 22)
                 .padding(.bottom, 14)

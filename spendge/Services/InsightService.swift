@@ -27,9 +27,9 @@ final class InsightService {
             return todayInsight(today)
         }
 
-        // 2. 今天确认过不花钱
+        // 2. 今天确认过没花钱
         if try isConfirmedToday() {
-            return Insight(title: "今天不花钱", detail: "也是一种过法")
+            return Insight(title: "今天没花钱", detail: "也是一种过法")
         }
 
         // 3. 刚开始用：先别谈数据

@@ -137,7 +137,7 @@ struct RecordPage: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(editing == nil ? "记一笔" : "编辑")
-                .font(.headline)
+                .font(Typography.sectionTitle)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
 
@@ -171,7 +171,7 @@ struct RecordPage: View {
                         }
                         // 固定占位：提示出现时不会把下面的备注顶动
                         Text(voiceHint ?? " ")
-                            .font(.caption2)
+                            .font(Typography.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -243,7 +243,7 @@ struct RecordPage: View {
             select(categories.first)
         } label: {
             Text(title)
-                .font(.subheadline.weight(selected ? .semibold : .regular))
+                .font(selected ? Typography.bodyStrong : Typography.body)
                 .foregroundStyle(selected ? Color.primary : Color.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
@@ -272,10 +272,10 @@ struct RecordPage: View {
         } label: {
             VStack(spacing: 3) {
                 Text(weekdayLabel(day))
-                    .font(.system(size: 10))
+                    .font(Typography.caption)
                     .foregroundStyle(selected ? Color.white.opacity(0.85) : .secondary)
                 Text("\(calendar.component(.day, from: day))")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(Typography.numberSmall)
                     .foregroundStyle(selected ? .white : .primary)
             }
             .frame(maxWidth: .infinity)
@@ -315,7 +315,7 @@ struct RecordPage: View {
                             select(category)
                         } label: {
                             Text(category.displayName)
-                                .font(.system(size: 13))
+                                .font(Typography.label)
                                 // 英文分类名更长：允许两行并轻微缩小，避免被截成 …
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.85)
@@ -356,7 +356,7 @@ struct RecordPage: View {
     private var amountView: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text("≈")
-                .font(.system(size: 15, weight: .medium))
+                .font(Typography.body)
                 .foregroundStyle(.secondary)
 
             Text(amountDisplay)
@@ -374,7 +374,7 @@ struct RecordPage: View {
         HStack(spacing: 6) {
             if showChips, !recentAmounts.isEmpty {
                 Text("最近")
-                    .font(.caption2)
+                    .font(Typography.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.trailing, 2)
             }
@@ -384,7 +384,7 @@ struct RecordPage: View {
                     amountEdited = true
                 } label: {
                     Text(Self.text(fromCents: chip))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(Typography.label)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
@@ -418,7 +418,7 @@ struct RecordPage: View {
     private func keyButton(_ label: String, small: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
+                .font(small ? Typography.label : Typography.numberLarge)
                 .frame(maxWidth: .infinity, minHeight: 60)
                 .background(Color.surface, in: RoundedRectangle(cornerRadius: 9))
         }
@@ -455,14 +455,14 @@ struct RecordPage: View {
     private var noteField: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "text.alignleft")
-                .font(.caption)
+                .font(Typography.label)
                 .foregroundStyle(.secondary)
                 .padding(.top, 3)
 
             ZStack(alignment: .topLeading) {
                 if note.isEmpty {
                     Text("备注（可选）")
-                        .font(.subheadline)
+                        .font(Typography.body)
                         .foregroundStyle(.secondary)
                         .padding(.top, 2)
                 }
@@ -484,7 +484,7 @@ struct RecordPage: View {
             transcriber.toggle()
         } label: {
             Image(systemName: transcriber.isListening ? "waveform" : "mic.fill")
-                .font(.system(size: 18, weight: .medium))
+                .font(Typography.number)
                 .foregroundStyle(transcriber.isListening ? Color.white : Color.brand)
                 .frame(width: 48, height: 48)
                 .background(
@@ -500,7 +500,7 @@ struct RecordPage: View {
             save()
         } label: {
             Text(editing == nil ? "记下" : "保存")
-                .font(.headline)
+                .font(Typography.sectionTitle)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(

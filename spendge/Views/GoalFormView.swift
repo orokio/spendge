@@ -45,7 +45,8 @@ struct GoalFormView: View {
     private var goalKindCodes: [CategoryCode] { kind.allowedCategoryCodes }
 
     private var parsedValue: Int? {
-        guard let value = Int(valueText), value > 0 else { return nil }
+        // 允许 0：比如「本月奶茶 0 次」是完全合理的上限；空的输入框仍然不可保存
+        guard let value = Int(valueText), value >= 0 else { return nil }
         switch kind {
         case .countLimit: return value
         case .categorySum: return value * 100
@@ -80,12 +81,12 @@ struct GoalFormView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(goal == nil ? "新增目标" : "修改目标")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(Typography.pageTitle)
                         .padding(.top, 56)
 
                     field("名字") {
                         TextField("给这个目标起个名字", text: $title)
-                            .font(.body)
+                            .font(Typography.rowTitle)
                             .padding(.vertical, 10)
                             .padding(.horizontal, 12)
                             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
@@ -114,9 +115,9 @@ struct GoalFormView: View {
                                 // 目前只支持月度，先做成不可改的展示
                                 HStack(spacing: 6) {
                                     Text("月度")
-                                        .font(.subheadline)
+                                        .font(Typography.body)
                                     Text("暂不可更改")
-                                        .font(.caption2)
+                                        .font(Typography.caption)
                                         .foregroundStyle(.tertiary)
                                     Spacer(minLength: 0)
                                 }
@@ -130,10 +131,10 @@ struct GoalFormView: View {
                                 HStack(spacing: 8) {
                                     TextField("0", text: $valueText)
                                         .keyboardType(.numberPad)
-                                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                                        .font(Typography.numberLarge)
                                         .foregroundStyle(Color.brand)
                                     Text(kind.unitSuffix)
-                                        .font(.footnote)
+                                        .font(Typography.label)
                                         .foregroundStyle(.secondary)
                                 }
                                 .padding(.vertical, 8)
@@ -147,7 +148,7 @@ struct GoalFormView: View {
                                     save()
                                 } label: {
                                     Text("保存")
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(Typography.bodyStrong)
                                         .foregroundStyle(.white)
                                         .padding(.vertical, 14)
                                         .frame(maxWidth: .infinity)
@@ -164,7 +165,7 @@ struct GoalFormView: View {
                                     }
                                 } label: {
                                     Text(goal == nil ? "取消" : "删除")
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(Typography.bodyStrong)
                                         .foregroundStyle(goal == nil ? Color.secondary : Color.red)
                                         .padding(.horizontal, 18)
                                         .padding(.vertical, 14)
@@ -175,7 +176,7 @@ struct GoalFormView: View {
 
                             if duplicate != nil {
                                 Text("已经有这个目标了，回到列表里改它。")
-                                    .font(.caption2)
+                                    .font(Typography.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -237,7 +238,7 @@ struct GoalFormView: View {
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.caption)
+                .font(Typography.label)
                 .foregroundStyle(.secondary)
             content()
         }
@@ -254,7 +255,7 @@ struct GoalFormView: View {
                         categoryCode = code
                     } label: {
                         Text(category.displayName)
-                            .font(.system(size: 13))
+                            .font(Typography.label)
                             .lineLimit(2)
                             .minimumScaleFactor(0.85)
                             .multilineTextAlignment(.leading)

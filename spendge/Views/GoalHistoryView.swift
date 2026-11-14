@@ -47,14 +47,14 @@ struct GoalHistoryView: View {
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("我的奖杯")
-                            .font(.system(size: 24, weight: .semibold, design: .rounded))
+                            .font(Typography.pageTitle)
                         Spacer()
                         if !groups.isEmpty {
                             Button {
                                 share()
                             } label: {
                                 Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 17, weight: .medium))
+                                    .font(Typography.bodyStrong)
                                     .foregroundStyle(Color.brand)
                             }
                             .buttonStyle(.plain)
@@ -65,9 +65,9 @@ struct GoalHistoryView: View {
                     if groups.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("还没有达成的记录")
-                                .font(.headline)
+                                .font(Typography.sectionTitle)
                             Text("每个目标月底结算一次，达成后会记在这里。")
-                                .font(.footnote)
+                                .font(Typography.label)
                                 .foregroundStyle(.secondary)
                         }
                     } else {
@@ -117,15 +117,15 @@ struct GoalHistoryView: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.title)
-                    .font(.headline)
+                    .font(Typography.sectionTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("共 \(group.total) 期")
-                    .font(.caption2)
+                    .font(Typography.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             Text("累计 \(group.achieved) 次")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(Typography.number)
                 .foregroundStyle(Color.brand)
                 .fixedSize()
         }
@@ -164,22 +164,22 @@ private struct AchievementShareCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("我达成的")
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(Typography.numberLarge)
                 .foregroundStyle(Color.brand)
 
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .firstTextBaseline) {
                     Text(row.title)
-                        .font(.headline)
+                        .font(Typography.sectionTitle)
                     Spacer(minLength: 16)
                     Text("累计 \(row.achieved) 次")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(Typography.numberSmall)
                         .foregroundStyle(Color.brand)
                 }
             }
 
             Text("spendge")
-                .font(.caption2)
+                .font(Typography.caption)
                 .foregroundStyle(.tertiary)
         }
         .padding(28)

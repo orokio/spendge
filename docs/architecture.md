@@ -66,7 +66,8 @@ erDiagram
 6. **服务层 `@MainActor` + `ModelContext`**：UI 层直接调用服务方法，未来如需后台写入再引入 actor。
 7. **不做独立账号**：不注册、不要手机号邮箱；同步身份直接用 iCloud，未登录也能完整使用。设置页展示的是 iCloud 状态，不是登录表单。
 8. **品牌素材与开屏**：logo 原图与去水印版在 `design/logo/`。开屏由系统启动屏承载：`Config/Info.plist` 的 `UILaunchScreen` 指定 `LaunchBackground` 色板（`#E9F1F4`，避免白底）与 `LaunchLogo` 图片（logo-2 泛洪去背景，230pt 宽，1x/2x/3x 三档）。App 首帧与启动屏同位置的 logo 做 0.4 秒交叉淡出、界面同时淡入，**不加任何延迟**。改启动屏资源后模拟器需重启才能刷新快照缓存。
-9. **只做中文**（2026-11-14）：不做多语言，没有 String Catalog，文案直接写中文；日期统一用 zh_CN，避免英文系统下出现英文日期名。
+9. **字阶只有一套**（Typography.swift）：hero / pageTitle / sectionTitle / number / numberSmall / numberLarge / amountInput / rowTitle / body / bodyStrong / label / caption / captionStrong / axisLabel。重量只用 regular 与 semibold，rounded 只给标题和数字；视图里不再手写 .font(.system(size:))，只有金额输入的动态字号例外。
+10. **只做中文**（2026-11-14）：不做多语言，没有 String Catalog，文案直接写中文；日期统一用 zh_CN，避免英文系统下出现英文日期名。
 12. **目标（Goal）**：独立表，暂不与 Budget 合并。历史不落表，按参数逐周期回算（`GoalService.history`），避免双份真相。只做四种封闭类型（zeroSpendDays / countLimit / categorySum / netInflow），每种类型在 `GoalService` 里只负责三件事：聚合、单位、方向；加类型靠改代码，用户能自定义的只有范围和阈值。
 13. **间距只有三级**：`PageLayout` 提供 `pageInset`（24）、`sectionGap`（32）、`blockGap`（12）、`inlineGap`（8）。页面容器只加一次，组件内部不再手填数字微调——之前图例多缩进 18、区块间距 26/30/48 各写一套，就是这样散出来的。
 9. **颜色只认语义 token**：视图用 `Color.brand / surface / surfaceElevated / canvas / income` 与 `Palette.current.domainColor(_:)`，不直接写 hex 或系统灰。换主题只改 `Palette.current`；`Palette.warm` 已按奶油桃配色备好但未启用。注意 `current` 是静态值，真正做切换时要改成环境注入才能触发刷新。

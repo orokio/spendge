@@ -18,10 +18,10 @@ struct TransactionRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(transaction.category?.name ?? "未分类")
-                    .font(.body)
+                    .font(Typography.rowTitle)
                 if let note = transaction.note, !note.isEmpty {
                     Text(note)
-                        .font(.caption)
+                        .font(Typography.label)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

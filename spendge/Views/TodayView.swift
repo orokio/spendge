@@ -65,13 +65,14 @@ struct TodayView: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
             highlighted(insight?.title ?? "正在看你的账本…")
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .font(Typography.hero)
+                .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
                 .transition(.opacity.combined(with: .offset(y: 6)))
 
             if let detail = insight?.detail {
                 Text(detail)
-                    .font(.subheadline)
+                    .font(Typography.body)
                     .foregroundStyle(.secondary)
             }
         }
@@ -99,16 +100,16 @@ struct TodayView: View {
                 }
             }
 
-            // 当天没有记录时，给一个「今天不花钱」的动作
+            // 当天没有记录时，给一个「今天没花钱」的动作
             if todayTransactions.isEmpty {
                 Button {
                     toggleNoSpend()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 15))
-                        Text("今天不花钱")
-                            .font(.footnote)
+                            .font(Typography.body)
+                        Text("今天没花钱")
+                            .font(Typography.label)
                     }
                     .foregroundStyle(confirmedToday ? Color.brand : Color.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -158,7 +159,7 @@ struct TodayView: View {
             onOpenRecord()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
+                .font(Typography.pageTitle)
                 .foregroundStyle(.white)
                 .frame(width: 58, height: 58)
                 .background(Color.brand, in: Circle())

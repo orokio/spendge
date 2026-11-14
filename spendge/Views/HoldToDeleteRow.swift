@@ -31,7 +31,7 @@ struct HoldToDeleteRow<Content: View>: View {
                         ZStack(alignment: .trailing) {
                             Color.red
                             Text("删除")
-                                .font(.subheadline.weight(.semibold))
+                                .font(Typography.bodyStrong)
                                 .foregroundStyle(.white)
                                 .padding(.trailing, 18)
                         }

@@ -11,7 +11,7 @@ struct ToastModifier: ViewModifier {
                     Image(systemName: "checkmark.circle.fill")
                     Text(text)
                 }
-                .font(.footnote.weight(.medium))
+                .font(Typography.label.weight(.medium))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

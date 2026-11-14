@@ -29,7 +29,7 @@ struct GoalView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                     Text("目标")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(Typography.pageTitle)
                         .padding(.top, 56)
 
                     budgetCard
@@ -100,10 +100,10 @@ struct GoalView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("本月预算")
-                        .font(.headline)
+                        .font(Typography.sectionTitle)
                     Spacer()
                     Text(monthTitle)
-                        .font(.caption2)
+                        .font(Typography.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -111,17 +111,17 @@ struct GoalView: View {
                     let remaining = budget.amountCents - monthExpenseCents
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("还剩 \(AmountFormat.string(cents: max(0, remaining)))")
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .font(Typography.number)
                             .foregroundStyle(Color.brand)
                         Text("/ \(AmountFormat.string(cents: budget.amountCents))")
-                            .font(.footnote)
+                            .font(Typography.label)
                             .foregroundStyle(.secondary)
                     }
                     ProgressView(value: max(0, 1 - Double(monthExpenseCents) / Double(budget.amountCents)))
                         .tint(Color.brand)
                 } else {
                     Text("设置一个数，用来对照这个月花到哪儿了")
-                        .font(.subheadline)
+                        .font(Typography.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -146,10 +146,10 @@ struct GoalView: View {
                 Image(systemName: "trophy")
                     .font(.system(size: 13, weight: .medium))
                 Text("我的奖杯")
-                    .font(.subheadline.weight(.medium))
+                    .font(Typography.bodyStrong)
                 if achievedTotal > 0 {
                     Text("\(achievedTotal)")
-                        .font(.caption2.weight(.semibold))
+                        .font(Typography.captionStrong)
                         .foregroundStyle(Color.brand)
                 }
             }
@@ -171,7 +171,7 @@ struct GoalView: View {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 13, weight: .medium))
                 Text("目标管理")
-                    .font(.subheadline.weight(.medium))
+                    .font(Typography.bodyStrong)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -214,25 +214,43 @@ private struct GoalCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(goal.title)
-                    .font(.headline)
+                    .font(Typography.sectionTitle)
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Text("月度")
+                    .font(Typography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let progress {
-                HStack(spacing: 12) {
-                    if progress.unit == .cents || progress.unit == .percent {
-                        ProgressView(value: max(0, 1 - progress.fraction))
-                            .tint(Color.brand)
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        dots(progress)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                if progress.target == 0 {
+                    // 「一次都不」型目标：没有名额可画，直接说结果
+                    // 字号字重与普通卡片的「2 / 4」保持一致
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(resultText(progress))
+                            .font(Typography.numberSmall)
+                            .foregroundStyle(progress.current == 0 ? Color.brand : Color.secondary)
+                        Spacer(minLength: 8)
+                        Text(statusText(progress))
+                            .font(Typography.numberSmall)
+                            .foregroundStyle(.secondary)
                     }
+                } else {
+                    HStack(spacing: 12) {
+                        if progress.unit == .cents || progress.unit == .percent {
+                            ProgressView(value: max(0, 1 - progress.fraction))
+                                .tint(Color.brand)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            dots(progress)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
 
-                    Text("\(valueText(progress)) / \(limitText(progress))")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(progress.isReached && !progress.isAtMost ? Color.brand : Color.secondary)
-                        .fixedSize()
+                        Text("\(valueText(progress)) / \(limitText(progress))")
+                            .font(Typography.numberSmall)
+                            .foregroundStyle(progress.isReached && !progress.isAtMost ? Color.brand : Color.secondary)
+                            .fixedSize()
+                    }
                 }
             }
         }
@@ -240,6 +258,19 @@ private struct GoalCard: View {
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    /// 0 目标的结果：次数 / 金额 / 占比
+    private func resultText(_ progress: GoalProgress) -> String {
+        switch progress.unit {
+        case .count: return "\(progress.current) 次"
+        case .cents: return AmountFormat.string(cents: Int64(progress.current))
+        case .percent: return "\(progress.current)%"
+        }
+    }
+
+    private func statusText(_ progress: GoalProgress) -> String {
+        progress.current == 0 ? "还没买过" : "买了 \(progress.current) 次"
     }
 
     private func valueText(_ progress: GoalProgress) -> String {

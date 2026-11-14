@@ -136,10 +136,10 @@ struct SectionHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.headline)
+                .font(Typography.sectionTitle)
             Spacer(minLength: 12)
             trailing()
-                .font(.footnote)
+                .font(Typography.label)
                 .foregroundStyle(.secondary)
         }
     }
@@ -161,7 +161,7 @@ struct CategoryBadge: View {
                     }
                 }
             Text(category.displayName)
-                .font(.caption)
+                .font(Typography.label)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
@@ -178,7 +178,7 @@ struct MonthStepper: View {
         HStack {
             Button { shift(by: -1) } label: {
                 Image(systemName: "chevron.left")
-                    .font(.subheadline.weight(.semibold))
+                    .font(Typography.bodyStrong)
                     .frame(width: 36, height: 36)
                     .background(Color.surface, in: Circle())
             }
@@ -187,14 +187,14 @@ struct MonthStepper: View {
             Spacer()
 
             Text(title)
-                .font(.headline)
+                .font(Typography.sectionTitle)
                 .contentTransition(.numericText())
 
             Spacer()
 
             Button { shift(by: 1) } label: {
                 Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
+                    .font(Typography.bodyStrong)
                     .frame(width: 36, height: 36)
                     .background(Color.surface, in: Circle())
             }

@@ -39,7 +39,7 @@ struct GoalRulesView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                     Text("目标管理")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(Typography.pageTitle)
                         .padding(.top, 56)
 
                     if goals.isEmpty {
@@ -111,15 +111,15 @@ struct GoalRulesView: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(goal.title)
-                                    .font(.subheadline)
+                                    .font(Typography.body)
                                     .foregroundStyle(.primary)
                                 Text(summary(for: goal))
-                                    .font(.caption2)
+                                    .font(Typography.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 12)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(Typography.captionStrong)
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 16)
@@ -168,9 +168,9 @@ struct GoalRulesView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.subheadline)
+                        .font(Typography.body)
                     Text(subtitle)
-                        .font(.caption2)
+                        .font(Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -196,7 +196,7 @@ struct GoalRulesView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 13, weight: .semibold))
                 Text("新增目标")
-                    .font(.subheadline)
+                    .font(Typography.body)
             }
             .foregroundStyle(Color.brand)
             .padding(.vertical, 10)
@@ -219,9 +219,12 @@ struct GoalRulesView: View {
         let scope = goal.categoryCodes.isEmpty
             ? "全部"
             : (categoryName(for: goal.categoryCodes.first) ?? "")
+        if goal.targetValue == 0 {
+            return "月度 · \(scope) · 一次都不买"
+        }
         let direction = goal.isAtMost ? "不超过" : "至少"
         let value = goal.kind == .categorySum ? String(goal.targetValue / 100) : String(goal.targetValue)
-        return "本月 · \(scope) · \(direction) \(value) \(goal.kind.unitSuffix)"
+        return "月度 · \(scope) · \(direction) \(value) \(goal.kind.unitSuffix)"
     }
 
     private func categoryName(for code: String?) -> String? {

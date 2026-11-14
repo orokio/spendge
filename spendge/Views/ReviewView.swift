@@ -175,10 +175,10 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
             if let coverage, coverage.coveredDays > 0 {
                 Text("本月有你 \(coverage.coveredDays) 天的记录")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(Typography.pageTitle)
             } else {
                 Text("这个月还没有记录")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(Typography.pageTitle)
             }
         }
     }
@@ -208,7 +208,7 @@ struct ReviewView: View {
                         HStack(spacing: barGap) {
                             ForEach(dayStats) { stat in
                                 Text(dayLabel(stat.id))
-                                    .font(.system(size: 9))
+                                    .font(Typography.axisLabel)
                                     .foregroundStyle(.tertiary)
                                     .frame(width: width)
                             }
@@ -258,6 +258,8 @@ struct ReviewView: View {
             return Color.secondary.opacity(0.08)
         }
         guard stat.hasRecord else { return Color.secondary.opacity(0.16) }
+        // 确认过没花钱的日子：有记录但不是支出，用浅一档的绿
+        if stat.count == 0 { return Color.brand.opacity(0.35) }
         if let selectedDay, calendar.isDate(selectedDay, equalTo: monthStart, toGranularity: .month) {
             let selectedComponent = calendar.component(.day, from: selectedDay)
             return stat.id == selectedComponent ? Color.brand : Color.brand.opacity(0.25)
@@ -267,6 +269,43 @@ struct ReviewView: View {
     }
 
     /// 柱高表示当天记了几笔：按当月最大笔数归一化，高度与笔数严格成正比。
+    /// 没有流水的一天：还没到、已确认、可以补确认，三种情况给三种表达
+    @ViewBuilder
+    private func noRecordRow(for day: Date) -> some View {
+        let isFuture = calendar.isDate(day, equalTo: .now, toGranularity: .month)
+            && calendar.startOfDay(for: day) > calendar.startOfDay(for: .now)
+        let confirmed = confirmations.contains { calendar.isDate($0.day, inSameDayAs: day) }
+
+        if isFuture {
+            Text("还没到这天")
+                .font(Typography.label)
+                .foregroundStyle(.secondary)
+        } else if confirmed {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(Typography.body)
+                Text("这天确认过没花钱")
+                    .font(Typography.label)
+            }
+            .foregroundStyle(Color.brand)
+        } else {
+            Button {
+                let service = DayConfirmationService(context: context)
+                try? service.confirmNoSpend(on: day)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle")
+                        .font(Typography.body)
+                    Text("这天没花钱")
+                        .font(Typography.label)
+                }
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private func barHeight(_ stat: DayStat, maxCount: Int) -> CGFloat {
         guard stat.hasRecord else { return 2 }
         guard stat.count > 0 else { return 8 }
@@ -285,9 +324,9 @@ struct ReviewView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "calendar")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Typography.label)
                 Text(monthStart.formatted(.dateTime.month(.abbreviated).locale(Locale(identifier: "zh_CN"))))
-                    .font(.subheadline.weight(.medium))
+                    .font(Typography.bodyStrong)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -309,13 +348,13 @@ struct ReviewView: View {
     private var pieSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(pieKind == .expense ? "钱花在哪儿" : "钱从哪来")
-                .font(.headline)
+                .font(Typography.sectionTitle)
 
             // 先列占比，再看饼图：数字比扇形面积更容易比较
             // 没有数据时，这句提示占据图例的位置
             if pieRows.isEmpty {
                 Text(pieKind == .expense ? "这个月还没有支出" : "这个月还没有收入")
-                    .font(.footnote)
+                    .font(Typography.label)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, PageLayout.blockGap)
@@ -358,10 +397,10 @@ struct ReviewView: View {
             } label: {
                 ZStack {
                     Text(AmountFormat.string(cents: pieTotalCents))
-                        .font(.system(.title3, design: .rounded).weight(.semibold))
+                        .font(Typography.numberLarge)
                         .foregroundStyle(.primary)
                     Text(pieKind == .expense ? "支出" : "收入")
-                        .font(.caption2.weight(.semibold))
+                        .font(Typography.captionStrong)
                         .foregroundStyle(.secondary)
                         .offset(y: 26)
                 }
@@ -379,18 +418,18 @@ struct ReviewView: View {
                         .fill(color(for: row.domain))
                         .frame(width: 10, height: 10)
                     Text(row.domain.displayName)
-                        .font(.body)
+                        .font(Typography.rowTitle)
                     Spacer()
                     Text(percentText(row.cents))
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.bodyStrong)
                         .foregroundStyle(.secondary)
                     // 百分比与金额之间的一条灰色短横线，前面留出更宽的间隔
                     Text("—")
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.bodyStrong)
                         .foregroundStyle(.secondary.opacity(0.45))
                         .padding(.leading, 26)
                     Text(AmountFormat.string(cents: row.cents))
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.bodyStrong)
                         .foregroundStyle(.secondary)
                         .frame(width: 84, alignment: .trailing)
                 }
@@ -414,12 +453,10 @@ struct ReviewView: View {
         let items = transactions(on: day)
         return VStack(alignment: .leading, spacing: PageLayout.blockGap) {
             Text(day.formatted(.dateTime.month(.abbreviated).day().weekday(.wide).locale(Locale(identifier: "zh_CN"))))
-                .font(.headline)
+                .font(Typography.sectionTitle)
 
             if items.isEmpty {
-                Text("那天没有记录")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                noRecordRow(for: day)
             } else {
                 TransactionList(
                     transactions: items,

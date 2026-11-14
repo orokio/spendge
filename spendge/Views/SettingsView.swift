@@ -46,7 +46,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                 Text("设置")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(Typography.pageTitle)
                     .padding(.top, 56)
 
                 group([
@@ -122,7 +122,7 @@ struct SettingsView: View {
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
                 notice = Notice(
                     title: "清除全部记录？",
-                    message: "会删除所有账单、预算和「不花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
+                    message: "会删除所有账单、预算和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
                     isConfirm: true,
                     confirmTitle: "清除",
                     onConfirm: { clearAllData() }
@@ -143,20 +143,20 @@ struct SettingsView: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(Typography.body)
                     .foregroundStyle(destructive ? Color.red : Color.brand)
                     .frame(width: 24)
                 Text(title)
-                    .font(.subheadline)
+                    .font(Typography.body)
                     .foregroundStyle(destructive ? Color.red : Color.primary)
                 Spacer(minLength: 12)
                 if !detail.isEmpty {
                     Text(detail)
-                        .font(.footnote)
+                        .font(Typography.label)
                         .foregroundStyle(.secondary)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Typography.captionStrong)
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 16)
@@ -201,7 +201,7 @@ struct SettingsView: View {
         pendingRestore = data
         notice = Notice(
             title: "从备份恢复？",
-            message: "会用备份里的内容替换当前所有记录、预算和「不花钱」确认。建议先导出一份当前备份。",
+            message: "会用备份里的内容替换当前所有记录、预算和「没花钱」确认。建议先导出一份当前备份。",
             isConfirm: true,
             confirmTitle: "覆盖恢复",
             onConfirm: {
@@ -258,12 +258,12 @@ struct SettingsView: View {
     private func row(_ item: Item) -> some View {
         HStack(spacing: 12) {
             Image(systemName: item.icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(Typography.body)
                 .foregroundStyle(Color.brand)
                 .frame(width: 24)
 
             Text(item.title)
-                .font(.subheadline)
+                .font(Typography.body)
 
             Spacer(minLength: 12)
 
@@ -273,7 +273,7 @@ struct SettingsView: View {
                     .tint(Color.brand)
             } else if !item.detail.isEmpty {
                 Text(item.detail)
-                    .font(.footnote)
+                    .font(Typography.label)
                     .foregroundStyle(.secondary)
             }
 
