@@ -46,7 +46,7 @@ struct GoalHistoryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("已达成")
+                        Text("我的奖杯")
                             .font(.system(size: 24, weight: .semibold, design: .rounded))
                         Spacer()
                         if !groups.isEmpty {
@@ -63,9 +63,13 @@ struct GoalHistoryView: View {
                     .padding(.top, 56)
 
                     if groups.isEmpty {
-                        Text("还没有达成的记录")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("还没有达成的记录")
+                                .font(.headline)
+                            Text("每个目标月底结算一次，达成后会记在这里。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         VStack(spacing: PageLayout.blockGap) {
                             ForEach(groups) { group in

@@ -59,6 +59,7 @@ struct GoalView: View {
             BudgetEditorSheet(
                 monthTitle: monthTitle,
                 initialCents: monthBudget?.amountCents,
+                initialRecurring: monthBudget?.isRecurring ?? false,
                 onSave: saveBudget,
                 onClear: clearBudget
             )
@@ -98,7 +99,7 @@ struct GoalView: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("预算")
+                    Text("本月预算")
                         .font(.headline)
                     Spacer()
                     Text(monthTitle)
@@ -125,7 +126,8 @@ struct GoalView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
             .contentShape(Rectangle())
@@ -135,27 +137,29 @@ struct GoalView: View {
 
     // MARK: - 入口
 
-    /// 已达成入口：有记录时才出现，避免空页面
-    @ViewBuilder
+    /// 奖杯入口：常驻，没记录时也能进去看说明
     private var achievementButton: some View {
-        if achievedTotal > 0 {
-            Button {
-                onOpenHistory()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "trophy")
-                        .font(.system(size: 13, weight: .medium))
-                    Text("已达成 \(achievedTotal) 次")
-                        .font(.subheadline.weight(.medium))
+        Button {
+            onOpenHistory()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "trophy")
+                    .font(.system(size: 13, weight: .medium))
+                Text("我的奖杯")
+                    .font(.subheadline.weight(.medium))
+                if achievedTotal > 0 {
+                    Text("\(achievedTotal)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.brand)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.regularMaterial, in: Capsule())
-                .foregroundStyle(Color.secondary)
-                .overlay(Capsule().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .foregroundStyle(Color.secondary)
+            .overlay(Capsule().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
         }
+        .buttonStyle(.plain)
     }
 
     /// 新增 / 管理目标的入口：右下角胶囊
@@ -184,13 +188,14 @@ struct GoalView: View {
         try? GoalService(context: context).progress(for: goal)
     }
 
-    private func saveBudget(_ cents: Int64) {
+    private func saveBudget(_ cents: Int64, _ recurring: Bool) {
         let comps = calendar.dateComponents([.year, .month], from: monthStart)
         try? BudgetService(context: context).setBudget(
             category: nil,
             amountCents: cents,
             year: comps.year ?? 2026,
-            month: comps.month ?? 1
+            month: comps.month ?? 1,
+            isRecurring: recurring
         )
     }
 
@@ -231,7 +236,8 @@ private struct GoalCard: View {
                 }
             }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
     }

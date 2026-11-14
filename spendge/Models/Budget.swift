@@ -9,6 +9,8 @@ final class Budget {
     var year: Int
     var month: Int
     var amountCents: Int64
+    /// 是否循环应用到之后的月份
+    var isRecurring: Bool = false
     var category: Category?
     var createdAt: Date
     var updatedAt: Date
@@ -19,6 +21,7 @@ final class Budget {
         amountCents: Int64,
         year: Int,
         month: Int,
+        isRecurring: Bool = false,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -27,6 +30,7 @@ final class Budget {
         self.amountCents = amountCents
         self.year = year
         self.month = month
+        self.isRecurring = isRecurring
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

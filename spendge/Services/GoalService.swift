@@ -189,14 +189,6 @@ final class GoalService {
             let total = try transactions(from: range.start, to: range.end, codes: [], kind: .expense)
                 .reduce(into: Int64(0)) { $0 += $1.amountCents }
             current = total > 0 ? Int((Double(scoped) / Double(total) * 100).rounded()) : 0
-        case .netInflow:
-            unit = .cents
-            isAtMost = false
-            let income = try transactions(from: range.start, to: range.end, codes: goal.categoryCodes, kind: .income)
-                .reduce(into: Int64(0)) { $0 += $1.amountCents }
-            let expense = try transactions(from: range.start, to: range.end, codes: goal.categoryCodes, kind: .expense)
-                .reduce(into: Int64(0)) { $0 += $1.amountCents }
-            current = Int(income - expense)
         }
 
         return GoalProgress(

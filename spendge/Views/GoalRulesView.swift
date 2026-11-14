@@ -88,6 +88,7 @@ struct GoalRulesView: View {
             BudgetEditorSheet(
                 monthTitle: monthTitle,
                 initialCents: monthBudget?.amountCents,
+                initialRecurring: monthBudget?.isRecurring ?? false,
                 onSave: saveBudget,
                 onClear: clearBudget
             )
@@ -248,11 +249,12 @@ struct GoalRulesView: View {
         )
     }
 
-    private func saveBudget(_ cents: Int64) {
+    private func saveBudget(_ cents: Int64, _ recurring: Bool) {
         let comps = calendar.dateComponents([.year, .month], from: .now)
         try? BudgetService(context: context).setBudget(
             category: nil, amountCents: cents,
-            year: comps.year ?? 2026, month: comps.month ?? 1
+            year: comps.year ?? 2026, month: comps.month ?? 1,
+            isRecurring: recurring
         )
     }
 

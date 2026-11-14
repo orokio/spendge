@@ -10,18 +10,11 @@ enum GoalKind: String, CaseIterable {
     case categorySum
     /// 某个分类占当月总支出的比例上限
     case shareCap
-    /// 收支净额（下限型）
-    case netInflow
 }
 
 extension GoalKind {
-    /// 上限型（用得越少越好）还是下限型（攒得越多越好）
-    var isAtMost: Bool {
-        switch self {
-        case .countLimit, .categorySum, .shareCap: return true
-        case .netInflow: return false
-        }
-    }
+    /// 三种维度都是「用得越少越好」
+    var isAtMost: Bool { true }
 
     /// 每个维度只允许「高频、可控」的分类：刚性支出和兜底分类都不进
     var allowedCategoryCodes: [CategoryCode] {
@@ -32,8 +25,6 @@ extension GoalKind {
             return [.takeout, .dineout, .grocery, .drink, .snack, .wear, .gear]
         case .shareCap:
             return [.takeout, .dineout, .grocery, .drink, .snack]
-        case .netInflow:
-            return []
         }
     }
 
@@ -41,7 +32,7 @@ extension GoalKind {
     var unitSuffix: String {
         switch self {
         case .countLimit: return "次"
-        case .categorySum, .netInflow: return "元"
+        case .categorySum: return "元"
         case .shareCap: return "%"
         }
     }

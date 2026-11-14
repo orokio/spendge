@@ -52,19 +52,41 @@ final class BudgetService {
         category: Category? = nil,
         amountCents: Int64,
         year: Int,
-        month: Int
+        month: Int,
+        isRecurring: Bool = false
     ) throws -> Budget {
         guard amountCents >= 0 else { throw SpendgeError.invalidAmount }
         if let existing = try budget(category: category, year: year, month: month) {
             existing.amountCents = amountCents
+            existing.isRecurring = isRecurring
             existing.updatedAt = .now
             try context.save()
             return existing
         }
-        let budget = Budget(category: category, amountCents: amountCents, year: year, month: month)
+        let budget = Budget(category: category, amountCents: amountCents,
+                            year: year, month: month, isRecurring: isRecurring)
         context.insert(budget)
         try context.save()
         return budget
+    }
+
+    /// 上个月勾了「循环应用」时，给本月补一条
+    func carryForwardIfNeeded(asOf date: Date = .now) throws {
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        guard let year = comps.year, let month = comps.month else { return }
+        guard try budget(category: nil, year: year, month: month) == nil else { return }
+
+        let all = try context.fetch(
+            FetchDescriptor<Budget>(sortBy: [
+                SortDescriptor(\Budget.year, order: .reverse),
+                SortDescriptor(\Budget.month, order: .reverse),
+            ])
+        )
+        guard let source = all.first(where: { $0.category == nil && $0.isRecurring }) else { return }
+        let copy = Budget(category: nil, amountCents: source.amountCents,
+                          year: year, month: month, isRecurring: true)
+        context.insert(copy)
+        try context.save()
     }
 
     func deleteBudget(_ budget: Budget) throws {

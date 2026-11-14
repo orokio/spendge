@@ -44,22 +44,19 @@ struct GoalFormView: View {
 
     private var goalKindCodes: [CategoryCode] { kind.allowedCategoryCodes }
 
-    private var needsCategory: Bool { !goalKindCodes.isEmpty }
-
     private var parsedValue: Int? {
         guard let value = Int(valueText), value > 0 else { return nil }
         switch kind {
         case .countLimit: return value
         case .categorySum: return value * 100
         case .shareCap: return min(value, 100)
-        case .netInflow: return value * 100
         }
     }
 
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespaces) }
 
     private var effectiveCodes: [String] {
-        needsCategory && !categoryCode.isEmpty ? [categoryCode] : []
+        categoryCode.isEmpty ? [] : [categoryCode]
     }
 
     /// 同维度 + 同分类 + 同周期已经存在时，不允许再建一条
@@ -72,7 +69,7 @@ struct GoalFormView: View {
 
     private var canSave: Bool {
         guard parsedValue != nil, duplicate == nil else { return false }
-        return !needsCategory || !categoryCode.isEmpty
+        return !categoryCode.isEmpty
     }
 
     var body: some View {
@@ -99,7 +96,6 @@ struct GoalFormView: View {
                             Text("次数").tag(GoalKind.countLimit)
                             Text("金额").tag(GoalKind.categorySum)
                             Text("占比").tag(GoalKind.shareCap)
-                            Text("结余").tag(GoalKind.netInflow)
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: kind) { _, _ in
@@ -111,19 +107,7 @@ struct GoalFormView: View {
 
                     // 分类竖列在左，上限与保存按钮在右
                     HStack(alignment: .top, spacing: 16) {
-                        if needsCategory {
-                            categoryRail
-                        } else {
-                            // 结余的范围就是全部，给一个不可选的占位，避免左侧空掉
-                            Text("全部")
-                                .font(.system(size: 13))
-                                .lineLimit(1)
-                                .frame(width: 96, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 9)
-                                .background(Color.brand, in: RoundedRectangle(cornerRadius: 9))
-                                .foregroundStyle(.white)
-                        }
+                        categoryRail
 
                         VStack(alignment: .leading, spacing: 20) {
                             field("周期") {
@@ -225,7 +209,7 @@ struct GoalFormView: View {
         .toast($toast)
         .onAppear {
             // 新建时默认选中第一个可选分类，避免进来一片空
-            if goal == nil, needsCategory, categoryCode.isEmpty {
+            if goal == nil, categoryCode.isEmpty {
                 categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
             }
         }
@@ -247,7 +231,6 @@ struct GoalFormView: View {
         case .countLimit: return "上限是多少次"
         case .categorySum: return "上限是多少元"
         case .shareCap: return "占比不超过（%）"
-        case .netInflow: return "至少结余多少元"
         }
     }
 

@@ -4,21 +4,26 @@ import SwiftUI
 struct BudgetEditorSheet: View {
     let monthTitle: String
     let initialCents: Int64?
-    let onSave: (Int64) -> Void
+    let initialRecurring: Bool
+    let onSave: (Int64, Bool) -> Void
     let onClear: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
+    @State private var recurring: Bool
 
     init(monthTitle: String,
          initialCents: Int64?,
-         onSave: @escaping (Int64) -> Void,
+         initialRecurring: Bool = false,
+         onSave: @escaping (Int64, Bool) -> Void,
          onClear: @escaping () -> Void) {
         self.monthTitle = monthTitle
         self.initialCents = initialCents
+        self.initialRecurring = initialRecurring
         self.onSave = onSave
         self.onClear = onClear
         _text = State(initialValue: initialCents.map { Self.text(fromCents: $0) } ?? "")
+        _recurring = State(initialValue: initialRecurring)
     }
 
     private static func text(fromCents cents: Int64) -> String {
@@ -52,7 +57,7 @@ struct BudgetEditorSheet: View {
 
                 Button {
                     if let cents {
-                        onSave(cents)
+                        onSave(cents, recurring)
                         dismiss()
                     }
                 } label: {
@@ -73,6 +78,22 @@ struct BudgetEditorSheet: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.brand)
             }
+
+            Button {
+                recurring.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: recurring ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(recurring ? Color.brand : Color.secondary)
+                    Text("循环应用到下个月")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
         }
