@@ -38,6 +38,9 @@ struct spendgeApp: App {
                         if ProcessInfo.processInfo.arguments.contains("-selfcheck") {
                             SelfCheck.run(context: container.mainContext)
                         }
+                        // 启动时把已经走完的周期固化成达成记录（幂等）
+                        try? GoalService(context: container.mainContext).materializeAchievements()
+
                         #endif
                     }
 

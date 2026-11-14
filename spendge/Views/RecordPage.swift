@@ -242,7 +242,7 @@ struct RecordPage: View {
             voiceHint = nil
             select(categories.first)
         } label: {
-            Text(LocalizedStringKey(title))
+            Text(title)
                 .font(.subheadline.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Color.primary : Color.secondary)
                 .frame(maxWidth: .infinity)
@@ -417,7 +417,7 @@ struct RecordPage: View {
 
     private func keyButton(_ label: String, small: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(LocalizedStringKey(label))
+            Text(label)
                 .font(small ? .footnote.weight(.medium) : .title3.weight(.medium))
                 .frame(maxWidth: .infinity, minHeight: 60)
                 .background(Color.surface, in: RoundedRectangle(cornerRadius: 9))
@@ -620,11 +620,7 @@ struct RecordPage: View {
 
         // 留在页面上连着记：给一句确认，然后清空这笔的内容，分类和日期保留
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        Toast.show(
-            String(format: String(localized: "toast.saved"),
-                   AmountFormat.string(cents: amountCents), category.displayName),
-            into: $toast
-        )
+        Toast.show("已记下 \(AmountFormat.string(cents: amountCents)) · \(category.displayName)", into: $toast)
         amountText = ""
         amountEdited = false
         note = ""

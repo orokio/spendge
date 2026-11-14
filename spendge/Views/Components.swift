@@ -38,7 +38,7 @@ enum AmountFormat {
     static func string(cents: Int64, showsSign: Bool = false) -> String {
         let yuan = Money.yuan(from: abs(cents))
         let number = yuan.formatted(
-            .number.precision(.fractionLength(0...2)).locale(.autoupdatingCurrent)
+            .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "zh_CN"))
         )
         let sign: String
         if !showsSign {
@@ -127,6 +127,24 @@ struct CategoryIcon: View {
     }
 }
 
+/// 区块小标题：左边标题，右边一句灰色补充（日期、范围等）。
+/// 今天页「今日流水 + 日期」是它的基准样式，其他页面同构的标题都用它。
+struct SectionHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.headline)
+            Spacer(minLength: 12)
+            trailing()
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct CategoryBadge: View {
     let category: Category
     var iconSize: CGFloat = 44
@@ -186,7 +204,7 @@ struct MonthStepper: View {
     }
 
     private var title: String {
-        month.formatted(.dateTime.year().month(.wide).locale(.autoupdatingCurrent))
+        month.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN")))
     }
 
     private func shift(by value: Int) {

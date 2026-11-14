@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// 「今天没花钱」的确认操作。
+/// 「今天不花钱」的确认操作。
 /// 一键就能完成——这个动作同时支撑零花费日目标和数据覆盖率。
 @MainActor
 final class DayConfirmationService {

@@ -85,38 +85,36 @@ struct TodayView: View {
     private var todayList: some View {
         // 与回看页一致：日期行到列表保持 22pt
         VStack(alignment: .leading, spacing: PageLayout.blockGap) {
-            // 一行：日期靠左，「今天没花钱」靠右
-            HStack(alignment: .firstTextBaseline) {
+            // 标题行：左「今日流水」，右日期（灰色小字，通用样式）
+            SectionHeader(title: "今日流水") {
                 HStack(spacing: 6) {
                     Text(Date.now.formatted(
                         .dateTime.month(.abbreviated).day().weekday(.abbreviated)
-                            .locale(.autoupdatingCurrent)
+                            .locale(Locale(identifier: "zh_CN"))
                     ))
                     if todayExpenseCents > 0 {
                         Text("·")
                         Text(AmountFormat.string(cents: todayExpenseCents))
                     }
                 }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            }
 
-                Spacer(minLength: 12)
-
-                if todayTransactions.isEmpty {
-                    Button {
-                        toggleNoSpend()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 15))
-                            Text("今天没花钱")
-                                .font(.footnote)
-                        }
-                        .foregroundStyle(confirmedToday ? Color.brand : Color.secondary)
-                        .contentShape(Rectangle())
+            // 当天没有记录时，给一个「今天不花钱」的动作
+            if todayTransactions.isEmpty {
+                Button {
+                    toggleNoSpend()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: confirmedToday ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 15))
+                        Text("今天不花钱")
+                            .font(.footnote)
                     }
-                    .buttonStyle(.plain)
+                    .foregroundStyle(confirmedToday ? Color.brand : Color.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
 
             if !todayTransactions.isEmpty {
@@ -129,7 +127,7 @@ struct TodayView: View {
         }
         .padding(.horizontal, PageLayout.pageInset)
         // 情绪块到列表：比普通区块再松一档（28 + 12 = 40），与回看页一致
-        .padding(.top, PageLayout.sectionGap + PageLayout.blockGap)
+        .padding(.top, PageLayout.sectionGap * 2)
     }
 
     /// 数字用品牌色，句子本身保持中性。

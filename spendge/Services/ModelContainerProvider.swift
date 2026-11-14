@@ -13,6 +13,8 @@ enum ModelContainerProvider {
             Transaction.self,
             Budget.self,
             DayConfirmation.self,
+            Goal.self,
+            GoalAchievement.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
 

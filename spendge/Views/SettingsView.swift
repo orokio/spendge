@@ -31,7 +31,6 @@ struct SettingsView: View {
 
     @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
 
-    @State private var showLanguagePicker = false
     @State private var sharedFile: SharedFile?
     @State private var toast: String?
     @State private var showImporter = false
@@ -39,18 +38,16 @@ struct SettingsView: View {
     @State private var notice: Notice?
 
     var body: some View {
+        ZStack {
+            // NavigationStack 自带不透明底色，这里重新铺回渐变
+            AppBackground()
+                .ignoresSafeArea()
+
         ScrollView {
             VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
-                Text("我的")
+                Text("设置")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .padding(.top, 56)
-
-                VStack(spacing: 0) {
-                    actionRow(icon: "globe", title: "语言", detail: currentLanguageName) {
-                        showLanguagePicker = true
-                    }
-                }
-                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
 
                 group([
                     Item(icon: "icloud", title: "iCloud 云同步", detail: "暂未接入", isOn: nil),
@@ -72,23 +69,15 @@ struct SettingsView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar(.hidden, for: .navigationBar)
+        }
         .contentShape(Rectangle())
         .toast($toast)
-        .sheet(isPresented: $showLanguagePicker) {
-            languageSheet
-                .presentationDetents([.fraction(1.0 / 3.0)])
-                .presentationCornerRadius(24)
-                .presentationBackground(Color.surfaceElevated)
-        }
         .sheet(item: $sharedFile) { file in
             ShareSheet(url: file.url) { completed in
                 sharedFile = nil
                 if completed {
-                    Toast.show(
-                        String(format: String(localized: "toast.exported"), file.url.lastPathComponent),
-                        into: $toast,
-                        duration: 2.2
-                    )
+                    Toast.show("已导出 \(file.url.lastPathComponent)", into: $toast, duration: 2.2)
                 }
             }
         }
@@ -98,75 +87,20 @@ struct SettingsView: View {
         .alert(item: $notice) { notice in
             if notice.isConfirm {
                 return Alert(
-                    title: Text(LocalizedStringKey(notice.title)),
-                    message: Text(LocalizedStringKey(notice.message)),
-                    primaryButton: .destructive(Text(LocalizedStringKey(notice.confirmTitle))) {
+                    title: Text(notice.title),
+                    message: Text(notice.message),
+                    primaryButton: .destructive(Text(notice.confirmTitle)) {
                         notice.onConfirm?()
                     },
                     secondaryButton: .cancel(Text("取消")) { pendingRestore = nil }
                 )
             }
             return Alert(
-                title: Text(LocalizedStringKey(notice.title)),
-                message: Text(LocalizedStringKey(notice.message)),
+                title: Text(notice.title),
+                message: Text(notice.message),
                 dismissButton: .default(Text("好"))
             )
         }
-    }
-
-    // MARK: - 语言
-
-    private var currentLanguageCode: String {
-        Locale.preferredLanguages.first ?? "zh-Hans"
-    }
-
-    private var currentLanguageName: String {
-        currentLanguageCode.hasPrefix("zh") ? "中文" : "English"
-    }
-
-    private var languageSheet: some View {
-        VStack(spacing: 0) {
-            languageOption(code: "zh-Hans", name: "中文")
-            Rectangle()
-                .fill(Color.secondary.opacity(0.12))
-                .frame(height: 0.5)
-            languageOption(code: "en", name: "English")
-        }
-        .padding(.horizontal, PageLayout.pageInset)
-        .padding(.top, 20)
-    }
-
-    private func languageOption(code: String, name: String) -> some View {
-        let selected = currentLanguageCode.hasPrefix(code.hasPrefix("zh") ? "zh" : "en")
-        return Button {
-            showLanguagePicker = false
-            switchLanguage(to: code, name: name)
-        } label: {
-            HStack {
-                Text(name)
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                Spacer()
-                if selected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.brand)
-                }
-            }
-            .frame(height: 54)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// 写 AppleLanguages，重启后整包生效（String(localized:) 读的是 Bundle 语言）
-    private func switchLanguage(to code: String, name: String) {
-        UserDefaults.standard.set([code], forKey: "AppleLanguages")
-        notice = Notice(
-            title: String(format: String(localized: "settings.switched"), name),
-            message: String(localized: "重启 App 后生效。"),
-            isConfirm: false
-        )
     }
 
     // MARK: - 数据
@@ -188,7 +122,7 @@ struct SettingsView: View {
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
                 notice = Notice(
                     title: "清除全部记录？",
-                    message: "会删除所有账单、预算和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
+                    message: "会删除所有账单、预算和「不花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
                     isConfirm: true,
                     confirmTitle: "清除",
                     onConfirm: { clearAllData() }
@@ -212,12 +146,12 @@ struct SettingsView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(destructive ? Color.red : Color.brand)
                     .frame(width: 24)
-                Text(LocalizedStringKey(title))
+                Text(title)
                     .font(.subheadline)
                     .foregroundStyle(destructive ? Color.red : Color.primary)
                 Spacer(minLength: 12)
                 if !detail.isEmpty {
-                    Text(LocalizedStringKey(detail))
+                    Text(detail)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -267,7 +201,7 @@ struct SettingsView: View {
         pendingRestore = data
         notice = Notice(
             title: "从备份恢复？",
-            message: "会用备份里的内容替换当前所有记录、预算和「没花钱」确认。建议先导出一份当前备份。",
+            message: "会用备份里的内容替换当前所有记录、预算和「不花钱」确认。建议先导出一份当前备份。",
             isConfirm: true,
             confirmTitle: "覆盖恢复",
             onConfirm: {
@@ -280,7 +214,7 @@ struct SettingsView: View {
         do {
             let count = try BackupService(context: context).restore(from: data)
             pendingRestore = nil
-            Toast.show(String(format: String(localized: "toast.restored"), count), into: $toast)
+            Toast.show("已恢复 \(count) 笔记录", into: $toast)
         } catch {
             pendingRestore = nil
             notice = Notice(title: "恢复失败", message: "\(error)")
@@ -328,7 +262,7 @@ struct SettingsView: View {
                 .foregroundStyle(Color.brand)
                 .frame(width: 24)
 
-            Text(LocalizedStringKey(item.title))
+            Text(item.title)
                 .font(.subheadline)
 
             Spacer(minLength: 12)
@@ -338,7 +272,7 @@ struct SettingsView: View {
                     .labelsHidden()
                     .tint(Color.brand)
             } else if !item.detail.isEmpty {
-                Text(LocalizedStringKey(item.detail))
+                Text(item.detail)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -348,21 +282,4 @@ struct SettingsView: View {
         .frame(height: 50)
         .contentShape(Rectangle())
     }
-}
-
-/// 系统分享面板：导出 CSV / JSON 后直接调起
-private struct ShareSheet: UIViewControllerRepresentable {
-    let url: URL
-    var onFinish: (Bool) -> Void = { _ in }
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        // 分享面板关掉后回调：用户真的存/发出去了才提示
-        controller.completionWithItemsHandler = { _, completed, _, _ in
-            onFinish(completed)
-        }
-        return controller
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

@@ -55,6 +55,20 @@ enum SelfCheck {
             expect(decoded.categories.count > 0, "备份应包含分类")
         }
 
+        // 3a2. 目标进度：方向、剩余、区间
+        let atMost = GoalProgress(current: 3, target: 4, unit: .count, isAtMost: true, period: .month)
+        expect(atMost.isReached, "上限型没超就算达标")
+        expect(atMost.remaining == 1, "上限型剩余应为 1")
+        let atLeast = GoalProgress(current: 2, target: 3, unit: .count, isAtMost: false, period: .week)
+        expect(!atLeast.isReached, "下限型没到不算达标")
+        expect(atLeast.remaining == 1, "下限型还差 1")
+        if let monthRange = try? GoalService(context: context).periodRange(.month),
+           let weekRange = try? GoalService(context: context).periodRange(.week) {
+            expect(Calendar.current.component(.day, from: monthRange.start) == 1, "月区间应从 1 号开始")
+            let days = Calendar.current.dateComponents([.day], from: weekRange.start, to: weekRange.end).day
+            expect(days == 7, "周区间应为 7 天")
+        }
+
         // 3b. 当月天数按公历：二月 28/29，小月 30，大月 31
         if let feb = calendar.date(from: DateComponents(year: 2028, month: 2, day: 1)) {
             expect(calendar.dayCount(inMonthOf: feb) == 29, "2028 年 2 月应有 29 天")

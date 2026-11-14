@@ -27,21 +27,21 @@ final class InsightService {
             return todayInsight(today)
         }
 
-        // 2. 今天确认过没花钱
+        // 2. 今天确认过不花钱
         if try isConfirmedToday() {
-            return Insight(title: String(localized: "今天没花钱"), detail: String(localized: "也是一种过法"))
+            return Insight(title: "今天不花钱", detail: "也是一种过法")
         }
 
         // 3. 刚开始用：先别谈数据
         if totalCount < 5 {
-            return Insight(title: String(localized: "从今天开始，它会越来越懂你"), detail: nil)
+            return Insight(title: "从今天开始，它会越来越懂你", detail: nil)
         }
 
         // 4. 有缺口：说成"有些天没记上"，不报天数
         let coverage = try coverage(forMonth: calendar.component(.month, from: .now),
                                     year: calendar.component(.year, from: .now))
         if coverage.elapsedDays - coverage.coveredDays >= 3 {
-            return Insight(title: String(localized: "有些事没记上"), detail: String(localized: "想补的时候补一下就好"))
+            return Insight(title: "有些事没记上", detail: "想补的时候补一下就好")
         }
 
         // 5. 兜底：本周与上周的外卖对比，数字放在小字里
@@ -53,21 +53,21 @@ final class InsightService {
     private func todayInsight(_ transactions: [Transaction]) -> Insight {
         // 发薪日单独说
         if transactions.contains(where: { $0.category?.categoryCode == .salary }) {
-            return Insight(title: String(localized: "发薪日快乐"), detail: String(localized: "这个月慢慢花"))
+            return Insight(title: "发薪日快乐", detail: "这个月慢慢花")
         }
 
         let takeoutCount = transactions.filter { $0.category?.categoryCode == .takeout }.count
         if takeoutCount >= 2 {
             return Insight(
-                title: String(format: String(localized: "insight.takeout"), takeoutCount),
-                detail: String(localized: "偶尔这样，也没关系")
+                title: "今天点了 \(takeoutCount) 次外卖",
+                detail: "偶尔这样，也没关系"
             )
         }
 
         // 取今天最有「事」的一笔：优先非收入、有分类的
         let candidate = transactions.first { $0.category != nil } ?? transactions[0]
         guard let code = candidate.category?.categoryCode else {
-            return Insight(title: String(localized: "记下了"), detail: nil)
+            return Insight(title: "记下了", detail: nil)
         }
         return copy(for: code)
     }
@@ -129,16 +129,13 @@ final class InsightService {
             let diff = thisWeek - lastWeek
             if diff == 0 {
                 return Insight(
-                    title: String(format: String(localized: "insight.sameWeek"), thisWeek),
+                    title: "这周和上周一样，点了 \(thisWeek) 次外卖",
                     detail: nil
                 )
             }
             return Insight(
-                title: String(
-                    format: String(localized: diff > 0 ? "insight.moreWeek" : "insight.lessWeek"),
-                    abs(diff)
-                ),
-                detail: String(format: String(localized: "insight.weekCompare"), lastWeek, thisWeek)
+                title: "这周外卖比上周\(diff > 0 ? "多" : "少")了 \(abs(diff)) 次",
+                detail: "上周 \(lastWeek) 次，这周 \(thisWeek) 次"
             )
         }
 
@@ -146,8 +143,8 @@ final class InsightService {
             predicate: #Predicate { $0.date >= monthStart }
         ))
         return Insight(
-            title: String(format: String(localized: "insight.monthCount"), monthCount),
-            detail: String(localized: "慢慢来")
+            title: "这个月记了 \(monthCount) 笔",
+            detail: "慢慢来"
         )
     }
 
