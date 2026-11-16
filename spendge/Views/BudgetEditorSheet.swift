@@ -129,9 +129,61 @@ struct MonthPickerSheet: View {
                         } label: {
                             HStack {
                                 Text(date.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN"))))
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(Color.textPrimary)
                                 Spacer()
                                 if Calendar.current.isDate(date, equalTo: selected, toGranularity: .month) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.brand)
+                                }
+                            }
+                            .padding(.horizontal, PageLayout.pageInset)
+                            .frame(height: 50)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 16)
+            }
+        }
+        .background(Color.surfaceElevated)
+    }
+}
+
+/// 选择年份：可选范围与月份面板一致（最近 12 个月覆盖到的年份）
+struct YearPickerSheet: View {
+    let selectedYear: Int
+    let onPick: (Int) -> Void
+
+    private var options: [Int] {
+        let calendar = Calendar.current
+        let base = calendar.startOfDay(for: .now)
+        let years = (0..<12).compactMap { offset -> Int? in
+            guard let date = calendar.date(byAdding: .month, value: -offset, to: base) else { return nil }
+            return calendar.component(.year, from: date)
+        }
+        return Array(Set(years)).sorted(by: >)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("选择年份")
+                .font(Typography.sectionTitle)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 22)
+                .padding(.bottom, 14)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(options, id: \.self) { year in
+                        Button {
+                            onPick(year)
+                        } label: {
+                            HStack {
+                                Text("\(year)年")
+                                    .foregroundStyle(Color.textPrimary)
+                                Spacer()
+                                if year == selectedYear {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(Color.brand)
                                 }

@@ -129,7 +129,7 @@ struct SettingsView: View {
                 )
             }
         }
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
     }
 
     private var divider: some View {
@@ -252,7 +252,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
     }
 
     private func row(_ item: Item) -> some View {

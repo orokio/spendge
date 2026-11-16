@@ -112,7 +112,7 @@ struct GoalRulesView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(goal.title)
                                     .font(Typography.body)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(Color.textPrimary)
                                 Text(summary(for: goal))
                                     .font(Typography.caption)
                                     .foregroundStyle(.secondary)
@@ -131,7 +131,7 @@ struct GoalRulesView: View {
                     if index < goals.count - 1 { divider }
                 }
             }
-            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
         }
     }
 
@@ -159,7 +159,7 @@ struct GoalRulesView: View {
                     showBudgetEditor = true
                 }
             }
-            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
         }
     }
 

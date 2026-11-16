@@ -1,11 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// 长按删除：按住整行，红色块从右往左充满，充满即删除；中途松手取消。
+/// 长按删除：按住行的右半边，红色块从右往左充满，充满即删除；中途松手取消。
 ///
 /// 不用横向拖拽，所以不会和整页翻页、列表纵向滚动抢同一个手势。
 struct HoldToDeleteRow<Content: View>: View {
     let onDelete: () -> Void
+    /// 红色块向上 / 向下多出来的高度：卡片里的首尾行用它贴到卡片边缘
+    var topBleed: CGFloat = 0
+    var bottomBleed: CGFloat = 0
+    /// 红色块向右多出来的宽度：卡片里的行用它贴到右侧边缘
+    var trailingBleed: CGFloat = 0
+    /// 红色块右下 / 右上的圆角：卡片首行给上圆角、末行给下圆角，中间保持直角
+    var topRightRadius: CGFloat = 0
+    var bottomRightRadius: CGFloat = 0
     @ViewBuilder var content: Content
 
     /// 红色块充满所需时间（形状节奏）
@@ -29,7 +37,13 @@ struct HoldToDeleteRow<Content: View>: View {
                     HStack(spacing: 0) {
                         Spacer(minLength: 0)
                         ZStack(alignment: .trailing) {
-                            Color.red
+                            UnevenRoundedRectangle(
+                                topLeadingRadius: 0,
+                                bottomLeadingRadius: 0,
+                                bottomTrailingRadius: bottomRightRadius,
+                                topTrailingRadius: topRightRadius
+                            )
+                            .fill(Color.red)
                             Text("删除")
                                 .font(Typography.bodyStrong)
                                 .foregroundStyle(.white)
@@ -40,24 +54,39 @@ struct HoldToDeleteRow<Content: View>: View {
                         .clipped()
                     }
                 }
+                .padding(.top, -topBleed)
+                .padding(.bottom, -bottomBleed)
+                .padding(.trailing, -trailingBleed)
                 .allowsHitTesting(false)
             }
-            .onLongPressGesture(minimumDuration: holdDuration, maximumDistance: allowedDrift) {
-                fillTask?.cancel()
-                progress = 0
-                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-                onDelete()
-            } onPressingChanged: { isPressing in
-                fillTask?.cancel()
-                if isPressing {
-                    // 先静置：手指还在轻微移动的（拖列表）不会看到红色
-                    fillTask = Task {
-                        try? await Task.sleep(for: .milliseconds(Int(gracePeriod * 1000)))
-                        guard !Task.isCancelled else { return }
-                        withAnimation(.linear(duration: fillDuration)) { progress = 1 }
+            // 只有右半边响应长按；左半边不接管点击，留给内容自己的「编辑」
+            .overlay {
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        Color.clear
+                            .frame(width: geo.size.width / 2)
+                            .allowsHitTesting(false)
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onLongPressGesture(minimumDuration: holdDuration, maximumDistance: allowedDrift) {
+                                fillTask?.cancel()
+                                progress = 0
+                                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                                onDelete()
+                            } onPressingChanged: { isPressing in
+                                fillTask?.cancel()
+                                if isPressing {
+                                    // 先静置：手指还在轻微移动的（拖列表）不会看到红色
+                                    fillTask = Task {
+                                        try? await Task.sleep(for: .milliseconds(Int(gracePeriod * 1000)))
+                                        guard !Task.isCancelled else { return }
+                                        withAnimation(.linear(duration: fillDuration)) { progress = 1 }
+                                    }
+                                } else {
+                                    withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
+                                }
+                            }
                     }
-                } else {
-                    withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
                 }
             }
             .onDisappear { fillTask?.cancel() }

@@ -11,8 +11,6 @@ import SwiftData
 @main
 struct spendgeApp: App {
     private let container = ModelContainerProvider.make()
-    /// 首帧淡入：不做延迟，只把静态启动屏上的 logo 交叉溶进界面
-    @State private var launched = false
 
     var body: some Scene {
         WindowGroup {
@@ -31,7 +29,8 @@ struct spendgeApp: App {
                 .ignoresSafeArea()
 
                 RootView()
-                    .opacity(launched ? 1 : 0)
+                    // 全站正文用近黑（#1F2937），不用系统纯黑
+                    .foregroundStyle(Color.textPrimary)
                     .task {
                         #if DEBUG
                         // 只在显式带参数时跑：simctl launch <device> com.orokio.spendge -selfcheck
@@ -46,19 +45,6 @@ struct spendgeApp: App {
 
                         #endif
                     }
-
-                // 与启动屏同一位置、同一尺寸，接着淡出——看起来是 logo 融进界面
-                Image("LaunchLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 230)
-                    .opacity(launched ? 0 : 1)
-                    .allowsHitTesting(false)
-            }
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    launched = true
-                }
             }
         }
         .modelContainer(container)

@@ -129,7 +129,7 @@ struct GoalView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -257,7 +257,7 @@ private struct GoalCard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
     }
 
     /// 0 目标的结果：次数 / 金额 / 占比

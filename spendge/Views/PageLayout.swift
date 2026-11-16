@@ -17,4 +17,11 @@ enum PageLayout {
 
     /// 行内元素：情绪文字↔副标题、同一行的标签
     static let inlineGap: CGFloat = 8
+
+    // MARK: - 圆角
+
+    /// 卡片：预算卡、目标卡、列表容器
+    static let cardRadius: CGFloat = 22
+    /// 卡片内的分组块
+    static let moduleRadius: CGFloat = 14
 }

@@ -1,514 +1,406 @@
-import Charts
 import SwiftUI
 import SwiftData
 
-/// 回看：只回答一个问题——这个月过成什么样。
-/// 一种时间尺度（月份），不掺日视角的交互。
+/// 统计：按月 / 按年看钱花在哪。一个下拉选期间，没有图表。
 struct ReviewView: View {
-    /// 正在翻页：月份切换不响应，避免滑动途中弹出月份面板
     let onEdit: (Transaction) -> Void
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
-    @Query private var confirmations: [DayConfirmation]
 
-    @State private var monthAnchor = Date()
-    @State private var coverage: MonthCoverage?
-    @State private var showMonthPicker = false
-    @State private var selectedDomain: CategoryDomain?
-    @State private var selectedDay: Date?
-    @State private var pieKind: TransactionKind = .expense
-    /// 页面正在滚动：此时不响应点击，避免滚动途中误开半屏
-    @State private var isScrolling = false
+    /// 当前查看的期间：某个月，或某一整年
+    @State private var period: Period = .month(Date())
+    @State private var showPicker = false
 
     private let calendar = Calendar.current
 
-    /// 一屏正好露出 12 天；一个月的柱子在屏幕上放不下，横向滚动查看
-    private let barGap: CGFloat = 3
-    private let daysPerScreen: CGFloat = 12
+    enum Period: Equatable {
+        case month(Date)
+        case year(Int)
 
-    private struct DayStat: Identifiable {
-        let id: Int
+        var title: String {
+            let calendar = Calendar.current
+            switch self {
+            case .month(let date):
+                let year = calendar.component(.year, from: date)
+                let month = calendar.component(.month, from: date)
+                return "\(year)年\(month)月"
+            case .year(let year):
+                return "\(year)年"
+            }
+        }
+    }
+
+    private struct CategoryRow: Identifiable {
+        let id: String
+        let cents: Int64
         let count: Int
-        let hasRecord: Bool
+        /// 用来取图标与颜色；分类被删掉时为空
+        let category: Category?
     }
 
-    private var monthStart: Date {
-        calendar.dateInterval(of: .month, for: monthAnchor)?.start ?? monthAnchor
-    }
+    // MARK: - 数据
 
-    private var isCurrentMonth: Bool {
-        calendar.isDate(monthStart, equalTo: .now, toGranularity: .month)
-    }
-
-    private var monthTitle: String {
-        monthStart.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "zh_CN")))
-    }
-
-    private var monthTransactions: [Transaction] {
-        transactions.filter { calendar.isDate($0.date, equalTo: monthStart, toGranularity: .month) }
-    }
-
-    private var expenseTransactions: [Transaction] {
-        monthTransactions.filter { $0.kind == .expense }
-    }
-
-    private var dayStats: [DayStat] {
-        let daysInMonth = calendar.dayCount(inMonthOf: monthStart)
-        // 整月都画出来：还没到的日子就是 0，柱子留成一道浅痕
-        let dayCount = daysInMonth
-
-        var counts: [Int: Int] = [:]
-        var recorded: Set<Int> = []
-
-        for txn in monthTransactions {
-            let day = calendar.component(.day, from: txn.date)
-            recorded.insert(day)
-            counts[day, default: 0] += 1
-        }
-        for item in confirmations where calendar.isDate(item.day, equalTo: monthStart, toGranularity: .month) {
-            recorded.insert(calendar.component(.day, from: item.day))
-        }
-
-        return (1...max(dayCount, 1)).map { day in
-            DayStat(id: day, count: counts[day] ?? 0, hasRecord: recorded.contains(day))
+    private var scopedTransactions: [Transaction] {
+        switch period {
+        case .month(let date):
+            return transactions.filter { calendar.isDate($0.date, equalTo: date, toGranularity: .month) }
+        case .year(let year):
+            return transactions.filter { calendar.component(.year, from: $0.date) == year }
         }
     }
 
-    private var homemadeDays: Int {
-        let days = expenseTransactions
-            .filter { $0.category?.categoryCode == .grocery }
-            .map { calendar.startOfDay(for: $0.date) }
-        return Set(days).count
-    }
-
-    private func count(_ code: CategoryCode) -> Int {
-        expenseTransactions.filter { $0.category?.categoryCode == code }.count
-    }
-
-    /// 饼图当前展示的那一类（支出 / 收入）
-    private var pieTransactions: [Transaction] {
-        monthTransactions.filter { $0.kind == pieKind }
-    }
-
-    private var pieRows: [(domain: CategoryDomain, cents: Int64)] {
-        var totals: [CategoryDomain: Int64] = [:]
-        for txn in pieTransactions {
-            totals[txn.category?.domain ?? .other, default: 0] += txn.amountCents
+    private var categoryRows: [CategoryRow] {
+        var cents: [String: Int64] = [:]
+        var counts: [String: Int] = [:]
+        var categories: [String: Category] = [:]
+        for txn in scopedTransactions where txn.kind == .expense {
+            let name = txn.category?.name ?? "未分类"
+            cents[name, default: 0] += txn.amountCents
+            counts[name, default: 0] += 1
+            if let category = txn.category { categories[name] = category }
         }
-        return totals
-            .map { (domain: $0.key, cents: $0.value) }
+        return cents
+            .map { CategoryRow(id: $0.key, cents: $0.value, count: counts[$0.key] ?? 0,
+                               category: categories[$0.key]) }
             .sorted { $0.cents > $1.cents }
     }
 
-    /// 与饼图同源：没有数据时就是 0，不会出现「空环但中间有钱」
-    private var pieTotalCents: Int64 {
-        pieRows.reduce(0) { $0 + $1.cents }
+    private var totalCents: Int64 {
+        categoryRows.reduce(0) { $0 + $1.cents }
     }
 
-    private var totalExpenseCents: Int64 {
-        expenseTransactions.reduce(0) { $0 + $1.amountCents }
+    /// 可选期间：有记录的月份倒序排列，每年 1 月后面跟一个「整年」
+    private var periodOptions: [Period] {
+        let months = transactions.compactMap { txn -> Date? in
+            calendar.dateInterval(of: .month, for: txn.date)?.start
+        }
+        let uniqueMonths = Array(Set(months)).sorted(by: >)
+        let currentMonth = calendar.dateInterval(of: .month, for: .now)?.start
+        let allMonths = Set(uniqueMonths + [currentMonth].compactMap { $0 }).sorted(by: >)
+
+        var result: [Period] = []
+        var seenYears: Set<Int> = []
+        for month in allMonths {
+            result.append(.month(month))
+            let year = calendar.component(.year, from: month)
+            let isJanuary = calendar.component(.month, from: month) == 1
+            let isLastOfYear = !allMonths.contains { calendar.component(.year, from: $0) == year && $0 < month }
+            if (isJanuary || isLastOfYear), !seenYears.contains(year) {
+                result.append(.year(year))
+                seenYears.insert(year)
+            }
+        }
+        return result
     }
+
+    // MARK: - 页面
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
-                    header
-                    // 日期轴单独一块，不塞在情绪标题里
-                    sparkline
-                    if !monthTransactions.isEmpty {
-                        Group {
-                            if let selectedDay {
-                                daySection(for: selectedDay)
-                            } else {
-                                pieSection
-                            }
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
+                headerBlock
+                insightCard
+                VStack(alignment: .leading, spacing: PageLayout.blockGap) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("支出分类")
+                            .font(Typography.sectionTitle)
+                        Spacer(minLength: 12)
+                        Text("共 \(categoryRows.reduce(0) { $0 + $1.count }) 笔")
+                            .font(Typography.label)
+                            .foregroundStyle(.secondary)
                     }
+                    domainSection
                 }
-                .padding(.horizontal, PageLayout.pageInset)
-                .padding(.top, 56)
-                // 滚到底时最后一行要落在渐隐区之上
-                .padding(.bottom, 110)
             }
-            .scrollIndicators(.hidden)
-            .modifier(ScrollPhaseGate { scrolling in isScrolling = scrolling })
-
-            // 底部渐隐：行滚到月份控件前淡出，不做硬裁切
-            LinearGradient(
-                stops: [
-                    .init(color: Color.canvas.opacity(0), location: 0),
-                    .init(color: Color.canvas, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 90)
-            .frame(maxWidth: .infinity)
-            // 一直接到屏幕最底部：底部安全区里不能露出没被渐隐盖住的列表
-            .ignoresSafeArea(edges: .bottom)
-            .allowsHitTesting(false)
-
-            monthButton
+            .padding(.horizontal, PageLayout.pageInset)
+            .padding(.top, 56)
+            .padding(.bottom, 110)
         }
-        // 底部留白也算页面：不留形状的话那块透明区域点不中，翻页手势起不来
-        .contentShape(Rectangle())
-        .sheet(isPresented: $showMonthPicker) {
-            MonthPickerSheet(selected: monthStart) { picked in
-                monthAnchor = picked
-                showMonthPicker = false
+        .scrollIndicators(.hidden)
+        .sheet(isPresented: $showPicker) {
+            PeriodPickerSheet(options: periodOptions, selected: period) { picked in
+                period = picked
+                showPicker = false
             }
-            .presentationDetents([.fraction(1.0 / 3.0)])
+            .presentationDetents([.fraction(0.45)])
             .presentationCornerRadius(24)
             .presentationBackground(Color.surfaceElevated)
         }
-        .task { refresh() }
-        .onChange(of: monthAnchor) { _, _ in refresh() }
-        .onChange(of: transactions.count) { _, _ in refresh() }
-        .onChange(of: confirmations.count) { _, _ in refresh() }
     }
 
-    // MARK: - 这个月
+    private var headerBlock: some View {
+        VStack(alignment: .leading, spacing: PageLayout.blockGap) {
+            HStack(alignment: .firstTextBaseline) {
+                Button {
+                    showPicker = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(period.title)
+                            .font(Typography.pageTitle)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(Color.textPrimary)
+                }
+                .buttonStyle(.plain)
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
-            if let coverage, coverage.coveredDays > 0 {
-                Text("本月有你 \(coverage.coveredDays) 天的记录")
-                    .font(Typography.pageTitle)
-            } else {
-                Text("这个月还没有记录")
-                    .font(Typography.pageTitle)
             }
         }
     }
 
-    /// 柱状图：柱高 = 当天几笔。柱子固定宽度，横向可滚，一个月都放得下。
-    private var sparkline: some View {
-        GeometryReader { geo in
-            let width = barWidth(for: geo.size.width)
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(spacing: 6) {
-                        HStack(alignment: .bottom, spacing: barGap) {
-                            ForEach(dayStats) { stat in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(barColor(stat))
-                                    .frame(width: width, height: barHeight(stat, maxCount: maxDayCount))
-                                    .id(stat.id)
+    // MARK: - 洞察
+
+    /// 一句话洞察：主句是事实（其中一个数字放大），副句只给视角、不评价
+    private struct InsightText {
+        let before: String
+        let highlight: String
+        let after: String
+        let sub: String
+    }
+
+    private var expenses: [Transaction] {
+        scopedTransactions.filter { $0.kind == .expense }
+    }
+
+    private var periodWord: String {
+        if case .year = period { return "这一年" }
+        return "这个月"
+    }
+
+    private var previousWord: String {
+        if case .year = period { return "去年" }
+        return "上月"
+    }
+
+    /// 优先级：结构 → 频次 → 时间 → 金额分布 → 对比 → 兜底
+    private var insight: InsightText {
+        let items = expenses
+        guard !items.isEmpty else {
+            return InsightText(before: periodWord, highlight: "还没有", after: "支出",
+                               sub: "记下第一笔，这里就会有结论")
+        }
+        let word = periodWord
+
+        // 1. 结构：某一类占 40% 以上
+        if let top = categoryRows.first, totalCents > 0 {
+            let share = Int((Double(top.cents) / Double(totalCents) * 100).rounded())
+            if share >= 40 {
+                return InsightText(before: "\(word) ", highlight: "\(share)%", after: " 花在了\(top.id)",
+                                   sub: "钱大多去了同一个地方")
+            }
+        }
+
+        // 2. 频次：有多少天被记下来（仅月档）
+        if case .month = period {
+            let days = Set(items.map { calendar.startOfDay(for: $0.date) }).count
+            if days >= 3 {
+                return InsightText(before: "\(word)有 ", highlight: "\(days)", after: " 天被记下来",
+                                   sub: "空着的那几天，也在过日子")
+            }
+        }
+
+        // 3. 时间：晚上记的账占比
+        let evening = items.filter { calendar.component(.hour, from: $0.date) >= 18 }.count
+        if items.count >= 6 {
+            let share = Int(Double(evening) / Double(items.count) * 100)
+            if share >= 60 {
+                return InsightText(before: "\(word)的账，", highlight: "\(share)%", after: " 记在晚上",
+                                   sub: "晚上手松一点，也正常")
+            }
+        }
+
+        // 4. 金额分布：单笔中位数
+        if items.count >= 4 {
+            let median = medianYuan(items.map { $0.amountCents })
+            return InsightText(before: "一半的支出在 ", highlight: "\(median)", after: " 元以下",
+                               sub: "这些才是\(word == "这一年" ? "这一年" : "这个月")的日子")
+        }
+
+        // 5. 对比：和上一个周期比
+        if let change = comparisonPercent(), abs(change) >= 20 {
+            let direction = change > 0 ? "多花了" : "少花了"
+            let tail = change > 0 ? "" : ""
+            return InsightText(before: "\(word)比\(previousWord)\(direction) ", highlight: "\(abs(change))%", after: tail,
+                               sub: change > 0 ? "花得快一点，也正常" : "省下来的，都在账上")
+        }
+
+        // 6. 兜底
+        return InsightText(before: "\(word)记了 ", highlight: "\(items.count)", after: " 笔",
+                           sub: "先记着，慢慢就有样子了")
+    }
+
+    private func medianYuan(_ cents: [Int64]) -> Int64 {
+        let sorted = cents.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let middle = sorted.count / 2
+        let value = sorted.count % 2 == 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
+        return max(1, value / 100)
+    }
+
+    /// 与上一个周期的总额变化（百分比）；上一周期没有数据时返回 nil
+    private func comparisonPercent() -> Int? {
+        let previous: Int64
+        switch period {
+        case .month(let date):
+            guard let previousDate = calendar.date(byAdding: .month, value: -1, to: date) else { return nil }
+            previous = transactions
+                .filter { calendar.isDate($0.date, equalTo: previousDate, toGranularity: .month) && $0.kind == .expense }
+                .reduce(0) { $0 + $1.amountCents }
+        case .year(let year):
+            previous = transactions
+                .filter { calendar.component(.year, from: $0.date) == year - 1 && $0.kind == .expense }
+                .reduce(0) { $0 + $1.amountCents }
+        }
+        guard previous > 0 else { return nil }
+        return Int(((Double(totalCents) - Double(previous)) / Double(previous) * 100).rounded())
+    }
+
+    private var insightCard: some View {
+        let text = insight
+        let mainFont = Font.system(size: 20, weight: .semibold, design: .rounded)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            (Text(text.before).font(mainFont).foregroundColor(Color.textPrimary)
+             + Text(text.highlight)
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .foregroundColor(Color.brand)
+             + Text(text.after).font(mainFont).foregroundColor(Color.textPrimary))
+                .lineSpacing(6)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(text.sub)
+                .font(Typography.body)
+                .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color.brand.opacity(0.12), Color.brand.opacity(0.04)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: PageLayout.cardRadius)
+        )
+    }
+
+    // MARK: - 钱花在哪
+
+    private var domainSection: some View {
+        CardContainer {
+                if categoryRows.isEmpty {
+                    Text("这段时间还没有支出")
+                        .font(Typography.label)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 24) {
+                        ForEach(categoryRows) { row in
+                            VStack(spacing: 9) {
+                                HStack(spacing: 6) {
+                                    CategoryIcon(
+                                        iconName: row.category?.iconName ?? "tag",
+                                        colorHex: row.category?.colorHex ?? "#9CA3AF",
+                                        size: 24
+                                    )
+                                    Text(row.id)
+                                        .font(Typography.rowTitle)
+                                        .padding(.leading, 4)
+
+                                    Spacer(minLength: 8)
+
+                                    // 百分比与笔数：小字灰色；金额在最后，字号略大
+                                    Text(percentText(row.cents))
+                                        .font(Typography.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text("·")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text("\(row.count) 笔")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(AmountFormat.string(cents: row.cents))
+                                        .font(Typography.numberSmall)
+                                        .foregroundStyle(Color.textPrimary)
+                                        .padding(.leading, 8)
+                                }
+
+                                GeometryReader { geo in
+                                    let ratio = totalCents > 0
+                                        ? CGFloat(Double(row.cents) / Double(totalCents)) : 0
+                                    Capsule()
+                                        .fill(Color.brand.opacity(0.55))
+                                        .frame(width: max(6, geo.size.width * ratio))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(height: 5)
                             }
-                        }
-                        .frame(height: 44, alignment: .bottom)
-                        .contentShape(Rectangle())
-                        .onTapGesture { location in
-                            let index = Int(location.x / (width + barGap))
-                            openDay(at: min(max(index, 0), dayStats.count - 1))
                         }
 
-                        HStack(spacing: barGap) {
-                            ForEach(dayStats) { stat in
-                                Text(dayLabel(stat.id))
-                                    .font(Typography.axisLabel)
-                                    .foregroundStyle(.tertiary)
-                                    .frame(width: width)
-                            }
+                        HStack(spacing: 8) {
+                            Spacer()
+                            Text("合计")
+                                .font(Typography.label)
+                                .foregroundStyle(.secondary)
+                            Text(AmountFormat.string(cents: totalCents))
+                                .font(Typography.numberSmall)
                         }
                     }
-                    // 上下留白同时是触摸区：手指更容易落在图上，不会误触翻页
-                    .padding(.vertical, 8)
                 }
-                .onAppear { scrollToEnd(proxy, animated: false) }
-                .onChange(of: monthAnchor) { _, _ in scrollToEnd(proxy, animated: false) }
-            }
-        }
-        .frame(height: 82)
-    }
-
-    /// 一屏 12 天：按可用宽度算出柱宽
-    private func barWidth(for available: CGFloat) -> CGFloat {
-        max(14, (available - barGap * (daysPerScreen - 1)) / daysPerScreen)
-    }
-
-    /// 当月停在今天（最右），往月停在月初
-    private func scrollToEnd(_ proxy: ScrollViewProxy, animated: Bool) {
-        let target: Int?
-        let anchor: UnitPoint
-        if isCurrentMonth {
-            target = min(calendar.component(.day, from: .now), dayStats.last?.id ?? 1)
-            anchor = .trailing
-        } else {
-            target = dayStats.first?.id
-            anchor = .leading
-        }
-        guard let target else { return }
-        if animated {
-            withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(target, anchor: anchor) }
-        } else {
-            proxy.scrollTo(target, anchor: anchor)
-        }
-    }
-
-    private var maxDayCount: Int {
-        max(dayStats.map(\.count).max() ?? 1, 1)
-    }
-
-    private func barColor(_ stat: DayStat) -> Color {
-        // 还没到的日子更淡一点：那不是「漏记」，只是还没到
-        if isCurrentMonth, stat.id > calendar.component(.day, from: .now) {
-            return Color.secondary.opacity(0.08)
-        }
-        guard stat.hasRecord else { return Color.secondary.opacity(0.16) }
-        // 确认过没花钱的日子：有记录但不是支出，用浅一档的绿
-        if stat.count == 0 { return Color.brand.opacity(0.35) }
-        if let selectedDay, calendar.isDate(selectedDay, equalTo: monthStart, toGranularity: .month) {
-            let selectedComponent = calendar.component(.day, from: selectedDay)
-            return stat.id == selectedComponent ? Color.brand : Color.brand.opacity(0.25)
-        }
-        // 没有选中时所有柱子同色，不再单独强调今天
-        return Color.brand.opacity(0.6)
-    }
-
-    /// 柱高表示当天记了几笔：按当月最大笔数归一化，高度与笔数严格成正比。
-    /// 没有流水的一天：还没到、已确认、可以补确认，三种情况给三种表达
-    @ViewBuilder
-    private func noRecordRow(for day: Date) -> some View {
-        let isFuture = calendar.isDate(day, equalTo: .now, toGranularity: .month)
-            && calendar.startOfDay(for: day) > calendar.startOfDay(for: .now)
-        let confirmed = confirmations.contains { calendar.isDate($0.day, inSameDayAs: day) }
-
-        if isFuture {
-            Text("还没到这天")
-                .font(Typography.label)
-                .foregroundStyle(.secondary)
-        } else if confirmed {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(Typography.body)
-                Text("这天确认过没花钱")
-                    .font(Typography.label)
-            }
-            .foregroundStyle(Color.brand)
-        } else {
-            Button {
-                let service = DayConfirmationService(context: context)
-                try? service.confirmNoSpend(on: day)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "circle")
-                        .font(Typography.body)
-                    Text("这天没花钱")
-                        .font(Typography.label)
-                }
-                .foregroundStyle(.secondary)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func barHeight(_ stat: DayStat, maxCount: Int) -> CGFloat {
-        guard stat.hasRecord else { return 2 }
-        guard stat.count > 0 else { return 8 }
-        let ratio = Double(stat.count) / Double(max(maxCount, 1))
-        return 8 + 32 * ratio
-    }
-
-    private func dayLabel(_ day: Int) -> String {
-        guard day == 1 || day % 5 == 0 else { return "" }
-        return "\(day)"
-    }
-
-    private var monthButton: some View {
-        Button {
-            showMonthPicker = true
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "calendar")
-                    .font(Typography.label)
-                Text(monthStart.formatted(.dateTime.month(.abbreviated).locale(Locale(identifier: "zh_CN"))))
-                    .font(Typography.bodyStrong)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
-            .foregroundStyle(Color.secondary)
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
-        .padding(.trailing, PageLayout.pageInset)
-        .padding(.bottom, 26)
-    }
-
-    // MARK: - 吃的
-
-    // MARK: - 钱花在哪儿
-
-    // MARK: - 钱花在哪儿
-
-    private var pieSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(pieKind == .expense ? "钱花在哪儿" : "钱从哪来")
-                .font(Typography.sectionTitle)
-
-            // 先列占比，再看饼图：数字比扇形面积更容易比较
-            // 没有数据时，这句提示占据图例的位置
-            if pieRows.isEmpty {
-                Text(pieKind == .expense ? "这个月还没有支出" : "这个月还没有收入")
-                    .font(Typography.label)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, PageLayout.blockGap)
-            } else {
-                // 与标题同一条边线：不再额外内缩
-                pieLegend
-                    .padding(.top, PageLayout.blockGap)
-            }
-
-            pieChart
-                .padding(.top, PageLayout.sectionGap)
-        }
-    }
-
-    /// 饼图本身。某一类为空也照常画（空环）：中心按钮必须一直在，否则切过去就回不来了
-    /// 没有数据时给一个灰色的整圈占位，形状与有数据时一致
-    private var chartRows: [(domain: CategoryDomain, cents: Int64)] {
-        pieRows.isEmpty ? [(domain: .other, cents: 1)] : pieRows
-    }
-
-    private var pieChart: some View {
-        Chart(chartRows, id: \.domain) { row in
-            SectorMark(
-                angle: .value("金额", row.cents),
-                innerRadius: .ratio(0.6),
-                angularInset: 1.5
-            )
-            .foregroundStyle(color(for: row.domain))
-            .cornerRadius(3)
-        }
-        .frame(height: 170)
-        .chartLegend(.hidden)
-        // overlay 必须在 padding 之前：否则它的居中是「图表 + 上边距」的居中，金额会比圆心高出一截
-        .overlay {
-            // 点中心切换支出 / 收入；金额严格居中，标签挂在下方
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    pieKind = pieKind == .expense ? .income : .expense
-                }
-            } label: {
-                ZStack {
-                    Text(AmountFormat.string(cents: pieTotalCents))
-                        .font(Typography.numberLarge)
-                        .foregroundStyle(.primary)
-                    Text(pieKind == .expense ? "支出" : "收入")
-                        .font(Typography.captionStrong)
-                        .foregroundStyle(.secondary)
-                        .offset(y: 26)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var pieLegend: some View {
-        VStack(spacing: 12) {
-            ForEach(pieRows, id: \.domain) { row in
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(color(for: row.domain))
-                        .frame(width: 10, height: 10)
-                    Text(row.domain.displayName)
-                        .font(Typography.rowTitle)
-                    Spacer()
-                    Text(percentText(row.cents))
-                        .font(Typography.bodyStrong)
-                        .foregroundStyle(.secondary)
-                    // 百分比与金额之间的一条灰色短横线，前面留出更宽的间隔
-                    Text("—")
-                        .font(Typography.bodyStrong)
-                        .foregroundStyle(.secondary.opacity(0.45))
-                        .padding(.leading, 26)
-                    Text(AmountFormat.string(cents: row.cents))
-                        .font(Typography.bodyStrong)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 84, alignment: .trailing)
-                }
-            }
         }
     }
 
     private func percentText(_ cents: Int64) -> String {
-        guard pieTotalCents > 0 else { return "" }
-        return "\(Int((Double(cents) / Double(pieTotalCents) * 100).rounded()))%"
-    }
-
-    /// 领域配色由主题提供，换主题时饼图与图例一起变
-    private func color(for domain: CategoryDomain) -> Color {
-        Palette.current.domainColor(domain)
-    }
-
-    // MARK: - 某一天的明细
-
-    private func daySection(for day: Date) -> some View {
-        let items = transactions(on: day)
-        return VStack(alignment: .leading, spacing: PageLayout.blockGap) {
-            Text(day.formatted(.dateTime.month(.abbreviated).day().weekday(.wide).locale(Locale(identifier: "zh_CN"))))
-                .font(Typography.sectionTitle)
-
-            if items.isEmpty {
-                noRecordRow(for: day)
-            } else {
-                TransactionList(
-                    transactions: items,
-                    spacing: 14,
-                    onDelete: { txn in try? TransactionService(context: context).delete(txn) },
-                    onTap: onEdit
-                )
-            }
-        }
-    }
-
-    /// 点柱子看那天的流水；再点同一根回到月度饼图。
-    private func openDay(at index: Int) {
-        guard dayStats.indices.contains(index) else { return }
-        guard let date = calendar.date(byAdding: .day, value: index, to: monthStart) else { return }
-        withAnimation(.easeInOut(duration: 0.18)) {
-            selectedDay = calendar.isDate(date, inSameDayAs: selectedDay ?? .distantPast) ? nil : date
-        }
-    }
-
-    private func transactions(on day: Date) -> [Transaction] {
-        transactions
-            .filter { calendar.isDate($0.date, inSameDayAs: day) }
-            .sorted { $0.date < $1.date }
-    }
-
-    private func refresh() {
-        let comps = calendar.dateComponents([.year, .month], from: monthStart)
-        coverage = try? TransactionService(context: context)
-            .coverage(forMonth: comps.year ?? 2026, month: comps.month ?? 1)
+        guard totalCents > 0 else { return "" }
+        return "\(Int((Double(cents) / Double(totalCents) * 100).rounded()))%"
     }
 }
 
-/// 把「这个滚动容器正在滚」翻译成一个开关：滚动期间翻页手势让路。
-/// iOS 18 用滚动阶段；更早的系统退化成「手指一动就算」。
-private struct ScrollPhaseGate: ViewModifier {
-    let onChange: (Bool) -> Void
+/// 期间选择：月份与整年混在一条时间线上
+struct PeriodPickerSheet: View {
+    let options: [ReviewView.Period]
+    let selected: ReviewView.Period
+    let onPick: (ReviewView.Period) -> Void
 
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollPhaseChange { _, phase in
-                switch phase {
-                case .idle: onChange(false)
-                default: onChange(true)
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("选择期间")
+                .font(Typography.sectionTitle)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 22)
+                .padding(.bottom, 14)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                        Button {
+                            onPick(option)
+                        } label: {
+                            HStack {
+                                Text(option.title)
+                                    .foregroundStyle(Color.textPrimary)
+                                if case .year = option {
+                                    Text("全年")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if option == selected {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.brand)
+                                }
+                            }
+                            .padding(.horizontal, PageLayout.pageInset)
+                            .frame(height: 50)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(.bottom, 16)
             }
-        } else {
-            content.simultaneousGesture(
-                DragGesture(minimumDistance: 4)
-                    .onChanged { _ in onChange(true) }
-                    .onEnded { _ in onChange(false) }
-            )
         }
+        .background(Color.surfaceElevated)
     }
 }

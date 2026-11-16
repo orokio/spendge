@@ -9,6 +9,8 @@ struct Palette {
     let accent: Color
     /// 强调色的浅色版：选中底、标签底、淡填充
     let accentSoft: Color
+    /// 压重的文字色：情绪句关键词、月度结论。用量极少
+    let deepGreen: Color
     /// 收入色
     let income: Color
     /// 页面底色（根背景）
@@ -53,12 +55,13 @@ extension Palette {
     static let mint = Palette(
         accent: Color(hex: "#14B8A6"),
         accentSoft: Color(hex: "#14B8A6").opacity(0.12),
+        deepGreen: Color(hex: "#0F766E"),
         income: Color(hex: "#10B981"),
         background: Color(.systemGroupedBackground),
         surface: Color(.systemGray6),
-        surfaceElevated: Color(.systemBackground),
-        text: .primary,
-        textSecondary: .secondary,
+        surfaceElevated: Color(hex: "#FFFFFF"),
+        text: Color(hex: "#1F2937"),
+        textSecondary: Color(hex: "#6B7A78"),
         gradientStops: [
             (Color(hex: "#14B8A6").opacity(0.20), 0),
             (Color(hex: "#14B8A6").opacity(0.15), 0.10),
@@ -83,6 +86,7 @@ extension Palette {
     static let warm = Palette(
         accent: Color(hex: "#B7653C"),
         accentSoft: Color(hex: "#E2C9A6"),
+        deepGreen: Color(hex: "#7A3E22"),
         income: Color(hex: "#8FA36B"),
         background: Color(hex: "#FBF3EA"),
         surface: Color(hex: "#F3E7D9"),

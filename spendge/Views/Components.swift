@@ -162,7 +162,7 @@ struct CategoryBadge: View {
                 }
             Text(category.displayName)
                 .font(Typography.label)
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.textPrimary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)

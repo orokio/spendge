@@ -5,6 +5,8 @@ import UIKit
 /// 记一笔：整页。键盘常驻，分类在左侧竖列；记下后留在页面连着记，点「完成」或右滑返回。
 struct RecordPage: View {
     let onClose: () -> Void
+    /// 保存成功后回传这笔的日期，首页据此把柱图聚焦到那天
+    var onSaved: ((Date) -> Void)?
     /// 非空表示在编辑这一笔：预填它的内容，保存走 update
     private let editing: Transaction?
 
@@ -21,22 +23,27 @@ struct RecordPage: View {
     @State private var amountText = ""
     @State private var amountEdited = false
     /// 最近用过的不同金额（全分类共享）
-    @State private var recentAmounts: [Int64] = []
     @State private var date = Date.now
     @State private var note = ""
     @State private var voiceHint: String?
-    @State private var showChips = false
     @StateObject private var transcriber = SpeechTranscriber()
     @State private var dragOffset: CGFloat = 0
+    /// 键盘高度：自己算，不用系统安全区（系统在收起时偶尔不归还高度）
+    @State private var keyboardInset: CGFloat = 0
     @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
     @State private var noteEditing = false
     @State private var toast: String?
 
     private let calendar = Calendar.current
 
-    init(editing: Transaction? = nil, onClose: @escaping () -> Void) {
+    init(editing: Transaction? = nil,
+         initialDate: Date = .now,
+         onClose: @escaping () -> Void,
+         onSaved: ((Date) -> Void)? = nil) {
         self.editing = editing
         self.onClose = onClose
+        self.onSaved = onSaved
+        _date = State(initialValue: initialDate)
         guard let transaction = editing else { return }
         _kind = State(initialValue: transaction.kind)
         _selectedCategory = State(initialValue: transaction.category)
@@ -134,12 +141,20 @@ struct RecordPage: View {
 
     private var hasAmount: Bool { amountCents > 0 }
 
+    private static var bottomSafeInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Text(editing == nil ? "记一笔" : "编辑")
                 .font(Typography.sectionTitle)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 14)
+                .padding(.top, 56)
 
             HStack(spacing: 0) {
                 kindSegment(.expense, title: "支出")
@@ -150,21 +165,21 @@ struct RecordPage: View {
             .padding(.horizontal, PageLayout.pageInset)
             .padding(.top, 12)
 
-            dateAxis
-                .padding(.horizontal, PageLayout.pageInset)
-                .padding(.top, 14)
-
             // 剩余空间全交给两列，底部自然贴屏幕
             GeometryReader { inner in
                 HStack(alignment: .top, spacing: 16) {
                     tagRail
+                        .padding(.top, 24)
                         .frame(height: inner.size.height)
 
                     VStack(spacing: 12) {
-                        amountView
+                        Text(dateLabel)
+                            .font(Typography.label)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 24)
-                        chipRow
-                            .padding(.top, 10)
+
+                        amountView
                         // 输入备注时收起数字键盘，把空间让给系统键盘和备注框
                         if !noteEditing {
                             keypad
@@ -189,7 +204,21 @@ struct RecordPage: View {
             .padding(.top, 12)
         }
         // 与首页 ＋ 号距安全区底部的距离一致
-        .padding(.bottom, 26)
+        .padding(.bottom, 26 + keyboardInset)
+        // 不让系统按键盘收缩布局：否则键盘收起后高度可能不归还，内容会挤在一起
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            guard let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let screenHeight = UIScreen.main.bounds.height
+            let overlap = max(0, screenHeight - end.origin.y)
+            let safeBottom = Self.bottomSafeInset
+            withAnimation(.easeOut(duration: 0.22)) {
+                keyboardInset = max(0, overlap - safeBottom)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.22)) { keyboardInset = 0 }
+        }
         .background(
             Color.surfaceElevated
                 .ignoresSafeArea()
@@ -214,9 +243,6 @@ struct RecordPage: View {
         )
         .task {
             bootstrap()
-            // 滑入动画结束后再露出常用金额，避免在滑入过程中突然出现
-            try? await Task.sleep(for: .milliseconds(360))
-            showChips = true
             transcriber.onFinish = { text in
                 finishVoice(text)
             }
@@ -244,7 +270,7 @@ struct RecordPage: View {
         } label: {
             Text(title)
                 .font(selected ? Typography.bodyStrong : Typography.body)
-                .foregroundStyle(selected ? Color.primary : Color.secondary)
+                .foregroundStyle(selected ? Color.textPrimary : Color.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
                 .background(
@@ -255,46 +281,11 @@ struct RecordPage: View {
         .buttonStyle(.plain)
     }
 
-    /// 固定 7 天，不滚动。
-    private var dateAxis: some View {
-        HStack(spacing: 6) {
-            ForEach(days, id: \.self) { day in
-                dayCell(day)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    private func dayCell(_ day: Date) -> some View {
-        let selected = calendar.isDate(date, inSameDayAs: day)
-        return Button {
-            withAnimation(.snappy(duration: 0.2)) { date = day }
-        } label: {
-            VStack(spacing: 3) {
-                Text(weekdayLabel(day))
-                    .font(Typography.caption)
-                    .foregroundStyle(selected ? Color.white.opacity(0.85) : .secondary)
-                Text("\(calendar.component(.day, from: day))")
-                    .font(Typography.numberSmall)
-                    .foregroundStyle(selected ? .white : .primary)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            // 没有底色之后，整格要显式声明可点击范围
-            .contentShape(Rectangle())
-            .background(
-                selected ? Color.brand : Color.clear,
-                in: RoundedRectangle(cornerRadius: 12)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// 星期首字：跟随系统语言（中文「一二三」，英文「MTW」）
-    private func weekdayLabel(_ day: Date) -> String {
-        let index = calendar.component(.weekday, from: day) - 1
-        let symbols = calendar.veryShortStandaloneWeekdaySymbols
-        return symbols.indices.contains(index) ? symbols[index] : ""
+    /// 记一笔时的日期：由首页聚焦的那天带过来，只展示不改
+    private var dateLabel: String {
+        let text = date.formatted(.dateTime.month(.abbreviated).day().weekday(.wide)
+            .locale(Locale(identifier: "zh_CN")))
+        return calendar.isDateInToday(date) ? "今天 · \(text)" : text
     }
 
     // MARK: - 分类（左侧竖列）
@@ -367,37 +358,6 @@ struct RecordPage: View {
                 .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// 最近用过的 3 个不同金额：只记忆，不猜测；点一下即填。
-    private var chipRow: some View {
-        HStack(spacing: 6) {
-            if showChips, !recentAmounts.isEmpty {
-                Text("最近")
-                    .font(Typography.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.trailing, 2)
-            }
-            ForEach(showChips ? recentAmounts : [], id: \.self) { chip in
-                Button {
-                    amountText = Self.text(fromCents: chip)
-                    amountEdited = true
-                } label: {
-                    Text(Self.text(fromCents: chip))
-                        .font(Typography.label)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            amountCents == chip ? Color.brand : Color.surface,
-                            in: Capsule()
-                        )
-                        .foregroundStyle(amountCents == chip ? .white : .primary)
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(height: 26, alignment: .leading)
     }
 
     private var keypad: some View {
@@ -505,7 +465,7 @@ struct RecordPage: View {
                 .frame(height: 48)
                 .background(
                     canSave ? Color.brand : Color.secondary.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 14)
+                    in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius)
                 )
                 .foregroundStyle(canSave ? Color.white : Color.secondary)
         }
@@ -525,7 +485,6 @@ struct RecordPage: View {
     }
 
     private func loadRecentAmounts() {
-        recentAmounts = (try? TransactionService(context: context).recentAmounts()) ?? []
     }
 
     private func select(_ category: Category?) {
@@ -597,6 +556,7 @@ struct RecordPage: View {
                 account: account
             )
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onSaved?(date)
             onClose()
             return
         }
@@ -611,9 +571,12 @@ struct RecordPage: View {
             account: account
         )
 
+        onSaved?(date)
+
         // 偏好：记完就回去（默认留在页面连着记）
         if !stayAfterSave {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onSaved?(date)
             onClose()
             return
         }

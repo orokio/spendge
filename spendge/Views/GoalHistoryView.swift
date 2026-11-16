@@ -131,7 +131,7 @@ struct GoalHistoryView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 18))
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
     }
 
     // MARK: - 分享
