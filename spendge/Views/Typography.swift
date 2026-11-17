@@ -33,6 +33,8 @@ enum Typography {
     static let rowTitle = Font.body
     /// 正文 / 说明性文案
     static let body = Font.subheadline
+    /// 卡片主文字：比正文重半档，小字在浅底上不至于发虚
+    static let bodyMedium = Font.subheadline.weight(.medium)
     /// 需要强调的正文：按钮、胶囊、行内主文案
     static let bodyStrong = Font.subheadline.weight(.semibold)
     /// 说明、副标题、单位

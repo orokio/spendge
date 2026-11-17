@@ -203,8 +203,17 @@ struct GoalView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    ProgressView(value: max(0, 1 - Double(monthExpenseCents) / Double(budget.amountCents)))
-                        .tint(Color.brand)
+                    GeometryReader { geo in
+                        let ratio = max(0, min(1, 1 - Double(monthExpenseCents) / Double(budget.amountCents)))
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.12))
+                            Capsule()
+                                .fill(Color.brand)
+                                .frame(width: geo.size.width * ratio)
+                        }
+                    }
+                    .frame(height: 8)
 
                     budgetTags(budgetCents: budget.amountCents, remaining: remaining)
                         .padding(.top, 14)
@@ -539,7 +548,7 @@ private struct GoalCard: View {
     var isPaused = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: 20) {
             if let progress {
                 GoalRing(progress: progress, tint: status?.color ?? Color.brand)
             }
@@ -547,7 +556,7 @@ private struct GoalCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .center, spacing: 8) {
                     Text(goal.title)
-                        .font(Typography.sectionTitle)
+                        .font(Typography.bodyMedium)
                         .foregroundStyle(Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
@@ -564,12 +573,12 @@ private struct GoalCard: View {
                 if let progress {
                     Text(detailText(progress))
                         .font(Typography.label)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
@@ -611,7 +620,7 @@ private struct GoalRing: View {
     let progress: GoalProgress
     var tint: Color = Color.brand
     private let diameter: CGFloat = 44
-    private let lineWidth: CGFloat = 5
+    private let lineWidth: CGFloat = 6
 
     var body: some View {
         ZStack {

@@ -19,7 +19,7 @@ struct TransactionRow: View {
             // 固定高度：没有备注时分类名垂直居中，行高与有备注时一致
             VStack(alignment: .leading, spacing: 2) {
                 Text(transaction.category?.name ?? "未分类")
-                    .font(Typography.body)
+                    .font(Typography.bodyMedium)
                 if let note = transaction.note, !note.isEmpty {
                     Text(note)
                         .font(Typography.label)
@@ -32,7 +32,7 @@ struct TransactionRow: View {
             Spacer(minLength: 8)
 
             Text(AmountFormat.string(cents: signedCents, showsSign: true))
-                .font(.system(.subheadline, design: .rounded).weight(.medium))
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .foregroundStyle(transaction.kind == .income ? Color.income : Color.textPrimary)
         }
         .padding(.vertical, 8)

@@ -311,7 +311,7 @@ struct ReviewView: View {
              + Text(text.after).foregroundColor(Color.textSecondary)
              + Text("，").foregroundColor(Color.textSecondary)
              + Text(text.sub).foregroundColor(Color.textSecondary))
-                .font(Typography.body.weight(.semibold))
+                .font(Typography.body)
                 .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 20)
@@ -584,7 +584,7 @@ struct ReviewView: View {
             context.stroke(
                 previousPath,
                 with: .color(Color.textSecondary.opacity(0.45)),
-                style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [4, 4])
+                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [4, 4])
             )
         }
 
@@ -599,7 +599,7 @@ struct ReviewView: View {
                 seg,
                 with: .color(isCovered ? Color.brand : emptyColor),
                 style: StrokeStyle(
-                    lineWidth: isCovered ? 2.5 : 1.5,
+                    lineWidth: isCovered ? 3 : 1.8,
                     lineCap: .round,
                     lineJoin: .round
                 )
@@ -821,7 +821,7 @@ struct ReviewView: View {
             CategoryIcon(iconName: iconName, colorHex: colorHex, size: 24)
 
             Text(name)
-                .font(isSummary ? Typography.label : Typography.body)
+                .font(isSummary ? Typography.label : Typography.bodyMedium)
                 .foregroundStyle(isSummary ? Color.textSecondary : Color.textPrimary)
                 .lineLimit(1)
                 .frame(minWidth: 66, alignment: .leading)
@@ -839,7 +839,7 @@ struct ReviewView: View {
                         .fill(Color.textSecondary.opacity(0.12))
                         .frame(width: 48, height: 5)
                     Capsule()
-                        .fill(Color.brand.opacity(0.55))
+                        .fill(Color.brand)
                         .frame(width: max(4, 48 * ratio), height: 5)
                 }
             }
