@@ -21,7 +21,6 @@ struct RootView: View {
     /// 「我的目标」整页
     @State private var showGoalHistory = false
     /// 选择目标整页
-    @State private var showGoalRules = false
 
     var body: some View {
         TabView(selection: $tab) {
@@ -35,7 +34,7 @@ struct RootView: View {
                 .tabItem { Label { Text("统计").foregroundStyle(tab == .review ? Color.brand : Color.textSecondary) } icon: { tabIcon("chart.bar.xaxis", selected: tab == .review) } }
                 .tag(Tab.review)
 
-            GoalView(onOpenHistory: openGoalHistory, onOpenPicker: openGoalRules)
+            GoalView(onOpenHistory: openGoalHistory)
                 .background(AppBackground())
                 .tabItem { Label { Text("目标").foregroundStyle(tab == .goal ? Color.brand : Color.textSecondary) } icon: { tabIcon("trophy", selected: tab == .goal) } }
                 .tag(Tab.goal)
@@ -46,13 +45,9 @@ struct RootView: View {
                 .tag(Tab.settings)
         }
         .tint(Color.brand)
+        // 四个 tab 页里只有目标抽屉有输入框，整体不避让键盘，抽屉就不会被压矮
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .overlay {
-            if showGoalRules {
-                GoalRulesView(onClose: closeGoalRules)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(12)
-            }
-
             if showGoalHistory {
                 GoalHistoryView(onClose: closeGoalHistory)
                     .transition(.move(edge: .trailing))
@@ -68,7 +63,7 @@ struct RootView: View {
             }
 
             if let editingTransaction {
-                RecordPage(editing: editingTransaction, onClose: closeEdit, onSaved: { focusedDay = $0 })
+                RecordPage(editing: editingTransaction, onClose: closeEdit, onSaved: { _ in })
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(3)
@@ -122,18 +117,6 @@ struct RootView: View {
     private func closeRecord() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             showRecord = false
-        }
-    }
-
-    private func openGoalRules() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            showGoalRules = true
-        }
-    }
-
-    private func closeGoalRules() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            showGoalRules = false
         }
     }
 

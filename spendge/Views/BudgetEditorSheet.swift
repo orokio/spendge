@@ -8,7 +8,6 @@ struct BudgetEditorSheet: View {
     let onSave: (Int64, Bool) -> Void
     let onClear: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var text: String
     @State private var recurring: Bool
 
@@ -36,40 +35,14 @@ struct BudgetEditorSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 16) {
-                Text("\(monthTitle)预算")
-                    .font(Typography.sectionTitle)
+        VStack(spacing: 18) {
+            Text("\(monthTitle)预算")
+                .font(Typography.sectionTitle)
+                .foregroundStyle(Color.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 14)
 
-                Spacer()
-
-                if initialCents != nil {
-                    Button {
-                        onClear()
-                        dismiss()
-                    } label: {
-                        Text("清除预算")
-                            .font(Typography.label)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Button {
-                    if let cents {
-                        onSave(cents, recurring)
-                        dismiss()
-                    }
-                } label: {
-                    Text("保存")
-                        .font(Typography.bodyStrong)
-                        .foregroundStyle(cents == nil ? Color.secondary : Color.brand)
-                }
-                .buttonStyle(.plain)
-                .disabled(cents == nil)
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("¥")
                     .font(Typography.number)
                     .foregroundStyle(.secondary)
@@ -78,6 +51,9 @@ struct BudgetEditorSheet: View {
                     .font(Typography.amountInput)
                     .foregroundStyle(Color.brand)
             }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .background(Color.surface, in: RoundedRectangle(cornerRadius: 12))
 
             Button {
                 recurring.toggle()
@@ -95,9 +71,40 @@ struct BudgetEditorSheet: View {
             }
             .buttonStyle(.plain)
 
-            Spacer(minLength: 0)
+            HStack(spacing: 10) {
+                if initialCents != nil {
+                    Button {
+                        onClear()
+                    } label: {
+                        Text("清除预算")
+                            .font(Typography.bodyStrong)
+                            .foregroundStyle(Color.textSecondary)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                            .background(Color.surface, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    if let cents { onSave(cents, recurring) }
+                } label: {
+                    Text("保存")
+                        .font(Typography.bodyStrong)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 12)
+                        .background(Color.brand, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 2)
         }
-        .padding(24)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 26)
+        .frame(maxWidth: .infinity)
     }
 }
 

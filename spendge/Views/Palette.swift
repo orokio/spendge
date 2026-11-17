@@ -15,6 +15,10 @@ struct Palette {
     let income: Color
     /// 提醒色：支出比上期涨了，用暖黄，不用红
     let warning: Color
+    /// 达标 / 稳定态用的冷色
+    let info: Color
+    /// 超限：只在真的越线时出现
+    let danger: Color
     /// 页面底色（根背景）
     let background: Color
     /// 表面色：键盘、输入框、分段控件底
@@ -60,10 +64,12 @@ extension Palette {
         deepGreen: Color(hex: "#0F766E"),
         income: Color(hex: "#10B981"),
         warning: Color(hex: "#D97706"),
+        info: Color(hex: "#4B7BEC"),
+        danger: Color(hex: "#D9503F"),
         background: Color(.systemGroupedBackground),
         surface: Color(.systemGray6),
         surfaceElevated: Color(hex: "#FFFFFF"),
-        text: Color(hex: "#1F2937"),
+        text: Color(hex: "#3F5150"),
         textSecondary: Color(hex: "#6B7A78"),
         gradientStops: [
             (Color(hex: "#14B8A6").opacity(0.20), 0),
@@ -92,6 +98,8 @@ extension Palette {
         deepGreen: Color(hex: "#7A3E22"),
         income: Color(hex: "#8FA36B"),
         warning: Color(hex: "#B7653C"),
+        info: Color(hex: "#7C8FA3"),
+        danger: Color(hex: "#C2544B"),
         background: Color(hex: "#FBF3EA"),
         surface: Color(hex: "#F3E7D9"),
         surfaceElevated: Color(hex: "#FFFDFB"),

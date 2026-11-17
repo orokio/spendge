@@ -11,6 +11,10 @@ extension Color {
     static var income: Color { Palette.current.income }
     /// 提醒色：支出比上期涨了
     static var warning: Color { Palette.current.warning }
+    /// 达标 / 稳定态
+    static var info: Color { Palette.current.info }
+    /// 超限
+    static var danger: Color { Palette.current.danger }
     /// 页面底色
     static var canvas: Color { Palette.current.background }
     /// 表面色：键盘、输入框、分段控件底
@@ -40,7 +44,7 @@ enum AmountFormat {
     static func string(cents: Int64, showsSign: Bool = false) -> String {
         let yuan = Money.yuan(from: abs(cents))
         let number = yuan.formatted(
-            .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "zh_CN"))
+            .number.precision(.fractionLength(0)).locale(Locale(identifier: "zh_CN"))
         )
         let sign: String
         if !showsSign {
@@ -213,5 +217,53 @@ struct MonthStepper: View {
         if let newDate = Calendar.current.date(byAdding: .month, value: value, to: month) {
             month = Calendar.current.startOfMonth(for: newDate)
         }
+    }
+}
+
+/// 从屏幕顶部滑下来的抽屉：半透明遮罩 + 贴顶底板 + 下滑动画。
+/// 用法是放在 overlay(alignment: .top) 里，传入绑定和内容。
+struct TopDrawer<Content: View>: View {
+    @Binding var isPresented: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            if isPresented {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .onTapGesture { close() }
+
+                content
+                    // 底板向上铺到屏幕最上沿，把状态栏那块也盖住
+                    .background {
+                        UnevenRoundedRectangle(bottomLeadingRadius: 28,
+                                               bottomTrailingRadius: 28,
+                                               style: .continuous)
+                            .fill(Color.surfaceElevated)
+                            .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+                            .ignoresSafeArea(.container, edges: .top)
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .ignoresSafeArea(.keyboard)
+            }
+        }
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: isPresented)
+        .onChange(of: isPresented) { _, shown in
+            // 收起抽屉时同时收键盘，两者才会一起走
+            if !shown { hideKeyboard() }
+        }
+    }
+
+    private func close() {
+        hideKeyboard()
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            isPresented = false
+        }
+    }
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
     }
 }

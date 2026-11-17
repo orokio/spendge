@@ -1,11 +1,10 @@
 import SwiftUI
 import SwiftData
 
-/// 目标页：只放「正在执行的」目标进度。
-/// 选目标（新增 = 管理）和已达成记录各自一页，三者不重复列同一份数据。
+/// 目标页：预算卡 + 进行中的目标 + 已暂停的目标。
+/// 新增、编辑、暂停都在半层里完成，不再跳整页管理。
 struct GoalView: View {
     let onOpenHistory: () -> Void
-    let onOpenPicker: () -> Void
 
     @Environment(\.modelContext) private var context
     @Query(sort: [SortDescriptor(\Goal.sortOrder), SortDescriptor(\Goal.createdAt)])
@@ -16,56 +15,123 @@ struct GoalView: View {
     private var achievements: [GoalAchievement]
 
     @State private var showBudgetEditor = false
+    @State private var showGoalForm = false
+    @State private var formTarget: Goal?
 
     private var calendar: Calendar { .current }
     private var goals: [Goal] { allGoals.filter(\.isActive) }
-    private var achievedTotal: Int { achievements.filter(\.achieved).count }
+    private var pausedGoals: [Goal] { allGoals.filter { !$0.isActive } }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             AppBackground()
                 .ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
-                    Text("目标")
-                        .font(Typography.pageTitle)
-                        .padding(.top, 56)
-
+                    header
                     budgetCard
 
-                    if !goals.isEmpty {
-                        VStack(spacing: PageLayout.blockGap) {
-                            ForEach(goals) { goal in
-                                GoalCard(goal: goal, progress: progress(for: goal))
-                            }
-                        }
+                    if goals.isEmpty && pausedGoals.isEmpty {
+                        presetSection
+                    } else {
+                        if !goals.isEmpty { activeSection }
+                        if !pausedGoals.isEmpty { pausedSection }
                     }
                 }
                 .padding(.horizontal, PageLayout.pageInset)
+                .padding(.top, 56)
                 .padding(.bottom, 110)
             }
             .scrollIndicators(.hidden)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            VStack(alignment: .trailing, spacing: 10) {
-                achievementButton
-                newGoalButton
-            }
-            .padding(.trailing, PageLayout.pageInset)
-            .padding(.bottom, 26)
         }
-        .sheet(isPresented: $showBudgetEditor) {
-            BudgetEditorSheet(
-                monthTitle: monthTitle,
-                initialCents: monthBudget?.amountCents,
-                initialRecurring: monthBudget?.isRecurring ?? false,
-                onSave: saveBudget,
-                onClear: clearBudget
-            )
-            .presentationDetents([.fraction(1.0 / 3.0)])
-            .presentationCornerRadius(24)
-            .presentationBackground(Color.surfaceElevated)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        // 预算也是同一套顶部抽屉
+        .overlay(alignment: .top) {
+            ZStack(alignment: .top) {
+                if showBudgetEditor {
+                    Color.black.opacity(0.18)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture { closeBudget() }
+
+                    BudgetEditorSheet(
+                        monthTitle: monthTitle,
+                        initialCents: monthBudget?.amountCents,
+                        initialRecurring: monthBudget?.isRecurring ?? false,
+                        onSave: { cents, recurring in
+                            saveBudget(cents, recurring)
+                            closeBudget()
+                        },
+                        onClear: {
+                            clearBudget()
+                            closeBudget()
+                        }
+                    )
+                    .background {
+                        UnevenRoundedRectangle(bottomLeadingRadius: 28,
+                                               bottomTrailingRadius: 28,
+                                               style: .continuous)
+                            .fill(Color.surfaceElevated)
+                            .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+                            .ignoresSafeArea(.container, edges: .top)
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .ignoresSafeArea(.keyboard)
+                }
+            }
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showBudgetEditor)
+        }
+        // 两个抽屉共用同一个容器：目标表单和预算编辑
+        .overlay(alignment: .top) {
+            ZStack(alignment: .top) {
+                TopDrawer(isPresented: $showGoalForm) {
+                    GoalFormView(goal: formTarget) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                            showGoalForm = false
+                        }
+                    }
+                }
+
+                TopDrawer(isPresented: $showBudgetEditor) {
+                    BudgetEditorSheet(
+                        monthTitle: monthTitle,
+                        initialCents: monthBudget?.amountCents,
+                        initialRecurring: monthBudget?.isRecurring ?? false,
+                        onSave: { cents, recurring in
+                            saveBudget(cents, recurring)
+                            closeBudget()
+                        },
+                        onClear: {
+                            clearBudget()
+                            closeBudget()
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - 顶部
+
+    private var header: some View {
+        HStack(alignment: .center) {
+            Text("目标")
+                .font(Typography.pageTitle)
+                .foregroundStyle(Color.textPrimary)
+
+            Spacer(minLength: 12)
+
+            Button {
+                onOpenHistory()
+            } label: {
+                Image(systemName: "trophy")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color.textSecondary)
+                    .frame(width: 40, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -93,32 +159,55 @@ struct GoalView: View {
             .reduce(into: Int64(0)) { $0 += $1.amountCents }
     }
 
+    /// 本月还剩几天（不含今天）
+    private var daysLeft: Int {
+        let end = calendar.dateInterval(of: .month, for: .now)?.end ?? .now
+        let comps = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: end)
+        return max(0, comps.day ?? 0)
+    }
+
+    /// 本月已经过了几天（含今天）
+    private var daysPassed: Int {
+        max(1, calendar.component(.day, from: .now))
+    }
+
     private var budgetCard: some View {
         Button {
-            showBudgetEditor = true
+            openBudget()
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("本月预算")
                         .font(Typography.sectionTitle)
                     Spacer()
-                    Text(monthTitle)
-                        .font(Typography.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(monthTitle)
+                        Text("·")
+                        Text("还剩 \(daysLeft) 天")
+                    }
+                    .font(Typography.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 if let budget = monthBudget, budget.amountCents > 0 {
                     let remaining = budget.amountCents - monthExpenseCents
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("还剩 \(AmountFormat.string(cents: max(0, remaining)))")
-                            .font(Typography.number)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("还剩")
+                            .font(Typography.label)
+                            .foregroundStyle(.secondary)
+                        Text(AmountFormat.string(cents: max(0, remaining)))
+                            .font(Typography.numberLarge)
                             .foregroundStyle(Color.brand)
                         Text("/ \(AmountFormat.string(cents: budget.amountCents))")
                             .font(Typography.label)
                             .foregroundStyle(.secondary)
                     }
+
                     ProgressView(value: max(0, 1 - Double(monthExpenseCents) / Double(budget.amountCents)))
                         .tint(Color.brand)
+
+                    budgetTags(budgetCents: budget.amountCents, remaining: remaining)
+                        .padding(.top, 14)
                 } else {
                     Text("设置一个数，用来对照这个月花到哪儿了")
                         .font(Typography.body)
@@ -135,42 +224,267 @@ struct GoalView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 入口
+    /// 进度条下的三个数：日均可用、实际日均、额度比
+    private func budgetTags(budgetCents: Int64, remaining: Int64) -> some View {
+        let perDayLeft = max(0, remaining) / Int64(max(1, daysLeft))
+        let perDaySpent = monthExpenseCents / Int64(max(1, daysPassed))
+        // 额度比 = 实际日均比「日均可用」超了多少，正数是超，负数是省
+        let overPercent: Int? = perDayLeft > 0
+            ? Int(((Double(perDaySpent - perDayLeft) / Double(perDayLeft)) * 100).rounded())
+            : nil
 
-    /// 奖杯入口：常驻，没记录时也能进去看说明
-    private var achievementButton: some View {
-        Button {
-            onOpenHistory()
-        } label: {
-            Image(systemName: "trophy")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(Color.secondary)
-                .frame(width: 48, height: 48)
-                .background(.regularMaterial, in: Circle())
-                .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
+        let ratioTint: Color
+        if let overPercent {
+            ratioTint = overPercent > 0 ? Color.danger : (overPercent < 0 ? Color.brand : Color.textSecondary)
+        } else {
+            ratioTint = Color.textSecondary
+        }
+
+        return HStack(spacing: 0) {
+            budgetCell(title: "日均可用", value: AmountFormat.string(cents: perDayLeft), tint: Color.textPrimary)
+            budgetSeparator
+            budgetCell(title: "实际日均", value: AmountFormat.string(cents: perDaySpent), tint: Color.textPrimary)
+            budgetSeparator
+            budgetCell(title: "额度比",
+                       value: overPercent.map { $0 > 0 ? "+\($0)%" : "\($0)%" } ?? "—",
+                       tint: ratioTint)
+        }
+        .padding(.vertical, 11)
+        .background(Color.brand.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func budgetCell(title: String, value: String, tint: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(Typography.numberSmall)
+                .foregroundStyle(tint)
+            Text(title)
+                .font(Typography.caption)
+                .foregroundStyle(Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var budgetSeparator: some View {
+        Rectangle()
+            .fill(Color.brand.opacity(0.18))
+            .frame(width: 1, height: 26)
+    }
+
+    // MARK: - 进行中
+
+    private var activeSection: some View {
+        VStack(alignment: .leading, spacing: PageLayout.blockGap) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("进行中")
+                    .font(Typography.sectionTitle)
+                    .foregroundStyle(Color.textPrimary)
+                Spacer(minLength: 12)
+                Button {
+                    openForm(nil)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("新增")
+                            .font(Typography.label)
+                    }
+                    .foregroundStyle(Color.brand)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            ForEach(goals) { goal in
+                goalRow(goal)
+            }
+        }
+    }
+
+    private var pausedSection: some View {
+        VStack(alignment: .leading, spacing: PageLayout.blockGap) {
+            Text("已暂停")
+                .font(Typography.sectionTitle)
+                .foregroundStyle(Color.textSecondary)
+
+            ForEach(pausedGoals) { goal in
+                Button {
+                    openForm(goal)
+                } label: {
+                    GoalCard(goal: goal,
+                             progress: progress(for: goal),
+                             streak: streakMonths(for: goal),
+                             status: nil,
+                             isPaused: true)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// 左侧点击进操作层，右半边长按删除
+    private func goalRow(_ goal: Goal) -> some View {
+        let p = progress(for: goal)
+        return         HoldToDeleteRow(onDelete: { delete(goal) },
+                               cornerRadius: PageLayout.cardRadius) {
+            Button {
+                openForm(goal)
+            } label: {
+                GoalCard(goal: goal,
+                         progress: p,
+                         streak: streakMonths(for: goal),
+                         status: p.map { status(for: $0) })
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - 空态：备选目标
+
+    private var presetSection: some View {
+        VStack(alignment: .leading, spacing: PageLayout.blockGap) {
+            SectionHeader(title: "先定一个目标") {
+                Text("目标不是任务，只是你想往哪走")
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(2)
+            }
+
+            VStack(spacing: 0) {
+                presetRow(title: "本月奶茶 ≤ 4 次", subtitle: "高频小额，最好管") {
+                    createDrinkLimitGoal()
+                }
+                divider
+                presetRow(title: "本月外卖 ≤ 800 元", subtitle: "超过就少吃几顿") {
+                    createTakeoutBudgetGoal()
+                }
+                divider
+                presetRow(title: "本月预算 ¥3,000", subtitle: "和花销对照着看") {
+                    openBudget()
+                }
+            }
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
+        }
+    }
+
+    private func presetRow(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(Typography.body)
+                        .foregroundStyle(Color.textPrimary)
+                    Text(subtitle)
+                        .font(Typography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.brand)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    /// 新增 / 管理目标的入口：右下角圆形按钮
-    private var newGoalButton: some View {
-        Button {
-            onOpenPicker()
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(Color.secondary)
-                .frame(width: 48, height: 48)
-                .background(.regularMaterial, in: Circle())
-                .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
+    private var divider: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.12))
+            .frame(height: 0.5)
+            .padding(.leading, 16)
+    }
+
+    // MARK: - 判定
+
+    /// 拿「用了多少」和「过了多少时间」比：同一个 50%，月初和月底完全不同
+    private func status(for progress: GoalProgress) -> GoalStatus {
+        if progress.target == 0 {
+            return progress.current == 0 ? .perfect : .over
         }
-        .buttonStyle(.plain)
+
+        let usage = progress.fraction
+        if usage > 1 { return .over }
+        if progress.current == 0 { return .perfect }
+
+        let dayCount = calendar.range(of: .day, in: .month, for: .now)?.count ?? 30
+        let timeProgress = Double(daysPassed) / Double(dayCount)
+
+        if usage <= timeProgress { return .healthy }
+        if usage > timeProgress + 0.2 || usage > 0.8 { return .warning }
+        return .healthy
     }
 
     // MARK: - 动作
 
     private func progress(for goal: Goal) -> GoalProgress? {
         try? GoalService(context: context).progress(for: goal)
+    }
+
+    /// 最近连续达成的周期数：从最新一条往前数，断了就停
+    private func streakMonths(for goal: Goal) -> Int {
+        let done = achievements
+            .filter { $0.goalID == goal.id && $0.achieved && $0.periodRawValue == goal.periodRawValue }
+            .map(\.periodStart)
+            .sorted(by: >)
+        guard !done.isEmpty else { return 0 }
+
+        var count = 1
+        for index in 1..<done.count {
+            let expected = calendar.date(byAdding: .month, value: -1, to: done[index - 1])
+                ?? done[index - 1]
+            guard calendar.isDate(done[index], equalTo: expected, toGranularity: .month) else { break }
+            count += 1
+        }
+        return count
+    }
+
+    private func openBudget() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            showBudgetEditor = true
+        }
+    }
+
+    private func closeBudget() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            showBudgetEditor = false
+        }
+    }
+
+    private func openForm(_ goal: Goal?) {
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+            formTarget = goal
+            showGoalForm = true
+        }
+    }
+
+    private func togglePause(_ goal: Goal) {
+        goal.isActive.toggle()
+        goal.updatedAt = .now
+        try? context.save()
+    }
+
+    private func delete(_ goal: Goal) {
+        try? GoalService(context: context).delete(goal)
+    }
+
+    private func createTakeoutBudgetGoal() {
+        _ = try? GoalService(context: context).create(
+            title: "本月外卖 ≤ 800 元",
+            kind: .categorySum,
+            categoryCodes: [CategoryCode.takeout.rawValue],
+            period: .month, targetValue: 80_000
+        )
+    }
+
+    private func createDrinkLimitGoal() {
+        _ = try? GoalService(context: context).create(
+            title: "本月奶茶 ≤ 4 次",
+            kind: .countLimit,
+            categoryCodes: [CategoryCode.drink.rawValue],
+            period: .month, targetValue: 4
+        )
     }
 
     private func saveBudget(_ cents: Int64, _ recurring: Bool) {
@@ -190,52 +504,68 @@ struct GoalView: View {
     }
 }
 
-/// 一张目标卡：标题、期间、点阵 + 分数。不承担编辑。
+/// 目标状态：消费进度对照时间进度
+enum GoalStatus {
+    case perfect
+    case healthy
+    case warning
+    case over
+
+    var label: String {
+        switch self {
+        case .perfect: return "完美保持"
+        case .healthy: return "健康"
+        case .warning: return "快超了"
+        case .over: return "已超标"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .perfect, .healthy: return Color.brand
+        case .warning: return Color.warning
+        case .over: return Color.danger
+        }
+    }
+}
+
+/// 一张目标卡：左边进度环，右边标题、状态徽章和一句说明
 private struct GoalCard: View {
     let goal: Goal
     let progress: GoalProgress?
+    /// 连续达成的周期数，用在「一次都不」型目标的文案里
+    let streak: Int
+    let status: GoalStatus?
+    var isPaused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(goal.title)
-                    .font(Typography.sectionTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Text("月度")
-                    .font(Typography.caption)
-                    .foregroundStyle(.secondary)
+        HStack(alignment: .center, spacing: 14) {
+            if let progress {
+                GoalRing(progress: progress, tint: status?.color ?? Color.brand)
             }
 
-            if let progress {
-                if progress.target == 0 {
-                    // 「一次都不」型目标：没有名额可画，直接说结果
-                    // 字号字重与普通卡片的「2 / 4」保持一致
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(resultText(progress))
-                            .font(Typography.numberSmall)
-                            .foregroundStyle(progress.current == 0 ? Color.brand : Color.secondary)
-                        Spacer(minLength: 8)
-                        Text(statusText(progress))
-                            .font(Typography.numberSmall)
-                            .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text(goal.title)
+                        .font(Typography.sectionTitle)
+                        .foregroundStyle(Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    if let status {
+                        Text(status.label)
+                            .font(Typography.captionStrong)
+                            .foregroundStyle(status.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(status.color.opacity(0.12), in: Capsule())
                     }
-                } else {
-                    HStack(spacing: 12) {
-                        if progress.unit == .cents || progress.unit == .percent {
-                            ProgressView(value: max(0, 1 - progress.fraction))
-                                .tint(Color.brand)
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            dots(progress)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                }
 
-                        Text("\(valueText(progress)) / \(limitText(progress))")
-                            .font(Typography.numberSmall)
-                            .foregroundStyle(progress.isReached && !progress.isAtMost ? Color.brand : Color.secondary)
-                            .fixedSize()
-                    }
+                if let progress {
+                    Text(detailText(progress))
+                        .font(Typography.label)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -243,47 +573,102 @@ private struct GoalCard: View {
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
-    }
-
-    /// 0 目标的结果：次数 / 金额 / 占比
-    private func resultText(_ progress: GoalProgress) -> String {
-        switch progress.unit {
-        case .count: return "\(progress.current) 次"
-        case .cents: return AmountFormat.string(cents: Int64(progress.current))
-        case .percent: return "\(progress.current)%"
-        }
-    }
-
-    private func statusText(_ progress: GoalProgress) -> String {
-        progress.current == 0 ? "还没买过" : "买了 \(progress.current) 次"
-    }
-
-    private func valueText(_ progress: GoalProgress) -> String {
-        switch progress.unit {
-        case .cents: return AmountFormat.string(cents: Int64(progress.current))
-        case .percent: return "\(progress.current)%"
-        case .count: return "\(min(progress.current, progress.target))"
-        }
-    }
-
-    private func limitText(_ progress: GoalProgress) -> String {
-        switch progress.unit {
-        case .cents: return AmountFormat.string(cents: Int64(progress.target))
-        case .percent: return "\(progress.target)%"
-        case .count: return "\(progress.target)"
-        }
-    }
-
-    private func dots(_ progress: GoalProgress) -> some View {
-        let total = min(progress.target, 12)
-        let filled = min(progress.current, total)
-        return HStack(spacing: 5) {
-            ForEach(0..<max(total, 1), id: \.self) { index in
-                Circle()
-                    .fill(index < filled ? Color.brand : Color.secondary.opacity(0.18))
-                    .frame(width: 8, height: 8)
+        .overlay {
+            if status == .over {
+                RoundedRectangle(cornerRadius: PageLayout.cardRadius)
+                    .stroke(Color.danger, lineWidth: 1.5)
             }
-            Spacer(minLength: 0)
         }
+        .opacity(isPaused ? 0.6 : 1)
+    }
+
+    private func detailText(_ progress: GoalProgress) -> String {
+        // 「一次都不」型：不说还差多少，说已经保持了多久
+        if progress.target == 0 {
+            if progress.current > 0 { return "这个周期买了 \(progress.current) 次" }
+            return streak > 0 ? "连续 \(streak) 个月做到" : "这个周期一次没买"
+        }
+
+        guard progress.current <= progress.target else {
+            let over = progress.current - progress.target
+            switch progress.unit {
+            case .count: return "超出 \(over) 次"
+            case .cents: return "超出 \(AmountFormat.string(cents: Int64(over)))"
+            case .percent: return "超出 \(over) 个百分点"
+            }
+        }
+
+        switch progress.unit {
+        case .count: return "还剩 \(progress.remaining) 次"
+        case .cents: return "还剩 \(AmountFormat.string(cents: Int64(progress.remaining)))"
+        case .percent: return "还剩 \(progress.remaining)%"
+        }
+    }
+}
+
+/// 44pt 的进度环：次数目标中心给分数，金额目标给百分比，0 目标达标时放一个火苗
+private struct GoalRing: View {
+    let progress: GoalProgress
+    var tint: Color = Color.brand
+    private let diameter: CGFloat = 44
+    private let lineWidth: CGFloat = 5
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.secondary.opacity(0.15), lineWidth: lineWidth)
+
+            Circle()
+                .trim(from: 0, to: fillFraction)
+                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+
+            center
+        }
+        .frame(width: diameter, height: diameter)
+    }
+
+    /// 环画的是「已经用掉多少」：3/4 就是四分之三圈，和中心的分数对得上
+    private var fillFraction: Double {
+        if progress.target == 0 {
+            return progress.current == 0 ? 1 : 0
+        }
+        return max(0, min(1, progress.fraction))
+    }
+
+    @ViewBuilder
+    private var center: some View {
+        if progress.target == 0 {
+            if progress.current == 0 {
+                Text("🔥")
+                    .font(.system(size: 16))
+            } else {
+                Text("\(progress.current)")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.warning)
+            }
+        } else if progress.unit == .count {
+            Text("\(min(progress.current, progress.target))/\(progress.target)")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(centerTint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        } else {
+            Text("\(usedPercent)%")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(centerTint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+    }
+
+    /// 真实用掉的比例：超了就是 120%，不压到 100%
+    private var usedPercent: Int {
+        guard progress.target > 0 else { return 0 }
+        return Int((Double(progress.current) / Double(progress.target) * 100).rounded())
+    }
+
+    private var centerTint: Color {
+        progress.current > progress.target ? Color.danger : Color.textPrimary
     }
 }

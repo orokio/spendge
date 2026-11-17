@@ -65,6 +65,8 @@ final class BackupService {
         let transactions = try context.fetch(FetchDescriptor<Transaction>())
         let budgets = try context.fetch(FetchDescriptor<Budget>())
         let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>())
+        let goals = try context.fetch(FetchDescriptor<Goal>())
+        let achievements = try context.fetch(FetchDescriptor<GoalAchievement>())
 
         let file = BackupFile(
             version: BackupFile.currentVersion,
@@ -73,7 +75,9 @@ final class BackupService {
             categories: categories.map(CategoryDTO.init),
             transactions: transactions.map(TransactionDTO.init),
             budgets: budgets.map(BudgetDTO.init),
-            dayConfirmations: confirmations.map(DayConfirmationDTO.init)
+            dayConfirmations: confirmations.map(DayConfirmationDTO.init),
+            goals: goals.map(GoalDTO.init),
+            achievements: achievements.map(GoalAchievementDTO.init)
         )
 
         let encoder = JSONEncoder()
@@ -94,6 +98,8 @@ final class BackupService {
         let file = try decodeBackup(data)
 
         // 清空（先删有引用的，再删被引用的）
+        for item in try context.fetch(FetchDescriptor<GoalAchievement>()) { context.delete(item) }
+        for item in try context.fetch(FetchDescriptor<Goal>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
@@ -180,6 +186,43 @@ final class BackupService {
             context.insert(DayConfirmation(id: dto.id, day: dto.day, createdAt: dto.createdAt))
         }
 
+        for dto in file.goals ?? [] {
+            context.insert(Goal(
+                id: dto.id,
+                title: dto.title,
+                kind: GoalKind(rawValue: dto.kindRawValue) ?? .countLimit,
+                categoryCodes: dto.categoryCodes,
+                period: GoalPeriod(rawValue: dto.periodRawValue) ?? .month,
+                targetValue: dto.targetValue,
+                basis: GoalBasis(rawValue: dto.basisRawValue) ?? .fixed,
+                isActive: dto.isActive,
+                sortOrder: dto.sortOrder,
+                createdAt: dto.createdAt,
+                updatedAt: dto.updatedAt
+            ))
+        }
+
+        for dto in file.achievements ?? [] {
+            let unit: GoalProgress.Unit
+            switch dto.unitRawValue {
+            case "cents": unit = .cents
+            case "percent": unit = .percent
+            default: unit = .count
+            }
+            context.insert(GoalAchievement(
+                id: dto.id,
+                goalID: dto.goalID,
+                title: dto.title,
+                period: GoalPeriod(rawValue: dto.periodRawValue) ?? .month,
+                periodStart: dto.periodStart,
+                achieved: dto.achieved,
+                currentValue: dto.currentValue,
+                targetValue: dto.targetValue,
+                unit: unit,
+                createdAt: dto.createdAt
+            ))
+        }
+
         try context.save()
         return file.transactions.count
     }
@@ -197,6 +240,9 @@ struct BackupFile: Codable {
     var transactions: [TransactionDTO]
     var budgets: [BudgetDTO]
     var dayConfirmations: [DayConfirmationDTO]
+    /// 旧备份里没有这两项，解码时允许为空
+    var goals: [GoalDTO]?
+    var achievements: [GoalAchievementDTO]?
 }
 
 struct AccountDTO: Codable {
@@ -298,6 +344,60 @@ struct BudgetDTO: Codable {
         month = budget.month
         createdAt = budget.createdAt
         updatedAt = budget.updatedAt
+    }
+}
+
+struct GoalDTO: Codable {
+    var id: UUID
+    var title: String
+    var kindRawValue: String
+    var categoryCodes: [String]
+    var periodRawValue: String
+    var targetValue: Int
+    var basisRawValue: String
+    var isActive: Bool
+    var sortOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(_ goal: Goal) {
+        id = goal.id
+        title = goal.title
+        kindRawValue = goal.kindRawValue
+        categoryCodes = goal.categoryCodes
+        periodRawValue = goal.periodRawValue
+        targetValue = goal.targetValue
+        basisRawValue = goal.basisRawValue
+        isActive = goal.isActive
+        sortOrder = goal.sortOrder
+        createdAt = goal.createdAt
+        updatedAt = goal.updatedAt
+    }
+}
+
+struct GoalAchievementDTO: Codable {
+    var id: UUID
+    var goalID: UUID
+    var title: String
+    var periodRawValue: String
+    var periodStart: Date
+    var achieved: Bool
+    var currentValue: Int
+    var targetValue: Int
+    var unitRawValue: String
+    var createdAt: Date
+
+    init(_ item: GoalAchievement) {
+        id = item.id
+        goalID = item.goalID
+        title = item.title
+        periodRawValue = item.periodRawValue
+        periodStart = item.periodStart
+        achieved = item.achieved
+        currentValue = item.currentValue
+        targetValue = item.targetValue
+        unitRawValue = item.unitRawValue
+        createdAt = item.createdAt
     }
 }
 

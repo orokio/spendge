@@ -149,9 +149,6 @@ struct TodayView: View {
                 .padding(.horizontal, PageLayout.pageInset)
                 .padding(.top, 56)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .onAppear {
-                    if let focus { scroll(to: focus, proxy: proxy) }
-                }
                 .onChange(of: focus) { _, newValue in
                     guard let newValue else { return }
                     scroll(to: newValue, proxy: proxy)
@@ -311,39 +308,46 @@ struct TodayView: View {
                 Text("流水")
                     .font(Typography.sectionTitle)
                 Spacer(minLength: 12)
-                Text("本月支出 \(AmountFormat.string(cents: monthExpenseCents))")
-                    .font(Typography.label)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("本月支出")
+                        .font(Typography.label)
+                        .foregroundStyle(.secondary)
+                    Text(AmountFormat.string(cents: monthExpenseCents))
+                        .font(Typography.numberSmall)
+                        .foregroundStyle(Color.textPrimary)
+                }
             }
 
             // 高度固定，只有这一块滚动；柱图和上面那句不动
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(dayGroups) { group in
-                        // 间距放在测量之外：判断「卡片是否滚出去」时不能把日期间的空白算进来
-                        daySection(group)
-                            .id(group.day)
-                            .background(
-                                GeometryReader { geo in
-                                    Color.clear.preference(
-                                        key: DayFrameKey.self,
-                                        value: [group.day: geo.frame(in: .named("flow"))]
-                                    )
-                                }
-                            )
-                            .padding(.bottom, 40)
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(dayGroups) { group in
+                            // 间距放在测量之外：判断「卡片是否滚出去」时不能把日期间的空白算进来
+                            daySection(group)
+                                .id(group.day)
+                                .background(
+                                    GeometryReader { inner in
+                                        Color.clear.preference(
+                                            key: DayFrameKey.self,
+                                            value: [group.day: inner.frame(in: .named("flow"))]
+                                        )
+                                    }
+                                )
+                                .padding(.bottom, 24)
+                        }
                     }
+                    // 底部先留给悬浮底栏和记账按钮，再多留一整屏：
+                    // 否则靠后的日期顶不到列表顶部，点它聚焦不过去
+                    .padding(.bottom, max(104, geo.size.height))
                 }
-                // 底部留给悬浮底栏和记账按钮，滚到底时最后一条不会被挡住
-                .padding(.bottom, 104)
+                .coordinateSpace(name: "flow")
+                .modifier(ScrollTickModifier { scrollTick &+= 1 })
+                .scrollIndicators(.hidden)
+                .onPreferenceChange(DayFrameKey.self) { frames in
+                    updateVisibleDay(frames)
+                }
             }
-            .coordinateSpace(name: "flow")
-            .modifier(ScrollTickModifier { scrollTick &+= 1 })
-            .scrollIndicators(.hidden)
-            .onPreferenceChange(DayFrameKey.self) { frames in
-                updateVisibleDay(frames)
-            }
-            .frame(maxHeight: .infinity)
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -381,6 +385,7 @@ struct TodayView: View {
     }
 
     /// 没有支出的一天：已确认的显示勾，今天还没记录的给一个「没花钱」入口
+    /// 没有支出的一天：已确认的留一个安静的勾，今天还没记录的给一个小按钮
     private func noSpendCard(_ day: Date) -> some View {
         let confirmed = confirmations.contains { calendar.isDate($0.day, inSameDayAs: day) }
         let today = calendar.isDateInToday(day)
@@ -394,29 +399,38 @@ struct TodayView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(Typography.body)
+                                .foregroundStyle(Color.brand)
                             Text(today ? "今天没花钱" : "这天没花钱")
-                                .font(Typography.label)
+                                .font(Typography.body)
+                                .foregroundStyle(Color.textSecondary)
                             Spacer(minLength: 0)
                         }
-                        .foregroundStyle(Color.brand)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 } else {
                     Text(today ? "今天还没记录" : "这天没记录")
-                        .font(Typography.label)
+                        .font(Typography.body)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 12)
                     Button {
                         try? DayConfirmationService(context: context).confirmNoSpend(on: day)
                     } label: {
-                        Text("没花钱")
-                            .font(Typography.label)
-                            .foregroundStyle(Color.brand)
+                        HStack(spacing: 5) {
+                            Image(systemName: "circle")
+                                .font(.system(size: 14, weight: .regular))
+                            Text("没花钱")
+                                .font(Typography.label)
+                        }
+                        .foregroundStyle(Color.textSecondary)
+                        // 用放大的点击区代替内边距，行高才和已确认态一样
+                        .contentShape(Rectangle().inset(by: -12))
                     }
                     .buttonStyle(.plain)
                 }
             }
+            // 两种状态用同一个高度，卡片不会忽高忽低
+            .frame(height: 26)
         }
     }
 

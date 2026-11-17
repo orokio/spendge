@@ -175,7 +175,7 @@ struct RecordPage: View {
                     VStack(spacing: 12) {
                         Text(dateLabel)
                             .font(Typography.label)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.brand)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 24)
 

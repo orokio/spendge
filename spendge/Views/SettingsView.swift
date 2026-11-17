@@ -122,7 +122,7 @@ struct SettingsView: View {
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
                 notice = Notice(
                     title: "清除全部记录？",
-                    message: "会删除所有账单、预算和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
+                    message: "会删除所有账单、预算、目标和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
                     isConfirm: true,
                     confirmTitle: "清除",
                     onConfirm: { clearAllData() }
@@ -201,7 +201,7 @@ struct SettingsView: View {
         pendingRestore = data
         notice = Notice(
             title: "从备份恢复？",
-            message: "会用备份里的内容替换当前所有记录、预算和「没花钱」确认。建议先导出一份当前备份。",
+            message: "会用备份里的内容替换当前所有记录、预算、目标和「没花钱」确认。建议先导出一份当前备份。",
             isConfirm: true,
             confirmTitle: "覆盖恢复",
             onConfirm: {
@@ -224,13 +224,25 @@ struct SettingsView: View {
     /// 清空用户数据，保留分类与账户（否则记录页没有可选项）
     private func clearAllData() {
         do {
+            // 目标的集合属性在对象被删后再访问会触发未解析的 fault，
+            // 先读一遍让 SwiftData 把值载进来，删完就不会崩
+            let goals = try context.fetch(FetchDescriptor<Goal>())
+            for goal in goals { _ = goal.categoryCodes }
+            let goalAchievements = try context.fetch(FetchDescriptor<GoalAchievement>())
+
+            // 目标单独存一次盘：删完立刻让列表变空，视图就不会在中间态
+            // 去算一个已经失效的目标的进度
+            for item in goalAchievements { context.delete(item) }
+            for item in goals { context.delete(item) }
+            try context.save()
+
             for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
             for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
             for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
             try context.save()
             Toast.show("已清空全部记录", into: $toast)
         } catch {
-            notice = Notice(title: "清除失败", message: "(error)")
+            notice = Notice(title: "清除失败", message: "\(error)")
         }
     }
 

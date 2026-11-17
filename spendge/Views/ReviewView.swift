@@ -201,11 +201,14 @@ struct ReviewView: View {
             }
         }
 
-        // 2. 频次：有多少天被记下来（仅月档）
-        if case .month = period {
-            let days = Set(items.map { calendar.startOfDay(for: $0.date) }).count
-            if days >= 3 {
-                return InsightText(before: "\(word)有 ", highlight: "\(days)", after: " 天被记下来",
+        // 2. 频次：有多少天留下了记录。确认「没花钱」的日子也算，那天并不是空的
+        if case .month(let monthDate) = period {
+            var days = Set(items.map { calendar.startOfDay(for: $0.date) })
+            for item in confirmations where calendar.isDate(item.day, equalTo: monthDate, toGranularity: .month) {
+                days.insert(calendar.startOfDay(for: item.day))
+            }
+            if days.count >= 3 {
+                return InsightText(before: "\(word)有 ", highlight: "\(days.count)", after: " 天被记下来",
                                    sub: "空着的那几天，也在过日子")
             }
         }

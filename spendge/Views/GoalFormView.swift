@@ -10,14 +10,16 @@ struct GoalFormView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: [SortDescriptor(\Category.sortOrder)]) private var categories: [Category]
 
-    @State private var dragOffset: CGFloat = 0
     @State private var title: String
     @State private var kind: GoalKind
     @State private var period: GoalPeriod
     @State private var categoryCode: String
     @State private var valueText: String
     @State private var toast: String?
-    @State private var showDeleteConfirm = false
+    /// 抽屉滑完再亮提示，避免它比面板先到
+    @State private var hintReady = false
+    /// 打开时不要自己抢焦点，等用户点了再弹键盘
+    @FocusState private var nameFocused: Bool
 
     init(goal: Goal?, onClose: @escaping () -> Void) {
         self.goal = goal
@@ -74,205 +76,189 @@ struct GoalFormView: View {
     }
 
     var body: some View {
-        ZStack {
-            AppBackground()
-                .ignoresSafeArea()
+        VStack(spacing: 16) {
+            Text(goal == nil ? "新增目标" : "修改目标")
+                .font(Typography.sectionTitle)
+                .foregroundStyle(Color.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(goal == nil ? "新增目标" : "修改目标")
-                        .font(Typography.pageTitle)
-                        .padding(.top, 56)
-
-                    field("名字") {
-                        TextField("给这个目标起个名字", text: $title)
-                            .font(Typography.rowTitle)
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 12)
-                            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    field("维度") {
-                        Picker("", selection: $kind) {
-                            Text("次数").tag(GoalKind.countLimit)
-                            Text("金额").tag(GoalKind.categorySum)
-                            Text("占比").tag(GoalKind.shareCap)
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: kind) { _, _ in
-                            if !goalKindCodes.contains(where: { $0.rawValue == categoryCode }) {
-                                categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
-                            }
-                        }
-                    }
-
-                    // 分类竖列在左，上限与保存按钮在右
-                    HStack(alignment: .top, spacing: 16) {
-                        categoryRail
-
-                        VStack(alignment: .leading, spacing: 20) {
-                            field("周期") {
-                                // 目前只支持月度，先做成不可改的展示
-                                HStack(spacing: 6) {
-                                    Text("月度")
-                                        .font(Typography.body)
-                                    Text("暂不可更改")
-                                        .font(Typography.caption)
-                                        .foregroundStyle(.tertiary)
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
-                            }
-
-                            field(hintLabel) {
-                                HStack(spacing: 8) {
-                                    TextField("0", text: $valueText)
-                                        .keyboardType(.numberPad)
-                                        .font(Typography.numberLarge)
-                                        .foregroundStyle(Color.brand)
-                                    Text(kind.unitSuffix)
-                                        .font(Typography.label)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 12)
-                                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
-                            }
-
-                            // 保存为主，右侧是取消（新建）或删除（修改）
-                            HStack(spacing: 10) {
-                                Button {
-                                    save()
-                                } label: {
-                                    Text("保存")
-                                        .font(Typography.bodyStrong)
-                                        .foregroundStyle(.white)
-                                        .padding(.vertical, 14)
-                                        .frame(maxWidth: .infinity)
-                                        .background(canSave ? Color.brand : Color.secondary.opacity(0.25), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(!canSave)
-
-                                Button {
-                                    if goal == nil {
-                                        onClose()
-                                    } else {
-                                        showDeleteConfirm = true
-                                    }
-                                } label: {
-                                    Text(goal == nil ? "取消" : "删除")
-                                        .font(Typography.bodyStrong)
-                                        .foregroundStyle(goal == nil ? Color.secondary : Color.red)
-                                        .padding(.horizontal, 18)
-                                        .padding(.vertical, 14)
-                                        .background(Color.surfaceElevated, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            if duplicate != nil {
-                                Text("已经有这个目标了，回到列表里改它。")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(.horizontal, PageLayout.pageInset)
-                .padding(.bottom, 40)
+            row("名字") {
+                TextField("给它起个名字", text: $title)
+                    .font(Typography.body)
+                    .focused($nameFocused)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    // 高度钉死：聚焦时 TextField 自己会缩 2pt，这里不让它影响外面
+                    .frame(height: 37)
+                    .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
             }
-            .scrollIndicators(.hidden)
-        }
-        .offset(x: max(0, dragOffset))
-        .gesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { value in
-                    guard value.translation.width > 0,
-                          abs(value.translation.width) > abs(value.translation.height) else { return }
-                    dragOffset = value.translation.width
+
+            row("维度") {
+                Picker("", selection: $kind) {
+                    Text("次数").tag(GoalKind.countLimit)
+                    Text("金额").tag(GoalKind.categorySum)
+                    Text("占比").tag(GoalKind.shareCap)
                 }
-                .onEnded { value in
-                    if value.translation.width > 120 {
-                        onClose()
-                        dragOffset = 0
-                    } else {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                            dragOffset = 0
-                        }
+                .pickerStyle(.segmented)
+                .onChange(of: kind) { _, _ in
+                    if !goalKindCodes.contains(where: { $0.rawValue == categoryCode }) {
+                        categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
                     }
                 }
-        )
-        .toast($toast)
-        .onAppear {
-            // 新建时默认选中第一个可选分类，避免进来一片空
-            if goal == nil, categoryCode.isEmpty {
-                categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
             }
-        }
-        .alert("删除这个目标？", isPresented: $showDeleteConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) {
-                if let goal {
-                    try? GoalService(context: context).delete(goal)
+
+            // 分类横着排，省掉整列高度
+            row("分类") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(allowedCategories) { category in
+                            let code = category.categoryCode?.rawValue ?? ""
+                            let selected = categoryCode == code
+                            Button {
+                                categoryCode = code
+                            } label: {
+                                Text(category.displayName)
+                                    .font(Typography.label)
+                                    .foregroundStyle(selected ? .white : Color.textPrimary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(selected ? Color.brand : Color.surface, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
-                onClose()
             }
-        } message: {
-            Text("已经达成的记录会保留。")
-        }
-    }
 
-    private var hintLabel: String {
-        switch kind {
-        case .countLimit: return "上限是多少次"
-        case .categorySum: return "上限是多少元"
-        case .shareCap: return "占比不超过（%）"
-        }
-    }
+            if hintReady, duplicate != nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("已经有一个同样的目标了")
+                        .font(Typography.caption)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Color.warning)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color.warning.opacity(0.12), in: Capsule())
+                // 和下面输入框左边对齐，不压到标签那一列
+                .padding(.leading, 76)
+                .transition(.opacity)
+            }
 
-    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(Typography.label)
-                .foregroundStyle(.secondary)
-            content()
-        }
-    }
-
-    /// 左侧竖列：和记录页同一套样式
-    private var categoryRail: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 9) {
-                ForEach(allowedCategories) { category in
-                    let code = category.categoryCode?.rawValue ?? ""
-                    let selected = categoryCode == code
-                    Button {
-                        categoryCode = code
-                    } label: {
-                        Text(category.displayName)
+            // 上限和按钮挤在一行，弹框高度才和预算那层一致
+            row("上限") {
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        TextField("0", text: $valueText)
+                            .keyboardType(.numberPad)
+                            .font(Typography.number)
+                            .foregroundStyle(Color.brand)
+                            .frame(height: 23)
+                        Text(kind.unitSuffix)
                             .font(Typography.label)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.85)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 10)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .frame(height: 39)
+                    .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
+
+                    Button {
+                        guard canSave else { return }
+                        save()
+                    } label: {
+                        Text("保存")
+                            .font(Typography.bodyStrong)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 9)
-                            .background(
-                                selected ? Color.brand : Color.surface,
-                                in: RoundedRectangle(cornerRadius: 9)
-                            )
-                            .foregroundStyle(selected ? .white : .primary)
+                            .background(Color.brand, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        if goal == nil {
+                            onClose()
+                        } else {
+                            togglePauseGoal()
+                        }
+                    } label: {
+                        Text(actionTitle)
+                            .font(Typography.bodyStrong)
+                            .foregroundStyle(Color.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(Color.surface, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-        .frame(width: 96, height: 300, alignment: .top)
+        .padding(.horizontal, PageLayout.pageInset)
+        .padding(.bottom, 30)
+        .frame(maxWidth: .infinity)
+        // 键盘出现时不要压缩高度，否则抽屉会缩一下
+        .fixedSize(horizontal: false, vertical: true)
+        .toast($toast)
+        .onAppear {
+            // 打开时显式放掉焦点，键盘不自己弹出来
+            nameFocused = false
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                            to: nil, from: nil, for: nil)
+
+            // 新建时默认选中第一个可选分类，避免进来一片空
+            if goal == nil, categoryCode.isEmpty {
+                categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
+            }
+            hintReady = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+                withAnimation(.easeOut(duration: 0.2)) { hintReady = true }
+            }
+            // 抽屉落位后再放一次焦点，防止动画期间系统又把光标塞进输入框
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.46) {
+                nameFocused = false
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                to: nil, from: nil, for: nil)
+            }
+        }
+    }
+
+    /// 新增时是「取消」，编辑时是「暂停 / 恢复」
+    private var actionTitle: String {
+        guard let goal else { return "取消" }
+        return goal.isActive ? "暂停" : "恢复"
+    }
+
+    /// 左标签、右控件，一行一项
+    private func row<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(Typography.label)
+                .foregroundStyle(.secondary)
+                .frame(width: 64, alignment: .leading)
+            content()
+        }
+    }
+
+    private var hintLabel: String {
+        switch kind {
+        case .countLimit: return "上限次数"
+        case .categorySum: return "上限金额"
+        case .shareCap: return "上限占比"
+        }
+    }
+
+    private func togglePauseGoal() {
+        guard let goal else { return }
+        goal.isActive.toggle()
+        goal.updatedAt = .now
+        try? context.save()
+        onClose()
     }
 
     private func save() {
