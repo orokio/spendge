@@ -27,7 +27,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             TodayView(onOpenRecord: openRecord(at:), onEdit: openEdit, focus: focusedDay)
                 .background(AppBackground())
-                .tabItem { Label { Text("今天").foregroundStyle(tab == .today ? Color.brand : Color.textSecondary) } icon: { tabIcon("sun.max", selected: tab == .today) } }
+                .tabItem { Label { Text("记账").foregroundStyle(tab == .today ? Color.brand : Color.textSecondary) } icon: { brandIcon("SpongeMark", selected: tab == .today) } }
                 .tag(Tab.today)
 
             ReviewView(onEdit: openEdit)
@@ -37,7 +37,7 @@ struct RootView: View {
 
             GoalView(onOpenHistory: openGoalHistory, onOpenPicker: openGoalRules)
                 .background(AppBackground())
-                .tabItem { Label { Text("目标").foregroundStyle(tab == .goal ? Color.brand : Color.textSecondary) } icon: { tabIcon("target", selected: tab == .goal) } }
+                .tabItem { Label { Text("目标").foregroundStyle(tab == .goal ? Color.brand : Color.textSecondary) } icon: { tabIcon("trophy", selected: tab == .goal) } }
                 .tag(Tab.goal)
 
             SettingsView()
@@ -80,7 +80,10 @@ struct RootView: View {
     private func tabIcon(_ name: String, selected: Bool) -> Image {
         let tint = selected ? UIColor(Color.brand) : UIColor(Color.textSecondary)
         let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
-        guard let symbol = UIImage(systemName: name, withConfiguration: config) else {
+        // 选中态优先用实心版本，和品牌标记的「充满」质感一致
+        let filledName = name + ".fill"
+        let resolved = selected && UIImage(systemName: filledName) != nil ? filledName : name
+        guard let symbol = UIImage(systemName: resolved, withConfiguration: config) ?? UIImage(systemName: name, withConfiguration: config) else {
             return Image(systemName: name)
         }
         let size = CGSize(width: 26, height: 26)
@@ -89,6 +92,22 @@ struct RootView: View {
                 .draw(in: CGRect(x: (size.width - symbol.size.width) / 2,
                                  y: (size.height - symbol.size.height) / 2,
                                  width: symbol.size.width, height: symbol.size.height))
+        }
+        return Image(uiImage: rendered.withRenderingMode(.alwaysOriginal))
+    }
+
+    /// 品牌标记（海绵）：把位图按当前状态染色后交给系统，避免被系统重新着色
+    private func brandIcon(_ asset: String, selected: Bool) -> Image {
+        guard let base = UIImage(named: asset) else { return Image(asset) }
+        let tint = selected ? UIColor(Color.brand) : UIColor(Color.textSecondary)
+        let side: CGFloat = 24
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+            let scale = min(side / base.size.width, side / base.size.height)
+            let width = base.size.width * scale
+            let height = base.size.height * scale
+            base.withTintColor(tint, renderingMode: .alwaysTemplate)
+                .draw(in: CGRect(x: (side - width) / 2, y: (side - height) / 2,
+                                 width: width, height: height))
         }
         return Image(uiImage: rendered.withRenderingMode(.alwaysOriginal))
     }

@@ -16,9 +16,10 @@ struct TransactionRow: View {
                 )
             }
 
+            // 固定高度：没有备注时分类名垂直居中，行高与有备注时一致
             VStack(alignment: .leading, spacing: 2) {
                 Text(transaction.category?.name ?? "未分类")
-                    .font(Typography.rowTitle)
+                    .font(Typography.body)
                 if let note = transaction.note, !note.isEmpty {
                     Text(note)
                         .font(Typography.label)
@@ -26,12 +27,13 @@ struct TransactionRow: View {
                         .lineLimit(1)
                 }
             }
+            .frame(height: 40)
 
             Spacer(minLength: 8)
 
             Text(AmountFormat.string(cents: signedCents, showsSign: true))
-                .font(.system(.body, design: .rounded).weight(.medium))
-                .foregroundStyle(transaction.kind == .income ? Color.income : .primary)
+                .font(.system(.subheadline, design: .rounded).weight(.medium))
+                .foregroundStyle(transaction.kind == .income ? Color.income : Color.textPrimary)
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
@@ -51,58 +53,51 @@ struct CardContainer<Content: View>: View {
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
-            // 裁到卡片形状：删除色块伸到边缘时不会露出直角
             .clipShape(RoundedRectangle(cornerRadius: PageLayout.cardRadius))
     }
 }
 
-/// 账单卡片：容器 + 行列表。两个页面共用同一套样式。
-struct TransactionCard: View {
-    let transactions: [Transaction]
-    var spacing: CGFloat = 14
-    let onDelete: (Transaction) -> Void
-    var onTap: ((Transaction) -> Void)?
-
-    var body: some View {
-        CardContainer {
-            TransactionList(
-                transactions: transactions,
-                spacing: spacing,
-                onDelete: onDelete,
-                onTap: onTap,
-                cardBleed: 18
-            )
-        }
-    }
-}
-
-/// 带左滑删除的账单列表，两页共用。
+/// 账单列表：每行是一张独立的小卡片，行间留空隙。
 struct TransactionList: View {
     let transactions: [Transaction]
-    var spacing: CGFloat = 16
+    var spacing: CGFloat = 10
     let onDelete: (Transaction) -> Void
     var onTap: ((Transaction) -> Void)?
-    /// 卡片内边距：首行与末行的删除红色块会多伸出一段，贴齐卡片边缘
-    var cardBleed: CGFloat = 0
+
+    private let rowRadius: CGFloat = 18
 
     var body: some View {
         VStack(spacing: spacing) {
-            ForEach(Array(transactions.enumerated()), id: \.element.id) { index, txn in
-                let isFirst = index == 0
-                let isLast = index == transactions.count - 1
+            ForEach(transactions) { txn in
                 HoldToDeleteRow(
                     onDelete: { onDelete(txn) },
-                    // 首行向上贴到卡片内边距，中间行各伸出半个行距让色块相接
-                    topBleed: isFirst ? cardBleed : spacing / 2,
-                    bottomBleed: isLast ? cardBleed : spacing / 2,
-                    trailingBleed: cardBleed,
-                    topRightRadius: isFirst ? PageLayout.cardRadius : 0,
-                    bottomRightRadius: isLast ? PageLayout.cardRadius : 0
+                    cornerRadius: rowRadius
                 ) {
                     TransactionRow(transaction: txn)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color.surfaceElevated,
+                                    in: RoundedRectangle(cornerRadius: rowRadius, style: .continuous))
                         .onTapGesture { onTap?(txn) }
                 }
             }
         }
+    }
+}
+
+/// 账单卡片：行列表本身已经是一张张卡片，这里只保留同名入口。
+struct TransactionCard: View {
+    let transactions: [Transaction]
+    var spacing: CGFloat = 10
+    let onDelete: (Transaction) -> Void
+    var onTap: ((Transaction) -> Void)?
+
+    var body: some View {
+        TransactionList(
+            transactions: transactions,
+            spacing: spacing,
+            onDelete: onDelete,
+            onTap: onTap
+        )
     }
 }

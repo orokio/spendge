@@ -3,17 +3,12 @@ import UIKit
 
 /// 长按删除：按住行的右半边，红色块从右往左充满，充满即删除；中途松手取消。
 ///
-/// 不用横向拖拽，所以不会和整页翻页、列表纵向滚动抢同一个手势。
+/// 红色块直接复用卡片的圆角形状，再按进度从右侧裁出来，
+/// 所以边缘一定和卡片严丝合缝，不会因为圆角曲线不同而错位。
 struct HoldToDeleteRow<Content: View>: View {
     let onDelete: () -> Void
-    /// 红色块向上 / 向下多出来的高度：卡片里的首尾行用它贴到卡片边缘
-    var topBleed: CGFloat = 0
-    var bottomBleed: CGFloat = 0
-    /// 红色块向右多出来的宽度：卡片里的行用它贴到右侧边缘
-    var trailingBleed: CGFloat = 0
-    /// 红色块右下 / 右上的圆角：卡片首行给上圆角、末行给下圆角，中间保持直角
-    var topRightRadius: CGFloat = 0
-    var bottomRightRadius: CGFloat = 0
+    /// 卡片圆角，必须和卡片的 cornerRadius 一致
+    var cornerRadius: CGFloat = 0
     @ViewBuilder var content: Content
 
     /// 红色块充满所需时间（形状节奏）
@@ -27,36 +22,24 @@ struct HoldToDeleteRow<Content: View>: View {
     @State private var progress: CGFloat = 0
     @State private var fillTask: Task<Void, Never>?
 
-    /// 按住多久算删除：静置 + 充满
     private var holdDuration: Double { gracePeriod + fillDuration }
 
     var body: some View {
         content
-            .overlay(alignment: .trailing) {
+            .overlay {
                 GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        ZStack(alignment: .trailing) {
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 0,
-                                bottomLeadingRadius: 0,
-                                bottomTrailingRadius: bottomRightRadius,
-                                topTrailingRadius: topRightRadius
-                            )
+                    ZStack(alignment: .trailing) {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(Color.red)
-                            Text("删除")
-                                .font(Typography.bodyStrong)
-                                .foregroundStyle(.white)
-                                .padding(.trailing, 18)
-                        }
-                        .frame(width: geo.size.width * progress)
-                        // 宽度还小的时候把文字裁掉，不要挤成一条
-                        .clipped()
+                        Text("删除")
+                            .font(Typography.bodyStrong)
+                            .foregroundStyle(.white)
+                            .padding(.trailing, 18)
+                    }
+                    .mask(alignment: .trailing) {
+                        Rectangle().frame(width: geo.size.width * progress)
                     }
                 }
-                .padding(.top, -topBleed)
-                .padding(.bottom, -bottomBleed)
-                .padding(.trailing, -trailingBleed)
                 .allowsHitTesting(false)
             }
             // 只有右半边响应长按；左半边不接管点击，留给内容自己的「编辑」

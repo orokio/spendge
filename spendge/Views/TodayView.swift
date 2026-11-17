@@ -15,7 +15,18 @@ struct TodayView: View {
     @Query private var confirmations: [DayConfirmation]
 
     @State private var insight: Insight?
-    @State private var selectedDay = Calendar.current.startOfDay(for: .now)
+    /// 流水区滚到顶部的日期：柱图指示器和记账日期都跟着它走
+    @State private var visibleDay: Date?
+    /// 程序触发的滚动过程中不要让偏移量改日期，否则会打断动画
+    @State private var isProgrammaticScroll = false
+    /// 最近一次测到的各组位置，程序滚动结束后用它补算一次
+    @State private var lastFrames: [Date: CGRect] = [:]
+    /// 滚动时用来强制重算一次视图：GeometryReader 只在重算时才会汇报新位置
+    @State private var scrollTick = 0
+
+    private var selectedDay: Date {
+        visibleDay ?? dayGroups.first?.day ?? calendar.startOfDay(for: .now)
+    }
 
     private let calendar = Calendar.current
     private let barGap: CGFloat = 5
@@ -29,26 +40,19 @@ struct TodayView: View {
 
     // MARK: - 数据
 
+    /// 首页只看当月
     private var monthStart: Date {
-        calendar.dateInterval(of: .month, for: selectedDay)?.start ?? selectedDay
+        calendar.dateInterval(of: .month, for: .now)?.start ?? calendar.startOfDay(for: .now)
     }
 
     private var isCurrentMonth: Bool {
         calendar.isDate(monthStart, equalTo: .now, toGranularity: .month)
     }
 
-    private var isToday: Bool {
-        calendar.isDateInToday(selectedDay)
-    }
-
     private var dayTransactions: [Transaction] {
         transactions
             .filter { calendar.isDate($0.date, inSameDayAs: selectedDay) }
             .sorted { $0.date < $1.date }
-    }
-
-    private var dayExpenseCents: Int64 {
-        dayTransactions.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amountCents }
     }
 
     private var dayStats: [DayStat] {
@@ -86,51 +90,84 @@ struct TodayView: View {
         confirmations.contains { calendar.isDate($0.day, inSameDayAs: selectedDay) }
     }
 
+    /// 流水里的一组：一天，加上那天的记录
+    private struct DayGroup: Identifiable {
+        let day: Date
+        let transactions: [Transaction]
+        let isConfirmed: Bool
+
+        var id: Date { day }
+    }
+
+    /// 本月有内容的日期，倒序。今天即使是空的也留着，好让「没花钱」还有入口
+    private var dayGroups: [DayGroup] {
+        var grouped: [Date: [Transaction]] = [:]
+        for txn in transactions where calendar.isDate(txn.date, equalTo: monthStart, toGranularity: .month) {
+            let key = calendar.startOfDay(for: txn.date)
+            grouped[key, default: []].append(txn)
+        }
+
+        var confirmed: Set<Date> = []
+        for item in confirmations where calendar.isDate(item.day, equalTo: monthStart, toGranularity: .month) {
+            confirmed.insert(calendar.startOfDay(for: item.day))
+        }
+
+        // 本月已经过去的每一天都列出来：没记录的一天也要能被确认成「没花钱」
+        let today = calendar.startOfDay(for: .now)
+        let dayCount = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 30
+        var days: [Date] = []
+        for offset in 0..<dayCount {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: monthStart) else { continue }
+            let start = calendar.startOfDay(for: date)
+            guard start <= today else { break }
+            days.append(start)
+        }
+
+        return days.sorted(by: >).map { day in
+            DayGroup(day: day,
+                     transactions: (grouped[day] ?? []).sorted { $0.date < $1.date },
+                     isConfirmed: confirmed.contains(day))
+        }
+    }
+
+    private var monthExpenseCents: Int64 {
+        transactions
+            .filter { $0.kind == .expense && calendar.isDate($0.date, equalTo: monthStart, toGranularity: .month) }
+            .reduce(0) { $0 + $1.amountCents }
+    }
+
     // MARK: - 页面
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            ScrollView {
+            ScrollViewReader { proxy in
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
                     topBlock
-                    chartBlock
+                    chartBlock(proxy: proxy)
                     listBlock
                 }
                 .padding(.horizontal, PageLayout.pageInset)
                 .padding(.top, 56)
-                .padding(.bottom, 110)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .onAppear {
+                    if let focus { scroll(to: focus, proxy: proxy) }
+                }
+                .onChange(of: focus) { _, newValue in
+                    guard let newValue else { return }
+                    scroll(to: newValue, proxy: proxy)
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active {
+                        if let first = dayGroups.first?.day { scroll(to: first, proxy: proxy) }
+                        refresh()
+                    }
+                }
             }
-            .scrollIndicators(.hidden)
 
             fab
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    if value.translation.width < -40 { moveDay(by: 1) }
-                    else if value.translation.width > 40 { moveDay(by: -1) }
-                }
-        )
         .task { refresh() }
-        .onAppear {
-            if let focus { selectedDay = calendar.startOfDay(for: focus) }
-        }
-        .onChange(of: focus) { _, newValue in
-            guard let newValue else { return }
-            withAnimation(.easeInOut(duration: 0.18)) {
-                selectedDay = calendar.startOfDay(for: newValue)
-            }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                selectedDay = calendar.startOfDay(for: .now)
-                refresh()
-            }
-        }
-        .onChange(of: selectedDay) { _, _ in refresh() }
         .onChange(of: transactions.count) { _, _ in
             refresh()
             if !dayTransactions.isEmpty, confirmedSelectedDay {
@@ -141,32 +178,24 @@ struct TodayView: View {
 
     // MARK: - 顶部：情绪句（今天）或日期
 
-    @ViewBuilder
+    /// 顶部这句话不跟着滚动变：下面的流水滚到哪天，它都稳定待在原位
     private var topBlock: some View {
         VStack(alignment: .leading, spacing: PageLayout.inlineGap) {
-            if isToday {
-                // 主句与副句同一行：高度固定，下面的柱图不会因为有没有副句而上下跳
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(insight?.title ?? "正在看你的账本…")
-                        .font(Typography.hero)
-                        .foregroundStyle(Color.brand)
-                        .fixedSize(horizontal: false, vertical: true)
+            // 主句与副句同一行：高度固定，下面的柱图不会因为有没有副句而上下跳
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(insight?.title ?? "正在看你的账本…")
+                    .font(Typography.hero)
+                    .foregroundStyle(Color.brand)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    if let detail = insight?.detail {
-                        Text(detail)
-                            .font(Typography.body)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                if let detail = insight?.detail {
+                    Text(detail)
+                        .font(Typography.body)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-            } else {
-                Text(selectedDay.formatted(
-                    .dateTime.month(.abbreviated).day().weekday(.wide).locale(Locale(identifier: "zh_CN"))
-                ))
-                .font(Typography.pageTitle)
             }
         }
-        // 有没有副句、是情绪还是日期，顶部块高度都一致，柱图不会上下跳
         .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
     }
 
@@ -177,7 +206,7 @@ struct TodayView: View {
 
     // MARK: - 柱状图
 
-    private var chartBlock: some View {
+    private func chartBlock(proxy: ScrollViewProxy) -> some View {
         let stats = dayStats
         let maxCents = max(stats.map(\.amountCents).max() ?? 0, 1)
         let height: CGFloat = 76
@@ -204,7 +233,7 @@ struct TodayView: View {
                     .onTapGesture { location in
                         let index = Int(location.x / (width + barGap))
                         guard index < shown else { return }
-                        selectDay(index: index)
+                        scrollToDay(index: index, proxy: proxy)
                     }
                     .padding(.horizontal, inset)
 
@@ -279,21 +308,64 @@ struct TodayView: View {
     private var listBlock: some View {
         VStack(alignment: .leading, spacing: PageLayout.blockGap) {
             HStack(alignment: .firstTextBaseline) {
-                Text(isToday ? "今日流水" : "当日流水")
+                Text("流水")
                     .font(Typography.sectionTitle)
                 Spacer(minLength: 12)
-                if dayExpenseCents > 0 {
-                    Text("支出合计 \(AmountFormat.string(cents: dayExpenseCents))")
-                        .font(Typography.label)
-                        .foregroundStyle(.secondary)
-                }
+                Text("本月支出 \(AmountFormat.string(cents: monthExpenseCents))")
+                    .font(Typography.label)
+                    .foregroundStyle(.secondary)
             }
 
-            if dayTransactions.isEmpty {
-                emptyCard
+            // 高度固定，只有这一块滚动；柱图和上面那句不动
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(dayGroups) { group in
+                        // 间距放在测量之外：判断「卡片是否滚出去」时不能把日期间的空白算进来
+                        daySection(group)
+                            .id(group.day)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: DayFrameKey.self,
+                                        value: [group.day: geo.frame(in: .named("flow"))]
+                                    )
+                                }
+                            )
+                            .padding(.bottom, 40)
+                    }
+                }
+                // 底部留给悬浮底栏和记账按钮，滚到底时最后一条不会被挡住
+                .padding(.bottom, 104)
+            }
+            .coordinateSpace(name: "flow")
+            .modifier(ScrollTickModifier { scrollTick &+= 1 })
+            .scrollIndicators(.hidden)
+            .onPreferenceChange(DayFrameKey.self) { frames in
+                updateVisibleDay(frames)
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func daySection(_ group: DayGroup) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text(dayTitle(group.day))
+                    .font(Typography.label)
+                    .foregroundStyle(.secondary)
+
+                DashedLine()
+                    .stroke(Color.secondary.opacity(0.22),
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                    .frame(height: 1)
+            }
+
+            if group.transactions.isEmpty {
+                noSpendCard(group.day)
             } else {
                 TransactionCard(
-                    transactions: dayTransactions,
+                    transactions: group.transactions,
                     onDelete: { txn in try? TransactionService(context: context).delete(txn) },
                     onTap: onEdit
                 )
@@ -301,18 +373,28 @@ struct TodayView: View {
         }
     }
 
-    private var emptyCard: some View {
-        CardContainer {
+    private func dayTitle(_ day: Date) -> String {
+        let month = calendar.component(.month, from: day)
+        let number = calendar.component(.day, from: day)
+        let weekday = day.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "zh_CN")))
+        return "\(month)月\(number)日 \(weekday)"
+    }
+
+    /// 没有支出的一天：已确认的显示勾，今天还没记录的给一个「没花钱」入口
+    private func noSpendCard(_ day: Date) -> some View {
+        let confirmed = confirmations.contains { calendar.isDate($0.day, inSameDayAs: day) }
+        let today = calendar.isDateInToday(day)
+
+        return CardContainer {
             HStack(spacing: 6) {
-                if confirmedSelectedDay {
-                    // 已确认：点一下可以撤销，回到「还没记录」
+                if confirmed {
                     Button {
-                        toggleNoSpend()
+                        try? DayConfirmationService(context: context).remove(on: day)
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(Typography.body)
-                            Text(isToday ? "今天没花钱" : "这天没花钱")
+                            Text(today ? "今天没花钱" : "这天没花钱")
                                 .font(Typography.label)
                             Spacer(minLength: 0)
                         }
@@ -320,18 +402,13 @@ struct TodayView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                } else if isFutureDay {
-                    Text("还没到这天")
-                        .font(Typography.label)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
                 } else {
-                    Text(isToday ? "今天还没记录" : "这天没记录")
+                    Text(today ? "今天还没记录" : "这天没记录")
                         .font(Typography.label)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 12)
                     Button {
-                        toggleNoSpend()
+                        try? DayConfirmationService(context: context).confirmNoSpend(on: day)
                     } label: {
                         Text("没花钱")
                             .font(Typography.label)
@@ -341,10 +418,6 @@ struct TodayView: View {
                 }
             }
         }
-    }
-
-    private var isFutureDay: Bool {
-        calendar.startOfDay(for: selectedDay) > calendar.startOfDay(for: .now)
     }
 
     // MARK: - FAB
@@ -367,26 +440,43 @@ struct TodayView: View {
 
     // MARK: - 动作
 
-    private func toggleNoSpend() {
-        let service = DayConfirmationService(context: context)
-        if confirmedSelectedDay {
-            try? service.remove(on: selectedDay)
-        } else {
-            try? service.confirmNoSpend(on: selectedDay)
-        }
+    /// 聚焦日期 = 第一个还有内容露在可视区里的组。
+    /// 这一天的最后一张卡片完全滚出去之后，就交给下一天，不用等它的日期头贴到顶
+    private func updateVisibleDay(_ frames: [Date: CGRect]) {
+        _ = scrollTick
+        lastFrames = frames
+        guard !isProgrammaticScroll else { return }
+        recomputeVisibleDay()
     }
 
-    private func selectDay(index: Int) {
+    /// 取第一个还有内容露在可视区里的组：这一天的最后一张卡片滚出去，才轮到下一天
+    private func recomputeVisibleDay() {
+        let current = dayGroups.first { group in
+            guard let frame = lastFrames[group.day] else { return false }
+            return frame.maxY > 0
+        }
+        guard let day = current?.day, day != visibleDay else { return }
+        visibleDay = day
+    }
+
+    /// 点柱子：把那天滚到流水区第一行。没内容的日子不滚
+    private func scrollToDay(index: Int, proxy: ScrollViewProxy) {
         guard let date = calendar.date(byAdding: .day, value: index, to: monthStart) else { return }
-        withAnimation(.easeInOut(duration: 0.18)) {
-            selectedDay = date
-        }
+        scroll(to: date, proxy: proxy)
     }
 
-    private func moveDay(by delta: Int) {
-        guard let next = calendar.date(byAdding: .day, value: delta, to: selectedDay) else { return }
-        withAnimation(.easeInOut(duration: 0.18)) {
-            selectedDay = next
+    /// 把某一天对齐到流水区顶部：日期和虚线落在第一行
+    private func scroll(to date: Date, proxy: ScrollViewProxy) {
+        let day = calendar.startOfDay(for: date)
+        guard dayGroups.contains(where: { $0.day == day }) else { return }
+        isProgrammaticScroll = true
+        visibleDay = day
+        withAnimation(.easeInOut(duration: 0.28)) {
+            proxy.scrollTo(day, anchor: .top)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            isProgrammaticScroll = false
+            recomputeVisibleDay()
         }
     }
 
@@ -394,3 +484,44 @@ struct TodayView: View {
         insight = try? InsightService(context: context).headline()
     }
 }
+
+/// 滚动时定时戳一下视图，让下面各组的 GeometryReader 重新汇报位置。
+/// GeometryReader 只在布局重算时才会更新 frame，光靠滚动它是不动的。
+private struct ScrollTickModifier: ViewModifier {
+    let onTick: () -> Void
+    @State private var lastOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { _, newOffset in
+                guard abs(newOffset - lastOffset) >= 16 else { return }
+                lastOffset = newOffset
+                onTick()
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// 每组日期在流水区里的位置
+private struct DayFrameKey: SwiftUI.PreferenceKey {
+    static var defaultValue: [Date: CGRect] = [:]
+
+    static func reduce(value: inout [Date: CGRect], nextValue: () -> [Date: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+/// 日期之间的虚分割线
+private struct DashedLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.width, y: rect.midY))
+        return path
+    }
+}
+

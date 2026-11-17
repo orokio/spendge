@@ -9,6 +9,8 @@ extension Color {
     static var brandSoft: Color { Palette.current.accentSoft }
     /// 收入色
     static var income: Color { Palette.current.income }
+    /// 提醒色：支出比上期涨了
+    static var warning: Color { Palette.current.warning }
     /// 页面底色
     static var canvas: Color { Palette.current.background }
     /// 表面色：键盘、输入框、分段控件底

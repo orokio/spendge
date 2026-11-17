@@ -126,8 +126,8 @@ struct GoalView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
             .contentShape(Rectangle())
@@ -142,42 +142,27 @@ struct GoalView: View {
         Button {
             onOpenHistory()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "trophy")
-                    .font(.system(size: 13, weight: .medium))
-                Text("我的奖杯")
-                    .font(Typography.bodyStrong)
-                if achievedTotal > 0 {
-                    Text("\(achievedTotal)")
-                        .font(Typography.captionStrong)
-                        .foregroundStyle(Color.brand)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
-            .foregroundStyle(Color.secondary)
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
+            Image(systemName: "trophy")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.secondary)
+                .frame(width: 48, height: 48)
+                .background(.regularMaterial, in: Circle())
+                .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
     }
 
-    /// 新增 / 管理目标的入口：右下角胶囊
+    /// 新增 / 管理目标的入口：右下角圆形按钮
     private var newGoalButton: some View {
         Button {
             onOpenPicker()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 13, weight: .medium))
-                Text("目标管理")
-                    .font(Typography.bodyStrong)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
-            .foregroundStyle(Color.secondary)
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.secondary)
+                .frame(width: 48, height: 48)
+                .background(.regularMaterial, in: Circle())
+                .overlay(Circle().stroke(Color.secondary.opacity(0.12), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
     }
