@@ -44,14 +44,16 @@ enum DefaultData {
         // 三、住行与账单
         .init(code: .housing, name: "房租水电", iconName: "house.fill",
               colorHex: "#14B8A6", kind: .expense, domain: .housing, sortOrder: 21),
-        .init(code: .outing, name: "出行游玩", iconName: "figure.walk",
+        .init(code: .outing, name: "交通出行", iconName: "car.fill",
               colorHex: "#3B82F6", kind: .expense, domain: .transport, sortOrder: 22),
+        .init(code: .game, name: "游戏娱乐", iconName: "gamecontroller.fill",
+              colorHex: "#8B5CF6", kind: .expense, domain: .play, sortOrder: 23),
         .init(code: .subscription, name: "订阅话费", iconName: "creditcard.fill",
-              colorHex: "#0EA5E9", kind: .expense, domain: .other, sortOrder: 23),
+              colorHex: "#0EA5E9", kind: .expense, domain: .other, sortOrder: 24),
         .init(code: .social, name: "人情往来", iconName: "gift.fill",
-              colorHex: "#EF4444", kind: .expense, domain: .social, sortOrder: 24),
+              colorHex: "#EF4444", kind: .expense, domain: .social, sortOrder: 25),
         .init(code: .otherExpense, name: "其他", iconName: "ellipsis.circle",
-              colorHex: "#9CA3AF", kind: .expense, domain: .other, sortOrder: 25),
+              colorHex: "#9CA3AF", kind: .expense, domain: .other, sortOrder: 26),
     ]
 
     static let incomeCategorySeeds: [CategorySeed] = [
@@ -69,11 +71,11 @@ enum DefaultData {
     /// 与结构变更不同，这里不删库——账单归属是用户数据。
     static func migrateCategoriesIfNeeded(context: ModelContext) {
         let key = "spendge.categoryMigration"
-        guard UserDefaults.standard.integer(forKey: key) < 10 else { return }
+        guard UserDefaults.standard.integer(forKey: key) < 11 else { return }
 
         let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
         guard !categories.isEmpty else {
-            UserDefaults.standard.set(10, forKey: key)
+            UserDefaults.standard.set(11, forKey: key)
             return
         }
 
@@ -84,10 +86,10 @@ enum DefaultData {
         // 旧的「买东西」并入「用的」
         category("shopping")?.code = CategoryCode.gear.rawValue
 
-        // 交通 + 娱乐 → 出行游玩
+        // 交通 + 娱乐 → 出行游玩（现在只留交通，改叫交通出行）
         if let outing = category("outing") ?? category("transport") {
             outing.code = CategoryCode.outing.rawValue
-            outing.name = "出行游玩"
+            outing.name = "交通出行"
             outing.domain = .transport
             outing.sortOrder = 6
             if let fun = category("fun") {
@@ -124,7 +126,7 @@ enum DefaultData {
         }
 
         try? context.save()
-        UserDefaults.standard.set(10, forKey: key)
+        UserDefaults.standard.set(11, forKey: key)
     }
 
     /// 幂等：已有数据时不重复写入。

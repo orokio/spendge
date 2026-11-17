@@ -89,7 +89,9 @@ final class InsightService {
         case .snack:
             options = [("买了点甜", "先吃哪个，纠结一下"), ("嘴里有点事做", "手就不闲了")]
         case .outing:
-            options = [("出门转了转", "原地不动的一天结束了"), ("走了不少路", "鞋该歇歇了")]
+            options = [("出门跑了一趟", "车没白养"), ("这一趟在路上", nil)]
+        case .game:
+            options = [("消遣了一下", "该松一松"), ("玩了会儿", nil)]
         case .housing:
             options = [("都交完了", "住处的事，办妥了"), ("这些钱，换的是安稳", nil)]
         case .daily:

@@ -191,25 +191,33 @@ struct GoalView: View {
 
                 if let budget = monthBudget, budget.amountCents > 0 {
                     let remaining = budget.amountCents - monthExpenseCents
+                    let spent = monthExpenseCents
+                    let overBudget = spent > budget.amountCents
+
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("还剩")
+                        Text("已花")
                             .font(Typography.label)
                             .foregroundStyle(.secondary)
-                        Text(AmountFormat.string(cents: max(0, remaining)))
+                        Text(AmountFormat.string(cents: spent))
                             .font(Typography.numberLarge)
-                            .foregroundStyle(Color.brand)
+                            .foregroundStyle(overBudget ? Color.danger : Color.brand)
                         Text("/ \(AmountFormat.string(cents: budget.amountCents))")
                             .font(Typography.label)
                             .foregroundStyle(.secondary)
                     }
 
                     GeometryReader { geo in
-                        let ratio = max(0, min(1, 1 - Double(monthExpenseCents) / Double(budget.amountCents)))
+                        let progress = Double(spent) / Double(max(1, budget.amountCents))
+                        let ratio = max(0, min(1, progress))
+                        // 绿 → 黄（用到八成）→ 红（超了）
+                        let barColor: Color = progress > 1
+                            ? Color.danger
+                            : (progress >= 0.8 ? Color.warning : Color.brand)
                         ZStack(alignment: .leading) {
                             Capsule()
                                 .fill(Color.secondary.opacity(0.12))
                             Capsule()
-                                .fill(Color.brand)
+                                .fill(barColor)
                                 .frame(width: geo.size.width * ratio)
                         }
                     }
@@ -649,8 +657,9 @@ private struct GoalRing: View {
     private var center: some View {
         if progress.target == 0 {
             if progress.current == 0 {
-                Text("🔥")
-                    .font(.system(size: 16))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.brand)
             } else {
                 Text("\(progress.current)")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))

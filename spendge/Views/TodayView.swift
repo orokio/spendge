@@ -154,10 +154,8 @@ struct TodayView: View {
                     scroll(to: newValue, proxy: proxy)
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active {
-                        if let first = dayGroups.first?.day { scroll(to: first, proxy: proxy) }
-                        refresh()
-                    }
+                    // 从后台回来只刷新顶部那句话，不动流水的滚动位置
+                    if phase == .active { refresh() }
                 }
             }
 

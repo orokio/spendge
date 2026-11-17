@@ -71,8 +71,10 @@ enum CategoryCode: String, CaseIterable, Sendable {
     case takeout = "takeout"
     case dineout = "dineout"
     case drink = "drink"
-    /// 交通 + 娱乐出行合并
+    /// 交通：油费、打车、公交、停车
     case outing = "outing"
+    /// 游戏、电影、演出、门票、旅游
+    case game = "game"
     case housing = "housing"
     case daily = "daily"
     /// 穿的：衣帽鞋袜、配饰
