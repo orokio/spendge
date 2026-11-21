@@ -178,7 +178,7 @@ struct GoalView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("本月预算")
-                        .font(Typography.sectionTitle)
+                        .font(Typography.bodyStrong)
                     Spacer()
                     HStack(spacing: 6) {
                         Text(monthTitle)

@@ -16,17 +16,20 @@ extension GoalKind {
     /// 三种维度都是「用得越少越好」
     var isAtMost: Bool { true }
 
-    /// 每个维度只允许「高频、可控」的分类：刚性支出和兜底分类都不进
+    /// 可选分类：次数只放高频小额；金额 / 占比放开到所有「能靠少花改变」的分类。
+    /// 排除的是金额基本固定、设目标也改不了的（房租 / 水电 / 宽带 / 装修 / 医疗）与兜底。
     var allowedCategoryCodes: [CategoryCode] {
         switch self {
         case .countLimit:
-            return [.takeout, .dineout, .drink, .snack]
-        case .categorySum:
-            return [.takeout, .dineout, .grocery, .drink, .snack, .wear,
-                    .digitalGear, .sportsOutdoor, .game, .alcoholBeverage,
-                    .fuel, .carCare]
-        case .shareCap:
-            return [.takeout, .dineout, .grocery, .drink, .snack, .game]
+            return [.takeout, .dineout, .drink, .alcoholBeverage, .snack, .game]
+        case .categorySum, .shareCap:
+            return [.takeout, .dineout, .grocery, .drink, .alcoholBeverage, .snack,
+                    .daily, .wear, .digitalGear, .sportsOutdoor,
+                    .appliance,
+                    .outing, .fuel, .travel, .carCare,
+                    .game,
+                    .social,
+                    .phone, .subscription]
         }
     }
 
