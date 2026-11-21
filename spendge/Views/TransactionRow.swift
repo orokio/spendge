@@ -31,7 +31,8 @@ struct TransactionRow: View {
 
             Spacer(minLength: 8)
 
-            Text(AmountFormat.string(cents: signedCents, showsSign: true))
+            // 明细保留角分，不被汇总用的取整规则抹掉
+            Text(AmountFormat.string(cents: signedCents, showsSign: true, exact: true))
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .foregroundStyle(transaction.kind == .income ? Color.income : Color.textPrimary)
         }

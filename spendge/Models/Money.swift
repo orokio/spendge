@@ -21,4 +21,9 @@ enum Money {
     static func yuan(from cents: Int64) -> Decimal {
         Decimal(cents) / 100
     }
+
+    /// 将「分」四舍五入为整元：¥0.5 进成 ¥1，不会像系统默认舍入那样落回 0
+    static func roundedYuan(from cents: Int64) -> Int64 {
+        (abs(cents) + 50) / 100
+    }
 }

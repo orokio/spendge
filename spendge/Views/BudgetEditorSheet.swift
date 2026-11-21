@@ -93,7 +93,7 @@ struct BudgetEditorSheet: View {
                 } label: {
                     Text("保存")
                         .font(Typography.bodyStrong)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.onAccent)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 12)
                         .background(Color.brand, in: Capsule())

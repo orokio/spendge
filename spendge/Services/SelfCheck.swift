@@ -23,9 +23,11 @@ enum SelfCheck {
         // 1. 种子完整性
         let categories = (try? categoryService.categories()) ?? []
         let expenses = categories.filter { $0.kind == .expense }
-        expect(expenses.count == 16, "种子应有 16 个支出分类，实际 \(expenses.count)")
+        expect(expenses.count == 25, "种子应有 25 个支出分类，实际 \(expenses.count)")
         expect(categories.allSatisfy { $0.categoryCode != nil }, "每个分类都应有 code")
-        expect(expenses.filter { $0.domain == .food }.count == 5, "吃的领域应有 5 个分类")
+        expect(categories.allSatisfy { $0.scope.isEmpty == ($0.categoryCode == .otherExpense) },
+               "除兜底的「其他」外都应填写包含范围")
+        expect(expenses.filter { $0.domain == .food }.count == 6, "吃的领域应有 6 个分类")
         expect(categories.contains { $0.categoryCode == .salary }, "应有工资分类")
 
         // 2. 金额快填只记忆不猜测：最近金额去重后最多 3 个
@@ -106,7 +108,16 @@ enum SelfCheck {
         expect(VoiceParser.parse("打车25块").yuan == 25, "语音应识别出阿拉伯数字金额")
         expect(VoiceParser.parse("打车25块").categoryCode == .outing, "语音应识别出出行")
         expect(VoiceParser.parse("随便说点什么").isEmpty, "没有把握时不应猜分类或金额")
-        expect(VoiceParser.parse("买了个充电宝50").categoryCode == .gear, "充电宝应归到装备器材")
+        expect(VoiceParser.parse("买了个充电宝50").categoryCode == .digitalGear, "充电宝应归到数码器材")
+        expect(VoiceParser.parse("给车充电30").categoryCode == .fuel, "充电应归到加油充电")
+        if let categories = try? categoryService.categories() {
+            expect(CategoryMatcher.match("PS Plus 会员", in: categories, kind: .expense)?.categoryCode == .subscription,
+                   "包含范围应能把会员归到会员订阅")
+            expect(CategoryMatcher.match("买了瓶啤酒", in: categories, kind: .expense)?.categoryCode == .alcoholBeverage,
+                   "包含范围应能把啤酒归到酒水饮料")
+            expect(CategoryMatcher.match("高铁票200", in: categories, kind: .expense)?.categoryCode == .travel,
+                   "高铁应归到机票酒店")
+        }
         expect(VoiceParser.parse("外卖３０").yuan == 30, "全角数字也应能解析")
         expect(VoiceParser.parse("买了苹果12").categoryCode == nil, "认不出分类时不应硬归")
         expect(VoiceParser.parse("买了苹果12").hasMoneyCue == false, "「苹果12」不是金额线索")

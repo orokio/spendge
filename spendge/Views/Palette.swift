@@ -15,10 +15,14 @@ struct Palette {
     let income: Color
     /// 提醒色：支出比上期涨了，用暖黄，不用红
     let warning: Color
-    /// 达标 / 稳定态用的冷色
+    /// 冷蓝：收入金额、刚性 / 稳定结构，以及需要与品牌绿区分的中性强调
     let info: Color
     /// 超限：只在真的越线时出现
     let danger: Color
+    /// 强调色 / 危险色上的文字与图标
+    let onAccent: Color
+    /// 浮层背后的遮罩
+    let scrim: Color
     /// 页面底色（根背景）
     let background: Color
     /// 表面色：键盘、输入框、分段控件底
@@ -64,8 +68,10 @@ extension Palette {
         deepGreen: Color(hex: "#0F766E"),
         income: Color(hex: "#10B981"),
         warning: Color(hex: "#D97706"),
-        info: Color(hex: "#4B7BEC"),
+        info: Color(hex: "#3B82F6"),
         danger: Color(hex: "#D9503F"),
+        onAccent: Color(hex: "#FFFFFF"),
+        scrim: Color.black.opacity(0.18),
         background: Color(.systemGroupedBackground),
         surface: Color(.systemGray6),
         surfaceElevated: Color(hex: "#FFFFFF"),
@@ -80,14 +86,15 @@ extension Palette {
             (Color(hex: "#14B8A6").opacity(0), 0.74),
         ],
         domainColors: [
-            .food: Color(hex: "#F97316"),
+            .food: Color(hex: "#FB923C"),
             .transport: Color(hex: "#3B82F6"),
-            .housing: Color(hex: "#14B8A6"),
+            .housing: Color(hex: "#0D9488"),
             .goods: Color(hex: "#A855F7"),
-            .play: Color(hex: "#8B5CF6"),
+            .play: Color(hex: "#EC4899"),
             .social: Color(hex: "#EF4444"),
             .health: Color(hex: "#10B981"),
-            .other: Color(hex: "#9CA3AF"),
+            .communication: Color(hex: "#06B6D4"),
+            .other: Color(hex: "#94A3B8"),
         ]
     )
 
@@ -100,6 +107,8 @@ extension Palette {
         warning: Color(hex: "#B7653C"),
         info: Color(hex: "#7C8FA3"),
         danger: Color(hex: "#C2544B"),
+        onAccent: Color(hex: "#FFFDFB"),
+        scrim: Color.black.opacity(0.18),
         background: Color(hex: "#FBF3EA"),
         surface: Color(hex: "#F3E7D9"),
         surfaceElevated: Color(hex: "#FFFDFB"),

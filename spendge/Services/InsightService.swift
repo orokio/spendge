@@ -98,8 +98,26 @@ final class InsightService {
             options = [("日子一格一格填满", nil), ("小东西，撑起日常", nil)]
         case .wear:
             options = [("买了件新的", "明天穿哪件，是道题"), ("衣柜里多了一件", "衣柜快满了")]
-        case .gear:
-            options = [("又多了件趁手的", "手痒就对了"), ("工具到位了", "家伙事儿齐了不少")]
+        case .digitalGear:
+            options = [("又多了件趁手的", "手痒就对了"), ("设备到位了", "家伙事儿齐了不少")]
+        case .sportsOutdoor:
+            options = [("动了动身体", "这钱花得值"), ("为下次出门备的", nil)]
+        case .alcoholBeverage:
+            options = [("喝了一点", "下不为例"), ("这杯不算贵", nil)]
+        case .utilities:
+            options = [("水电都交上了", "日子照常转"), ("这些跑不掉", nil)]
+        case .broadband:
+            options = [("网和物业都清了", "安心住着"), ("住处的事，办妥了", nil)]
+        case .renovation:
+            options = [("家里动了动", "住着更顺了"), ("修好了，踏实", nil)]
+        case .fuel:
+            options = [("油箱加满了", "能跑一阵子"), ("补了次能", nil)]
+        case .travel:
+            options = [("出门一趟", "路费和住处记下了"), ("这一程，值了", nil)]
+        case .carCare:
+            options = [("车的事办好了", "养车不便宜"), ("停好、洗好", nil)]
+        case .phone:
+            options = [("话费充上了", "不失联"), ("这个月的通讯费", nil)]
         case .appliance:
             options = [("家里更像家了", nil), ("添完了，屋子舒服一点", nil)]
         case .subscription:

@@ -70,7 +70,10 @@ erDiagram
 10. **只做中文**（2026-11-14）：不做多语言，没有 String Catalog，文案直接写中文；日期统一用 zh_CN，避免英文系统下出现英文日期名。
 12. **目标（Goal）**：独立表，暂不与 Budget 合并。历史不落表，按参数逐周期回算（`GoalService.history`），避免双份真相。只做四种封闭类型（zeroSpendDays / countLimit / categorySum / netInflow），每种类型在 `GoalService` 里只负责三件事：聚合、单位、方向；加类型靠改代码，用户能自定义的只有范围和阈值。
 13. **间距只有三级**：`PageLayout` 提供 `pageInset`（24）、`sectionGap`（32）、`blockGap`（12）、`inlineGap`（8）。页面容器只加一次，组件内部不再手填数字微调——之前图例多缩进 18、区块间距 26/30/48 各写一套，就是这样散出来的。
-9. **颜色只认语义 token**：视图用 `Color.brand / surface / surfaceElevated / canvas / income` 与 `Palette.current.domainColor(_:)`，不直接写 hex 或系统灰。换主题只改 `Palette.current`；`Palette.warm` 已按奶油桃配色备好但未启用。注意 `current` 是静态值，真正做切换时要改成环境注入才能触发刷新。
+11. **颜色只认语义 token**（2026-11-21 收口）：视图用 `Color.brand / brandSoft / income / warning / danger / info / onAccent / scrim / canvas / surface / surfaceElevated / textPrimary / textSecondary`，不直接写 hex、`.red`、`.white` 或系统灰。`info` 是冷蓝，收入金额与刚性 / 稳定结构共用；`onAccent` 是强调色上的文字与图标；`scrim` 是浮层遮罩。
+    - 换主题只改 `Palette.current`；`Palette.warm` 已按奶油桃配色备好但未启用。注意 `current` 是静态值，真正做切换时要改成环境注入才能触发刷新。
+    - 饼图 / 图例的领域色集中在 `Palette.domainColors`，通过 `Color.domainColor(_:)` 取；它们是主题的一部分，但允许临时微调。
+    - 分类自身的颜色（`Category.colorHex`）是**数据**，存在库里，不属于主题 token。
 
 ## 功能流程
 

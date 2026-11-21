@@ -12,7 +12,7 @@ struct ToastModifier: ViewModifier {
                     Text(text)
                 }
                 .font(Typography.label.weight(.medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onAccent)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.brand, in: Capsule())

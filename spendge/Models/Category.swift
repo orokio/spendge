@@ -19,6 +19,9 @@ final class Category {
     var kindRawValue: String
     /// 内部聚合领域，用户不可见。
     var domainRawValue: String = CategoryDomain.other.rawValue
+    /// 包含范围：写这一类别管哪些东西，用「、」分隔。
+    /// 既给人看，也用于备注 / 语音的自动识别（见 CategoryMatcher）。
+    var scope: String = ""
     var sortOrder: Int
     /// 系统预置分类不允许删除（可改名、可归档）
     var isSystem: Bool
@@ -40,6 +43,7 @@ final class Category {
         colorHex: String = "#9CA3AF",
         kind: TransactionKind,
         domain: CategoryDomain = .other,
+        scope: String = "",
         sortOrder: Int = 99,
         isSystem: Bool = false,
         isArchived: Bool = false,
@@ -53,6 +57,7 @@ final class Category {
         self.colorHex = colorHex
         self.kindRawValue = kind.rawValue
         self.domainRawValue = domain.rawValue
+        self.scope = scope
         self.sortOrder = sortOrder
         self.isSystem = isSystem
         self.isArchived = isArchived

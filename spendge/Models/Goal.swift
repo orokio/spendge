@@ -22,7 +22,9 @@ extension GoalKind {
         case .countLimit:
             return [.takeout, .dineout, .drink, .snack]
         case .categorySum:
-            return [.takeout, .dineout, .grocery, .drink, .snack, .wear, .gear, .game]
+            return [.takeout, .dineout, .grocery, .drink, .snack, .wear,
+                    .digitalGear, .sportsOutdoor, .game, .alcoholBeverage,
+                    .fuel, .carCare]
         case .shareCap:
             return [.takeout, .dineout, .grocery, .drink, .snack, .game]
         }

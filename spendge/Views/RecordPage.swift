@@ -32,6 +32,8 @@ struct RecordPage: View {
     @State private var keyboardInset: CGFloat = 0
     @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
     @State private var noteEditing = false
+    /// 用户手动点过分类：之后不再用备注自动改他的选择
+    @State private var categoryPicked = false
     @State private var toast: String?
 
     private let calendar = Calendar.current
@@ -252,6 +254,10 @@ struct RecordPage: View {
             // 只在结束时解析会让备注和金额对不上。
             applyVoice(text)
         }
+        .onChange(of: noteEditing) { _, editing in
+            // 备注写完收起键盘时，按「包含范围」帮他选分类
+            if !editing { autoCategorizeFromNote() }
+        }
     }
 
     // MARK: - 日期轴
@@ -266,6 +272,7 @@ struct RecordPage: View {
             note = ""
             noteEditing = false
             voiceHint = nil
+            categoryPicked = false
             select(categories.first)
         } label: {
             Text(title)
@@ -303,6 +310,7 @@ struct RecordPage: View {
                     case .category(let category):
                         let selected = selectedCategory?.id == category.id
                         Button {
+                            categoryPicked = true
                             select(category)
                         } label: {
                             Text(category.displayName)
@@ -318,7 +326,7 @@ struct RecordPage: View {
                                     selected ? Color.brand : Color.surface,
                                     in: RoundedRectangle(cornerRadius: 9)
                                 )
-                                .foregroundStyle(selected ? .white : .primary)
+                                .foregroundStyle(selected ? Color.onAccent : Color.textPrimary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -445,7 +453,7 @@ struct RecordPage: View {
         } label: {
             Image(systemName: transcriber.isListening ? "waveform" : "mic.fill")
                 .font(Typography.number)
-                .foregroundStyle(transcriber.isListening ? Color.white : Color.brand)
+                .foregroundStyle(transcriber.isListening ? Color.onAccent : Color.brand)
                 .frame(width: 48, height: 48)
                 .background(
                     transcriber.isListening ? Color.brand : Color.brand.opacity(0.12),
@@ -467,7 +475,7 @@ struct RecordPage: View {
                     canSave ? Color.brand : Color.secondary.opacity(0.12),
                     in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius)
                 )
-                .foregroundStyle(canSave ? Color.white : Color.secondary)
+                .foregroundStyle(canSave ? Color.onAccent : Color.secondary)
         }
         .buttonStyle(.plain)
         .disabled(!canSave)
@@ -491,6 +499,17 @@ struct RecordPage: View {
         selectedCategory = category
     }
 
+    /// 备注里写了明确的东西（比如「PS Plus 会员」）就顺手把分类选好。
+    /// 用户自己点过分类就不再插手。
+    private func autoCategorizeFromNote() {
+        guard !categoryPicked, editing == nil else { return }
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2,
+              let matched = CategoryMatcher.match(trimmed, in: allCategories, kind: kind),
+              matched.id != selectedCategory?.id else { return }
+        select(matched)
+    }
+
     /// 边听边填：备注与金额始终来自同一段文本。
     private func applyVoice(_ text: String) {
         guard !text.isEmpty else { return }
@@ -499,9 +518,8 @@ struct RecordPage: View {
         let parsed = VoiceParser.parse(text)
 
         // 认不出分类就落到「其他」，不留着上一次的选择让人误会
-        let matched = parsed.categoryCode.flatMap { code in
-            allCategories.first { $0.categoryCode == code && $0.kind == kind }
-        } ?? allCategories.first { $0.categoryCode == .otherExpense && $0.kind == kind }
+        let matched = CategoryMatcher.match(text, in: allCategories, kind: kind)
+            ?? allCategories.first { $0.categoryCode == .otherExpense && $0.kind == kind }
 
         if let matched { select(matched) }
 
@@ -519,10 +537,11 @@ struct RecordPage: View {
             return
         }
         let parsed = VoiceParser.parse(text)
+        let matched = CategoryMatcher.match(text, in: allCategories, kind: kind)
 
-        if parsed.categoryCode != nil, parsed.yuan != nil {
+        if matched != nil, parsed.yuan != nil {
             showHint("已按你说的填好")
-        } else if parsed.categoryCode != nil {
+        } else if matched != nil {
             showHint("分类填好了，金额确认一下")
         } else if parsed.yuan != nil {
             showHint("金额填好了，分类先放「其他」")

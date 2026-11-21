@@ -50,7 +50,7 @@ struct GoalView: View {
         .overlay(alignment: .top) {
             ZStack(alignment: .top) {
                 if showBudgetEditor {
-                    Color.black.opacity(0.18)
+                    Color.scrim
                         .ignoresSafeArea()
                         .transition(.opacity)
                         .onTapGesture { closeBudget() }

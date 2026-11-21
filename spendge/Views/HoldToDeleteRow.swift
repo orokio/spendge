@@ -30,10 +30,10 @@ struct HoldToDeleteRow<Content: View>: View {
                 GeometryReader { geo in
                     ZStack(alignment: .trailing) {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(Color.red)
+                            .fill(Color.danger)
                         Text("删除")
                             .font(Typography.bodyStrong)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.onAccent)
                             .padding(.trailing, 18)
                     }
                     .mask(alignment: .trailing) {

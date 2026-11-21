@@ -143,6 +143,7 @@ final class BackupService {
                 colorHex: dto.colorHex,
                 kind: TransactionKind(rawValue: dto.kindRawValue) ?? .expense,
                 domain: CategoryDomain(rawValue: dto.domainRawValue) ?? .other,
+                scope: dto.scope ?? "",
                 sortOrder: dto.sortOrder,
                 isSystem: dto.isSystem,
                 isArchived: dto.isArchived,
@@ -279,6 +280,8 @@ struct CategoryDTO: Codable {
     var colorHex: String
     var kindRawValue: String
     var domainRawValue: String
+    /// 旧备份里没有这个字段
+    var scope: String?
     var sortOrder: Int
     var isSystem: Bool
     var isArchived: Bool
@@ -293,6 +296,7 @@ struct CategoryDTO: Codable {
         colorHex = category.colorHex
         kindRawValue = category.kindRawValue
         domainRawValue = category.domainRawValue
+        scope = category.scope
         sortOrder = category.sortOrder
         isSystem = category.isSystem
         isArchived = category.isArchived

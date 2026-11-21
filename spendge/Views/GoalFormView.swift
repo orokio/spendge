@@ -96,17 +96,13 @@ struct GoalFormView: View {
             }
 
             row("维度") {
-                Picker("", selection: $kind) {
-                    Text("次数").tag(GoalKind.countLimit)
-                    Text("金额").tag(GoalKind.categorySum)
-                    Text("占比").tag(GoalKind.shareCap)
+                HStack(spacing: 0) {
+                    kindOption("次数", value: .countLimit)
+                    kindOption("金额", value: .categorySum)
+                    kindOption("占比", value: .shareCap)
                 }
-                .pickerStyle(.segmented)
-                .onChange(of: kind) { _, _ in
-                    if !goalKindCodes.contains(where: { $0.rawValue == categoryCode }) {
-                        categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
-                    }
-                }
+                .padding(3)
+                .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
             }
 
             // 分类横着排，省掉整列高度
@@ -121,7 +117,7 @@ struct GoalFormView: View {
                             } label: {
                                 Text(category.displayName)
                                     .font(Typography.label)
-                                    .foregroundStyle(selected ? .white : Color.textPrimary)
+                                    .foregroundStyle(selected ? Color.onAccent : Color.textPrimary)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                                     .background(selected ? Color.brand : Color.surface, in: Capsule())
@@ -174,7 +170,7 @@ struct GoalFormView: View {
                     } label: {
                         Text("保存")
                             .font(Typography.bodyStrong)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.onAccent)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 9)
                             .background(Color.brand, in: Capsule())
@@ -232,6 +228,31 @@ struct GoalFormView: View {
     private var actionTitle: String {
         guard let goal else { return "取消" }
         return goal.isActive ? "暂停" : "恢复"
+    }
+
+    /// 维度切换：和统计页的支出 / 收入用同一套胶囊
+    private func kindOption(_ title: String, value: GoalKind) -> some View {
+        let selected = kind == value
+        return Button {
+            guard kind != value else { return }
+            withAnimation(.snappy(duration: 0.2)) {
+                kind = value
+                if !goalKindCodes.contains(where: { $0.rawValue == categoryCode }) {
+                    categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
+                }
+            }
+        } label: {
+            Text(title)
+                .font(selected ? Typography.bodyStrong : Typography.body)
+                .foregroundStyle(selected ? Color.textPrimary : Color.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 32)
+                .background(
+                    selected ? Color.surfaceElevated : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     /// 左标签、右控件，一行一项

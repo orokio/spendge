@@ -15,6 +15,10 @@ extension Color {
     static var info: Color { Palette.current.info }
     /// 超限
     static var danger: Color { Palette.current.danger }
+    /// 强调色上的文字 / 图标
+    static var onAccent: Color { Palette.current.onAccent }
+    /// 浮层遮罩
+    static var scrim: Color { Palette.current.scrim }
     /// 页面底色
     static var canvas: Color { Palette.current.background }
     /// 表面色：键盘、输入框、分段控件底
@@ -24,6 +28,10 @@ extension Color {
     /// 正文与次要文字
     static var textPrimary: Color { Palette.current.text }
     static var textSecondary: Color { Palette.current.textSecondary }
+    /// 领域色：饼图与图例的唯一来源
+    static func domainColor(_ domain: CategoryDomain) -> Color {
+        Palette.current.domainColor(domain)
+    }
 
     init(hex: String) {
         let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
@@ -40,12 +48,20 @@ extension Color {
 // MARK: - 金额格式化
 
 enum AmountFormat {
-    /// 分 → "¥1,234.5" 形式
-    static func string(cents: Int64, showsSign: Bool = false) -> String {
-        let yuan = Money.yuan(from: abs(cents))
-        let number = yuan.formatted(
-            .number.precision(.fractionLength(0)).locale(Locale(identifier: "zh_CN"))
-        )
+    /// 分 → "¥1,235"
+    /// - Parameter exact: 为 true 时保留角分（去掉末尾的 0），流水明细用它；
+    ///   否则四舍五入到整元，汇总与统计用这个。
+    static func string(cents: Int64, showsSign: Bool = false, exact: Bool = false) -> String {
+        let number: String
+        if exact {
+            number = Money.yuan(from: abs(cents)).formatted(
+                .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "zh_CN"))
+            )
+        } else {
+            number = Money.roundedYuan(from: cents).formatted(
+                .number.locale(Locale(identifier: "zh_CN"))
+            )
+        }
         let sign: String
         if !showsSign {
             sign = ""
@@ -229,7 +245,7 @@ struct TopDrawer<Content: View>: View {
     var body: some View {
         ZStack(alignment: .top) {
             if isPresented {
-                Color.black.opacity(0.18)
+                Color.scrim
                     .ignoresSafeArea()
                     .transition(.opacity)
                     .onTapGesture { close() }

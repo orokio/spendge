@@ -144,11 +144,11 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(Typography.body)
-                    .foregroundStyle(destructive ? Color.red : Color.brand)
+                    .foregroundStyle(destructive ? Color.danger : Color.brand)
                     .frame(width: 24)
                 Text(title)
                     .font(Typography.body)
-                    .foregroundStyle(destructive ? Color.red : Color.primary)
+                    .foregroundStyle(destructive ? Color.danger : Color.textPrimary)
                 Spacer(minLength: 12)
                 if !detail.isEmpty {
                     Text(detail)

@@ -440,7 +440,7 @@ struct TodayView: View {
         } label: {
             Image(systemName: "plus")
                 .font(Typography.pageTitle)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onAccent)
                 .frame(width: 58, height: 58)
                 .background(Color.brand, in: Circle())
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
