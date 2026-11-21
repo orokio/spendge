@@ -226,6 +226,12 @@ struct RecordPage: View {
                 .ignoresSafeArea()
                 .onTapGesture { noteEditing = false }
         )
+        // 返回放在标题上方的留白里，不参与排版，内容不会下移
+        .overlay(alignment: .topLeading) {
+            BackButton(action: onClose)
+                .padding(.leading, PageLayout.pageInset)
+                .padding(.top, 12)
+        }
         // 顶部浮出，像一条系统通知；与「我的」页共用同一套样式
         .toast($toast)
         .offset(x: max(0, dragOffset))

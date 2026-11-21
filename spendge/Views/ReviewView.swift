@@ -1,13 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// 统计：按月 / 按年看钱花在哪。一个下拉选期间，没有图表。
+/// 统计：按月 / 按年看收支结构。一个下拉选期间，支出侧带一级饼图。
 struct ReviewView: View {
     let onEdit: (Transaction) -> Void
+    let onOpenCategory: (CategoryScope) -> Void
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
-    /// 「今天没花钱」的确认。曲线里它也算有数据的一天
 
     /// 当前查看的期间：某个月，或某一整年
     @State private var period: Period = .month(Date())
@@ -241,7 +241,6 @@ struct ReviewView: View {
 
     private var incomeContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            incomeSourceCard
             structureCard(title: "收入结构",
                           fixedLabel: "稳定",
                           variableLabel: "浮动",
@@ -250,6 +249,7 @@ struct ReviewView: View {
                           fixedNames: stableIncomeNames,
                           variableNames: floatingIncomeNames,
                           suffix: "…")
+            incomeSourceCard
             surplusCard
         }
     }
@@ -368,6 +368,10 @@ struct ReviewView: View {
                                 count: row.count,
                                 baseCents: incomeTotalCents
                             )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if let category = row.category { openCategory(category) }
+                            }
                         }
                     }
                 }
@@ -523,6 +527,25 @@ struct ReviewView: View {
 
     private var incomes: [Transaction] {
         scopedTransactions.filter { $0.kind == .income }
+    }
+
+    /// 把当前期间换算成区间，和分类一起交给明细页
+    private func openCategory(_ category: Category) {
+        let start: Date
+        let end: Date
+        switch period {
+        case .month(let date):
+            let range = calendar.dateInterval(of: .month, for: date)
+            start = range?.start ?? date
+            end = range?.end ?? date
+        case .year(let year):
+            start = calendar.date(from: DateComponents(year: year, month: 1, day: 1)) ?? .now
+            end = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1)) ?? .now
+        }
+        onOpenCategory(CategoryScope(category: category,
+                                     title: period.title,
+                                     start: start,
+                                     end: end))
     }
 
     private var incomeTotalCents: Int64 {
@@ -739,6 +762,10 @@ struct ReviewView: View {
                                 count: row.count,
                                 baseCents: activeDomain?.cents ?? totalCents
                             )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if let category = row.category { openCategory(category) }
+                            }
                         }
                     }
                 }

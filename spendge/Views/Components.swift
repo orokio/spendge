@@ -149,6 +149,22 @@ struct CategoryIcon: View {
     }
 }
 
+/// 全局滑入页左上角的返回：主题色、32pt 点击区，放在标题上方。
+struct BackButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.brand)
+                .frame(width: 32, height: 32, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 /// 区块小标题：左边标题，右边一句灰色补充（日期、范围等）。
 /// 今天页「今日流水 + 日期」是它的基准样式，其他页面同构的标题都用它。
 struct SectionHeader<Trailing: View>: View {

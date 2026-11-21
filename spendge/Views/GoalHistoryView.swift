@@ -83,6 +83,11 @@ struct GoalHistoryView: View {
             }
             .scrollIndicators(.hidden)
         }
+        .overlay(alignment: .topLeading) {
+            BackButton(action: onClose)
+                .padding(.leading, PageLayout.pageInset)
+                .padding(.top, 12)
+        }
         .offset(x: max(0, dragOffset))
         .gesture(
             DragGesture(minimumDistance: 12)

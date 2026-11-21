@@ -20,6 +20,8 @@ struct RootView: View {
     @State private var editingTransaction: Transaction?
     /// 「我的目标」整页
     @State private var showGoalHistory = false
+    /// 统计页下钻的分类明细
+    @State private var categoryScope: CategoryScope?
     /// 选择目标整页
 
     var body: some View {
@@ -29,7 +31,7 @@ struct RootView: View {
                 .tabItem { Label { Text("记账").foregroundStyle(tab == .today ? Color.brand : Color.textSecondary) } icon: { brandIcon("SpongeMark", selected: tab == .today) } }
                 .tag(Tab.today)
 
-            ReviewView(onEdit: openEdit)
+            ReviewView(onEdit: openEdit, onOpenCategory: openCategoryDetail)
                 .background(AppBackground())
                 .tabItem { Label { Text("统计").foregroundStyle(tab == .review ? Color.brand : Color.textSecondary) } icon: { tabIcon("chart.bar.xaxis", selected: tab == .review) } }
                 .tag(Tab.review)
@@ -48,6 +50,13 @@ struct RootView: View {
         // 四个 tab 页里只有目标抽屉有输入框，整体不避让键盘，抽屉就不会被压矮
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .overlay {
+            if let categoryScope {
+                CategoryRecordsView(scope: categoryScope, onEdit: openEdit, onClose: closeCategoryDetail)
+                    .geometryGroup()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
+            }
+
             if showGoalHistory {
                 GoalHistoryView(onClose: closeGoalHistory)
                     .transition(.move(edge: .trailing))
@@ -129,6 +138,18 @@ struct RootView: View {
     private func closeGoalHistory() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             showGoalHistory = false
+        }
+    }
+
+    private func openCategoryDetail(_ scope: CategoryScope) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            categoryScope = scope
+        }
+    }
+
+    private func closeCategoryDetail() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            categoryScope = nil
         }
     }
 
