@@ -3,14 +3,14 @@ import SwiftUI
 /// 全站字阶：一个角色一个 token，视图里不再手写 size / weight。
 ///
 /// 规则：
-/// - 重量只用 regular 和 semibold（金额输入是唯一例外，用 bold）；
+/// - 重量用 regular 和 semibold；bold 只给金额输入与首页情绪句。
 /// - rounded 只给页面标题和数字，正文用系统默认字体；
 /// - 同一角色的字号不再各处不同。
 enum Typography {
     // MARK: 标题
 
     /// 情绪大句：比页面标题大一档，是全屏最重的那句话
-    static let hero = Font.system(size: 26, weight: .semibold, design: .rounded)
+    static let hero = Font.system(size: 28, weight: .semibold, design: .rounded)
     /// 页面标题（四个 tab 的主标题）
     static let pageTitle = Font.system(size: 24, weight: .semibold, design: .rounded)
     /// 区块标题（今日流水、钱花在哪儿、先定一个目标）

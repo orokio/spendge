@@ -180,6 +180,7 @@ struct TodayView: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(insight?.title ?? "正在看你的账本…")
                     .font(Typography.hero)
+                    .fontWeight(.bold)
                     .foregroundStyle(Color.brand)
                     .fixedSize(horizontal: false, vertical: true)
 
