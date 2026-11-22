@@ -4,7 +4,7 @@ import CoreGraphics
 ///
 /// 规则：
 /// - 页面容器只加一次 pageInset / sectionGap，组件内部不要再手填数字微调；
-/// - 上下间距只有三级：行内 8、块内 12、区块之间 32。
+/// - 上下间距只有几级：行内 8、卡片堆叠 12、块内 12、卡片内 20、区块之间 28。
 enum PageLayout {
     /// 页面左右边距
     static let pageInset: CGFloat = 20
@@ -14,6 +14,12 @@ enum PageLayout {
 
     /// 块内标题与内容：副标题↔时间轴、标题↔图例、图例↔饼图
     static let blockGap: CGFloat = 12
+
+    /// 卡片内：标题↔内容，内容↔卡片底部，两个方向用同一个值
+    static let cardTitleGap: CGFloat = 20
+
+    /// 同权重卡片连续堆叠：卡片之间统一 12，比区块间距紧
+    static let stackedCardGap: CGFloat = 12
 
     /// 行内元素：情绪文字↔副标题、同一行的标签
     static let inlineGap: CGFloat = 8

@@ -258,7 +258,7 @@ struct ReviewView: View {
 
     private var rhythmCard: some View {
         CardContainer {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
                 Text("花钱节奏")
                     .font(Typography.bodyStrong)
                     .foregroundStyle(Color.textPrimary)
@@ -282,7 +282,7 @@ struct ReviewView: View {
         let fixedColor = Color.info
 
         return CardContainer {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
                 Text(title)
                     .font(Typography.bodyStrong)
                     .foregroundStyle(Color.textPrimary)
@@ -342,7 +342,7 @@ struct ReviewView: View {
 
     private var incomeSourceCard: some View {
         CardContainer {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("钱从哪来")
                         .font(Typography.bodyStrong)
@@ -388,7 +388,7 @@ struct ReviewView: View {
             : months.reduce(0) { $0 + $1.cents } / Int64(months.count)
 
         return CardContainer {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("近 6 个月结余")
                         .font(Typography.bodyStrong)

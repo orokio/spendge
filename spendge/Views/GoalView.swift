@@ -175,7 +175,7 @@ struct GoalView: View {
         Button {
             openBudget()
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
                 HStack {
                     Text("本月预算")
                         .font(Typography.bodyStrong)
@@ -224,7 +224,6 @@ struct GoalView: View {
                     .frame(height: 8)
 
                     budgetTags(budgetCents: budget.amountCents, remaining: remaining)
-                        .padding(.top, 14)
                 } else {
                     Text("设置一个数，用来对照这个月花到哪儿了")
                         .font(Typography.body)
@@ -233,7 +232,8 @@ struct GoalView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 28)
+            .padding(.top, 20)
+            .padding(.bottom, PageLayout.cardTitleGap)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
             .contentShape(Rectangle())

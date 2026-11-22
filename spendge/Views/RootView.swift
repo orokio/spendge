@@ -20,8 +20,6 @@ struct RootView: View {
     @State private var showRecord = false
     /// 正在编辑的那一笔；非空时弹出编辑页
     @State private var editingTransaction: Transaction?
-    /// 「我的目标」整页
-    @State private var showGoalHistory = false
     /// 奖杯墙整页
     @State private var showTrophies = false
     /// 本次要庆祝的新奖杯
@@ -68,15 +66,9 @@ struct RootView: View {
             }
 
             if showTrophies {
-                AchievementView(onClose: closeTrophies, onOpenGoalHistory: openGoalHistory)
+                AchievementView(onClose: closeTrophies)
                     .transition(.move(edge: .trailing))
                     .zIndex(4)
-            }
-
-            if showGoalHistory {
-                GoalHistoryView(onClose: closeGoalHistory)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(11)
             }
 
             if !celebration.isEmpty {
@@ -193,18 +185,6 @@ struct RootView: View {
     private func closeTrophies() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             showTrophies = false
-        }
-    }
-
-    private func openGoalHistory() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            showGoalHistory = true
-        }
-    }
-
-    private func closeGoalHistory() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            showGoalHistory = false
         }
     }
 

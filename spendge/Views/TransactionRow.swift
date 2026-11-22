@@ -51,7 +51,9 @@ struct CardContainer<Content: View>: View {
 
     var body: some View {
         content
-            .padding(18)
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, PageLayout.cardTitleGap)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
             .clipShape(RoundedRectangle(cornerRadius: PageLayout.cardRadius))
