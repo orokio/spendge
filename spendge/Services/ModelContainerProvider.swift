@@ -15,6 +15,7 @@ enum ModelContainerProvider {
             DayConfirmation.self,
             Goal.self,
             GoalAchievement.self,
+            TrophyUnlock.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
 

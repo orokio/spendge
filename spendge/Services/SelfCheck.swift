@@ -125,6 +125,21 @@ enum SelfCheck {
         expect(VoiceParser.parse("今天买了一瓶香水500块").yuan == 500, "量词后面的数字不应被当金额")
         expect(VoiceParser.parse("一杯咖啡30").yuan == 30, "多个数字时取最大的")
 
+        // 6. 奖杯目录：30 枚，稀有度 16 / 8 / 6，每个系列都有内容
+        expect(TrophyCatalog.all.count == 30, "奖杯应有 30 枚")
+        expect(Set(TrophyCatalog.all.map(\.id)).count == 30, "奖杯 id 不应重复")
+        expect(TrophyCatalog.all.filter { $0.rarity == .common }.count == 16, "普通奖杯应为 16 枚")
+        expect(TrophyCatalog.all.filter { $0.rarity == .rare }.count == 8, "稀有奖杯应为 8 枚")
+        expect(TrophyCatalog.all.filter { $0.rarity == .legendary }.count == 6, "传说奖杯应为 6 枚")
+        expect(TrophySeries.allCases.allSatisfy { series in
+            TrophyCatalog.all.contains { $0.series == series }
+        }, "每个系列都应有奖杯")
+        expect(TrophyProgress(current: 2, target: 5, unit: .days).remainingText == "还差 3 天",
+               "奖杯进度文案应带单位")
+        let trophySnapshot = AchievementService(context: context).snapshot()
+        expect(trophySnapshot.states.count == 30, "快照应覆盖 30 枚奖杯")
+        expect(trophySnapshot.unlockedCount <= 30, "已解锁数不应超过总数")
+
         report(passed: passed, failures: failures)
     }
 

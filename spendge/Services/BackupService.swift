@@ -67,6 +67,7 @@ final class BackupService {
         let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>())
         let goals = try context.fetch(FetchDescriptor<Goal>())
         let achievements = try context.fetch(FetchDescriptor<GoalAchievement>())
+        let trophies = try context.fetch(FetchDescriptor<TrophyUnlock>())
 
         let file = BackupFile(
             version: BackupFile.currentVersion,
@@ -77,7 +78,8 @@ final class BackupService {
             budgets: budgets.map(BudgetDTO.init),
             dayConfirmations: confirmations.map(DayConfirmationDTO.init),
             goals: goals.map(GoalDTO.init),
-            achievements: achievements.map(GoalAchievementDTO.init)
+            achievements: achievements.map(GoalAchievementDTO.init),
+            trophies: trophies.map(TrophyUnlockDTO.init)
         )
 
         let encoder = JSONEncoder()
@@ -99,6 +101,7 @@ final class BackupService {
 
         // 清空（先删有引用的，再删被引用的）
         for item in try context.fetch(FetchDescriptor<GoalAchievement>()) { context.delete(item) }
+        for item in try context.fetch(FetchDescriptor<TrophyUnlock>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Goal>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
@@ -224,6 +227,11 @@ final class BackupService {
             ))
         }
 
+        for dto in file.trophies ?? [] {
+            guard let id = TrophyID(rawValue: dto.trophyID) else { continue }
+            context.insert(TrophyUnlock(trophyID: id, unlockedAt: dto.unlockedAt))
+        }
+
         try context.save()
         return file.transactions.count
     }
@@ -244,6 +252,8 @@ struct BackupFile: Codable {
     /// 旧备份里没有这两项，解码时允许为空
     var goals: [GoalDTO]?
     var achievements: [GoalAchievementDTO]?
+    /// 奖杯解锁：旧备份里没有
+    var trophies: [TrophyUnlockDTO]?
 }
 
 struct AccountDTO: Codable {
@@ -402,6 +412,16 @@ struct GoalAchievementDTO: Codable {
         targetValue = item.targetValue
         unitRawValue = item.unitRawValue
         createdAt = item.createdAt
+    }
+}
+
+struct TrophyUnlockDTO: Codable {
+    var trophyID: String
+    var unlockedAt: Date
+
+    init(_ item: TrophyUnlock) {
+        trophyID = item.trophyID
+        unlockedAt = item.unlockedAt
     }
 }
 

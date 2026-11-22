@@ -4,6 +4,8 @@ import SwiftData
 /// 四个页面用底部导航切换：今天 · 统计 · 目标 · 设置。
 /// 记录页与编辑页仍然挂在根上全屏呈现，右滑即可关闭。
 struct RootView: View {
+    @Environment(\.modelContext) private var context
+
     private enum Tab: Hashable {
         case today, review, goal, settings
     }
@@ -20,6 +22,12 @@ struct RootView: View {
     @State private var editingTransaction: Transaction?
     /// 「我的目标」整页
     @State private var showGoalHistory = false
+    /// 奖杯墙整页
+    @State private var showTrophies = false
+    /// 本次要庆祝的新奖杯
+    @State private var celebration: [TrophySpec] = []
+    /// 记录页还开着时先攒着，等它收起再庆祝
+    @State private var pendingCelebration: [TrophySpec] = []
     /// 统计页下钻的分类明细
     @State private var categoryScope: CategoryScope?
     /// 选择目标整页
@@ -36,7 +44,7 @@ struct RootView: View {
                 .tabItem { Label { Text("统计").foregroundStyle(tab == .review ? Color.brand : Color.textSecondary) } icon: { tabIcon("chart.bar.xaxis", selected: tab == .review) } }
                 .tag(Tab.review)
 
-            GoalView(onOpenHistory: openGoalHistory)
+            GoalView(onOpenTrophies: openTrophies)
                 .background(AppBackground())
                 .tabItem { Label { Text("目标").foregroundStyle(tab == .goal ? Color.brand : Color.textSecondary) } icon: { tabIcon("trophy", selected: tab == .goal) } }
                 .tag(Tab.goal)
@@ -47,6 +55,8 @@ struct RootView: View {
                 .tag(Tab.settings)
         }
         .tint(Color.brand)
+        .task { refreshTrophies(celebrate: false) }
+        .onChange(of: tab) { _, _ in refreshTrophies(celebrate: false) }
         // 四个 tab 页里只有目标抽屉有输入框，整体不避让键盘，抽屉就不会被压矮
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .overlay {
@@ -57,14 +67,33 @@ struct RootView: View {
                     .zIndex(1)
             }
 
+            if showTrophies {
+                AchievementView(onClose: closeTrophies, onOpenGoalHistory: openGoalHistory)
+                    .transition(.move(edge: .trailing))
+                    .zIndex(4)
+            }
+
             if showGoalHistory {
                 GoalHistoryView(onClose: closeGoalHistory)
                     .transition(.move(edge: .trailing))
                     .zIndex(11)
             }
 
+            if !celebration.isEmpty {
+                TrophyCelebrationView(trophies: celebration) {
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        celebration = []
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(13)
+            }
+
             if showRecord {
-                RecordPage(initialDate: recordDate, onClose: closeRecord, onSaved: { focusedDay = $0 })
+                RecordPage(initialDate: recordDate, onClose: closeRecord, onSaved: { date in
+                    focusedDay = date
+                    refreshTrophies(celebrate: true)
+                })
                     // 转场期间冻结内部布局，页面整体作为一个图层滑入
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
@@ -126,6 +155,44 @@ struct RootView: View {
     private func closeRecord() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             showRecord = false
+        }
+        guard !pendingCelebration.isEmpty else { return }
+        let queued = pendingCelebration
+        pendingCelebration = []
+        Task {
+            try? await Task.sleep(for: .milliseconds(380))
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                celebration = queued
+            }
+        }
+    }
+
+    /// 记下后检查奖杯：新拿到的等记录页收起再庆祝，避免压住还在输入的面板
+    private func refreshTrophies(celebrate: Bool) {
+        let newly = AchievementService(context: context).refreshUnlocks()
+        guard celebrate, !newly.isEmpty else { return }
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(520))
+            if showRecord {
+                pendingCelebration = newly
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                    celebration = newly
+                }
+            }
+        }
+    }
+
+    private func openTrophies() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            showTrophies = true
+        }
+    }
+
+    private func closeTrophies() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            showTrophies = false
         }
     }
 

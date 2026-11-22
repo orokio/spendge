@@ -4,7 +4,7 @@ import SwiftData
 /// 目标页：预算卡 + 进行中的目标 + 已暂停的目标。
 /// 新增、编辑、暂停都在半层里完成，不再跳整页管理。
 struct GoalView: View {
-    let onOpenHistory: () -> Void
+    let onOpenTrophies: () -> Void
 
     @Environment(\.modelContext) private var context
     @Query(sort: [SortDescriptor(\Goal.sortOrder), SortDescriptor(\Goal.createdAt)])
@@ -123,7 +123,7 @@ struct GoalView: View {
             Spacer(minLength: 12)
 
             Button {
-                onOpenHistory()
+                onOpenTrophies()
             } label: {
                 Image(systemName: "trophy")
                     .font(.system(size: 17, weight: .medium))
@@ -421,7 +421,7 @@ struct GoalView: View {
             return progress.current == 0 ? .perfect : .over
         }
 
-        let usage = progress.fraction
+        let usage = Double(progress.current) / Double(progress.target)
         if usage > 1 { return .over }
         if progress.current == 0 { return .perfect }
 
@@ -533,7 +533,7 @@ enum GoalStatus {
         case .perfect: return "完美保持"
         case .healthy: return "健康"
         case .warning: return "快超了"
-        case .over: return "已超标"
+        case .over: return "已超出"
         }
     }
 
@@ -590,20 +590,14 @@ private struct GoalCard: View {
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
-        .overlay {
-            if status == .over {
-                RoundedRectangle(cornerRadius: PageLayout.cardRadius)
-                    .stroke(Color.danger, lineWidth: 1.5)
-            }
-        }
         .opacity(isPaused ? 0.6 : 1)
     }
 
     private func detailText(_ progress: GoalProgress) -> String {
         // 「一次都不」型：不说还差多少，说已经保持了多久
         if progress.target == 0 {
-            if progress.current > 0 { return "这个周期买了 \(progress.current) 次" }
-            return streak > 0 ? "连续 \(streak) 个月做到" : "这个周期一次没买"
+            if progress.current > 0 { return "做了 \(progress.current) 次" }
+            return streak > 0 ? "连续 \(streak) 个月做到" : "一次没做"
         }
 
         guard progress.current <= progress.target else {

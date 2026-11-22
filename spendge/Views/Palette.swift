@@ -19,6 +19,8 @@ struct Palette {
     let info: Color
     /// 超限：只在真的越线时出现
     let danger: Color
+    /// 金色：传说级奖杯
+    let gold: Color
     /// 强调色 / 危险色上的文字与图标
     let onAccent: Color
     /// 浮层背后的遮罩
@@ -70,6 +72,7 @@ extension Palette {
         warning: Color(hex: "#D97706"),
         info: Color(hex: "#3B82F6"),
         danger: Color(hex: "#D9503F"),
+        gold: Color(hex: "#D4A017"),
         onAccent: Color(hex: "#FFFFFF"),
         scrim: Color.black.opacity(0.18),
         background: Color(.systemGroupedBackground),
@@ -107,6 +110,7 @@ extension Palette {
         warning: Color(hex: "#B7653C"),
         info: Color(hex: "#7C8FA3"),
         danger: Color(hex: "#C2544B"),
+        gold: Color(hex: "#C08A3E"),
         onAccent: Color(hex: "#FFFDFB"),
         scrim: Color.black.opacity(0.18),
         background: Color(hex: "#FBF3EA"),

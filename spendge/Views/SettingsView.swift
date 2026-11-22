@@ -229,10 +229,12 @@ struct SettingsView: View {
             let goals = try context.fetch(FetchDescriptor<Goal>())
             for goal in goals { _ = goal.categoryCodes }
             let goalAchievements = try context.fetch(FetchDescriptor<GoalAchievement>())
+            let trophyUnlocks = try context.fetch(FetchDescriptor<TrophyUnlock>())
 
             // 目标单独存一次盘：删完立刻让列表变空，视图就不会在中间态
             // 去算一个已经失效的目标的进度
             for item in goalAchievements { context.delete(item) }
+            for item in trophyUnlocks { context.delete(item) }
             for item in goals { context.delete(item) }
             try context.save()
 

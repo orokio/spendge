@@ -15,6 +15,8 @@ extension Color {
     static var info: Color { Palette.current.info }
     /// 超限
     static var danger: Color { Palette.current.danger }
+    /// 传说级奖杯
+    static var gold: Color { Palette.current.gold }
     /// 强调色上的文字 / 图标
     static var onAccent: Color { Palette.current.onAccent }
     /// 浮层遮罩
