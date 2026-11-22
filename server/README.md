@@ -17,10 +17,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
-uvicorn app.main:app --reload
+flask --app app.main run --debug --port 8010
 ```
 
-打开 http://127.0.0.1:8000/health 应返回 `{"status":"ok"}`。
+打开 http://127.0.0.1:8010/health 应返回 `{"status":"ok","env":"development"}`。
+
+默认用 8010：macOS 的 5000 常被 AirPlay 接收器占用，8000 也容易撞上别的本地服务。
 
 ## 测试
 
@@ -28,17 +30,35 @@ uvicorn app.main:app --reload
 pytest
 ```
 
+## 起停
+
+```bash
+./serve.sh start          # 后台启动，默认 8010
+./serve.sh status         # pid、端口、health
+./serve.sh stop
+./serve.sh restart
+./serve.sh start --port 8011   # 换端口
+```
+
+日志和 pid 文件都在 `server/.run/`，不入库。脚本会先检查端口占用，启动后轮询 `/health` 确认真的起来了，失败时打印日志尾部。
+
 ## 部署（腾讯云）
 
 部署形态还没定，代码先保持形态无关。已知两条路线，确定后再补具体步骤：
 
-1. **SCF 云函数（Python 运行时）**：上传代码包，依赖随包或分层安装，入口按 ASGI 适配
-2. **轻量应用服务器 / CVM**：venv 装依赖，uvicorn + systemd 常驻
+1. **SCF 云函数（Python 运行时）**：上传代码包，依赖随包或分层安装，入口按 WSGI 适配
+2. **轻量应用服务器 / CVM**：venv 装依赖，gunicorn + systemd 常驻，nginx 反向代理到本机端口
+
+nginx 在前面的三个必调项：
+
+- `proxy_read_timeout` 放大到 60–120 秒，不然模型没返回就 504
+- `client_max_body_size` 调大（截图解析会传图片，默认 1M 不够）
+- 流式返回时关掉 `proxy_buffering`，并加 `X-Accel-Buffering: no`
 
 对外只需要 HTTPS；证书、WAF / 基础防护由腾讯云侧承担。域名与备案在发布阶段处理，与代码无关。
 
 ## 约定
 
-- 所有对外接口在 `app/main.py` 挂载，分组用 `APIRouter`
+- 对外接口用 Blueprint 分组，在 `create_app()` 里注册；不要再建第二个 Flask 实例
 - 配置只在 `app/config.py` 读取环境变量，别处不直接 `os.getenv`
 - 请求日志不打印用户原文与金额，解析请求默认不留存
