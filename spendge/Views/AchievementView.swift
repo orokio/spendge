@@ -241,7 +241,7 @@ struct AchievementView: View {
         return VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
             HStack(alignment: .firstTextBaseline) {
                 Text(section.series.title)
-                    .font(Typography.sectionTitle)
+                    .font(Typography.bodyStrong)
                     .foregroundStyle(Color.textPrimary)
                 Spacer(minLength: 12)
 
@@ -305,7 +305,7 @@ struct AchievementView: View {
                     share(selected)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 430)
+                .frame(height: 400)
                 .background {
                     UnevenRoundedRectangle(topLeadingRadius: 28,
                                            topTrailingRadius: 28,
@@ -496,6 +496,13 @@ private struct TrophyDetailSheet: View {
     let state: TrophyState
     let onShare: () -> Void
 
+    /// 达成条件与解锁日期合成一行，用逗号分隔
+    private var detailText: String {
+        guard let date = state.unlockedAt else { return state.spec.condition }
+        let dateText = date.formatted(.dateTime.year().month().day().locale(Locale(identifier: "zh_CN")))
+        return state.spec.condition + "，" + dateText
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -512,27 +519,23 @@ private struct TrophyDetailSheet: View {
                             unlocked: state.isUnlocked,
                             size: 120)
 
-                Text(state.spec.name)
-                    .font(Typography.numberLarge)
-                    .foregroundStyle(Color.textPrimary)
+                HStack(alignment: .center, spacing: 8) {
+                    Text(state.spec.rarity.title)
+                        .font(Typography.label.weight(.medium))
+                        .foregroundStyle(state.spec.rarity.tint)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(state.spec.rarity.tint.opacity(0.12), in: Capsule())
 
-                Text(state.spec.rarity.title)
-                    .font(Typography.label.weight(.medium))
-                    .foregroundStyle(state.spec.rarity.tint)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(state.spec.rarity.tint.opacity(0.12), in: Capsule())
+                    Text(state.spec.name)
+                        .font(Typography.sectionTitle)
+                        .foregroundStyle(Color.textPrimary)
+                }
 
-                Text(state.spec.condition)
+                Text(detailText)
                     .font(Typography.body)
                     .foregroundStyle(Color.textSecondary)
                     .multilineTextAlignment(.center)
-
-                if let date = state.unlockedAt {
-                    Text("解锁于 " + date.formatted(.dateTime.year().month().day().locale(Locale(identifier: "zh_CN"))))
-                        .font(Typography.label)
-                        .foregroundStyle(Color.textSecondary)
-                }
             }
 
             Spacer(minLength: 0)
@@ -576,14 +579,11 @@ private struct TrophyShareCard: View {
                 Text(spec.name)
                     .font(Typography.numberLarge)
                     .foregroundStyle(Color.textPrimary)
-                Text(spec.condition)
+                Text(spec.condition + "，" + unlockedAt.formatted(.dateTime.year().month().day().locale(Locale(identifier: "zh_CN"))))
                     .font(Typography.label)
                     .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.center)
             }
-
-            Text(unlockedAt.formatted(.dateTime.year().month().day().locale(Locale(identifier: "zh_CN"))))
-                .font(Typography.caption)
-                .foregroundStyle(Color.textSecondary)
 
             Text("spendge")
                 .font(Typography.label.weight(.semibold))
