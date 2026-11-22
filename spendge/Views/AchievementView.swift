@@ -15,6 +15,8 @@ struct AchievementView: View {
     @State private var snapshot: AchievementSnapshot?
     @State private var selected: TrophyState?
     @State private var dragOffset: CGFloat = 0
+    /// 关闭详情后的短暂冷却：避免同一触摸落到卡片上再次弹出
+    @State private var suppressTaps = false
     @State private var shareFile: SharedFile?
     @State private var toast: String?
 
@@ -32,6 +34,8 @@ struct AchievementView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: PageLayout.stackedCardGap) {
+                    BackButton(action: onClose)
+
                     header
                     progressCard
                     if let nearest { heroCard(nearest) }
@@ -44,27 +48,23 @@ struct AchievementView: View {
                     }
                 }
                 .padding(.horizontal, PageLayout.pageInset)
-                .padding(.top, 56)
+                .padding(.top, 12)
                 .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
-        }
-        .overlay(alignment: .topLeading) {
-            BackButton(action: onClose)
-                .padding(.leading, PageLayout.pageInset)
-                .padding(.top, 12)
+            .allowsHitTesting(selected == nil && !suppressTaps)
         }
         .offset(x: max(0, dragOffset))
         .gesture(
             DragGesture(minimumDistance: 12)
                 .onChanged { value in
-                    guard selected == nil,
+                    guard selected == nil, !suppressTaps,
                           value.translation.width > 0,
                           abs(value.translation.width) > abs(value.translation.height) else { return }
                     dragOffset = value.translation.width
                 }
                 .onEnded { value in
-                    guard selected == nil else { return }
+                    guard selected == nil, !suppressTaps else { return }
                     if value.translation.width > 120 {
                         onClose()
                         dragOffset = 0
@@ -145,9 +145,6 @@ struct AchievementView: View {
         let got = items.filter { snapshot?.states[$0.id]?.isUnlocked == true }.count
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(rarity.tint)
-                    .frame(width: 8, height: 8)
                 Text(rarity.title)
                     .font(Typography.label)
                     .foregroundStyle(Color.textSecondary)
@@ -184,36 +181,31 @@ struct AchievementView: View {
     }
 
     private func heroCard(_ state: TrophyState) -> some View {
-        Button {
-            openDetail(state)
-        } label: {
-            HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: 14) {
                 TrophyBadge(spec: state.spec,
                             progress: state.progress,
                             unlocked: false,
                             size: 54)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("离你最近")
-                        .font(Typography.caption)
-                        .foregroundStyle(Color.textSecondary)
-                    Text(state.spec.name)
-                        .font(Typography.bodyStrong)
-                        .foregroundStyle(Color.textPrimary)
-                }
+                Text(state.spec.name)
+                    .font(Typography.bodyStrong)
+                    .foregroundStyle(Color.textPrimary)
 
                 Spacer(minLength: 8)
 
-                Text(state.progress.remainingText)
-                    .font(Typography.label)
-                    .foregroundStyle(Color.textSecondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("离你最近")
+                        .font(Typography.caption)
+                    Text("·")
+                        .font(Typography.caption)
+                    Text(state.progress.remainingText)
+                        .font(Typography.label)
+                }
+                .foregroundStyle(Color.textSecondary)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.cardRadius))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - 网格
@@ -222,6 +214,8 @@ struct AchievementView: View {
         let series: TrophySeries
         let states: [TrophyState]
         let unlockedCount: Int
+        /// 该系列下一个未解锁的达成条件，用来给方向，不暴露名字
+        let nextCondition: String?
     }
 
     private var orderedStates: [TrophyState] {
@@ -238,7 +232,8 @@ struct AchievementView: View {
         return SectionModel(
             series: series,
             states: states,
-            unlockedCount: states.filter(\.isUnlocked).count
+            unlockedCount: states.filter(\.isUnlocked).count,
+            nextCondition: states.first { !$0.isUnlocked }?.spec.condition
         )
     }
 
@@ -249,19 +244,32 @@ struct AchievementView: View {
                     .font(Typography.sectionTitle)
                     .foregroundStyle(Color.textPrimary)
                 Spacer(minLength: 12)
-                Text("\(section.unlockedCount)/\(section.states.count)")
-                    .font(Typography.caption)
-                    .foregroundStyle(Color.textSecondary)
+
+                if let condition = section.nextCondition {
+                    Text("下一档 · " + condition)
+                        .font(Typography.caption)
+                        .foregroundStyle(Color.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else {
+                    Text("已集齐")
+                        .font(Typography.caption)
+                        .foregroundStyle(Color.brand)
+                }
             }
 
             LazyVGrid(columns: gridColumns, spacing: 16) {
                 ForEach(section.states) { state in
-                    Button {
-                        openDetail(state)
-                    } label: {
+                    if state.isUnlocked {
+                        Button {
+                            openDetail(state)
+                        } label: {
+                            TrophyCell(state: state)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
                         TrophyCell(state: state)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -319,14 +327,20 @@ struct AchievementView: View {
     }
 
     private func openDetail(_ state: TrophyState) {
+        guard !suppressTaps else { return }
         withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
             selected = state
         }
     }
 
     private func closeDetail() {
+        suppressTaps = true
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             selected = nil
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            suppressTaps = false
         }
     }
 
@@ -498,7 +512,7 @@ private struct TrophyDetailSheet: View {
                             unlocked: state.isUnlocked,
                             size: 120)
 
-                Text(state.isUnlocked ? state.spec.name : (state.isInProgress ? state.spec.name : "？？？？"))
+                Text(state.spec.name)
                     .font(Typography.numberLarge)
                     .foregroundStyle(Color.textPrimary)
 
@@ -523,43 +537,19 @@ private struct TrophyDetailSheet: View {
 
             Spacer(minLength: 0)
 
-            if state.isUnlocked {
-                Button(action: onShare) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("分享这枚奖杯")
-                    }
-                    .font(Typography.bodyStrong)
-                    .foregroundStyle(Color.onAccent)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Color.brand, in: RoundedRectangle(cornerRadius: 14))
+            Button(action: onShare) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("分享这枚奖杯")
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
-            } else {
-                VStack(spacing: 8) {
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.secondary.opacity(0.12))
-                            Capsule()
-                                .fill(state.spec.rarity.tint)
-                                .frame(width: proxy.size.width * state.progress.fraction)
-                        }
-                    }
-                    .frame(height: 10)
-
-                    HStack {
-                        Text(state.progress.valueText)
-                        Spacer()
-                        Text(state.progress.remainingText)
-                    }
-                    .font(Typography.caption)
-                    .foregroundStyle(Color.textSecondary)
-                }
-                .frame(height: 48, alignment: .bottom)
-                .padding(.top, 12)
+                .font(Typography.bodyStrong)
+                .foregroundStyle(Color.onAccent)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Color.brand, in: RoundedRectangle(cornerRadius: 14))
             }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 20)

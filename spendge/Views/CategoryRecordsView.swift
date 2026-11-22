@@ -50,6 +50,8 @@ struct CategoryRecordsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
+                    BackButton(action: onClose)
+
                     header
 
                     if groups.isEmpty {
@@ -84,15 +86,10 @@ struct CategoryRecordsView: View {
                     }
                 }
                 .padding(.horizontal, PageLayout.pageInset)
-                .padding(.top, 52)
+                .padding(.top, 12)
                 .padding(.bottom, 60)
             }
             .scrollIndicators(.hidden)
-        }
-        .overlay(alignment: .topLeading) {
-            BackButton(action: onClose)
-                .padding(.leading, PageLayout.pageInset)
-                .padding(.top, 12)
         }
         .offset(x: max(0, dragOffset))
         .gesture(
