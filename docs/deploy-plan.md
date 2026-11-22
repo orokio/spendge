@@ -32,7 +32,7 @@
 | 域名 | www.orokio.com（ICP 备案进行中） |
 | 已装服务 | 无 nginx / 无 mysql / 无 redis |
 
-已占用端口（需规避）：9000（python3，公网）、9001、9003、3080、22、53、8000（python3）。
+已占用端口（需规避）：22、53、3080（node）、59087（node/CodeBuddy）。9000/9001/9003 的旧 python 服务已停止；8000/8010/8080/8443/6379 均空闲。
 
 ## 3. 目录规划
 
@@ -55,7 +55,7 @@
 | gunicorn | 127.0.0.1:8010 | 否 | 全程 |
 | Redis | 127.0.0.1:6379 | 否 | 全程 |
 
-> gunicorn 用 8010：8000 已被本机 python3 服务占用，且与本地 serve.sh 默认端口一致。
+> gunicorn 用 8010：与本地 serve.sh 默认端口一致（8000 经核实为空闲）。
 
 ## 5. 技术选型与版本
 
@@ -96,7 +96,7 @@ nginx 编译参数（关键模块）：
 - 安装依赖：build-essential libpcre2-dev zlib1g-dev libssl-dev python3-venv sqlite3 redis-server。
 - 腾讯云安全组放行 22、8080、8443（备案后加 80、443）；6379 与 8010 不对外。
 - 复核 DNS：www.orokio.com 仅指向 124.223.27.87。
-- 确认 9000 与 8000 端口进程身份，避免后续冲突。
+- 复核 8010/8080/8443/6379 在部署时仍空闲（8000/9000/9001/9003 已核实空闲）。
 
 验收：目录齐备、依赖可装、安全组已开。
 
@@ -113,8 +113,8 @@ nginx 编译参数（关键模块）：
 SQLite：
 
 - 创建 data/spendge，属主 ubuntu，目录权限 750。
-- 库文件由应用首次启动时创建（Alembic 迁移）；不要手工建表。
-- 启动后确认：`sqlite3 data/spendge/spendge.db "PRAGMA journal_mode;"` 返回 `wal`。
+- 库文件由应用首次启动时创建（Alembic 迁移）；不要手工建库/建表。
+- WAL 等 PRAGMA 由应用连接时设置（见 server-design §6）；本阶段仅准备目录，WAL 实际验证放到阶段 3 应用启动后。
 - 设置每日备份：
 
       sqlite3 data/spendge/spendge.db \
@@ -137,9 +137,10 @@ Redis：
 - `systemctl enable --now redis-server`，用 `REDISCLI_AUTH=... redis-cli ping` 验证，避免密码进 history。
 - 所有键必须带 TTL；Redis 只存限流计数与幂等键，重启丢失不影响正确性（usage 唯一键兜底）。
 
-验收：SQLite 可写入且为 WAL；Redis 返回 PONG；6379 不对公网。
+验收：SQLite 目录就绪（WAL 待阶段 3 应用建库后验证）；Redis 返回 PONG；6379 不对公网。
 
 ### 阶段 3 · Flask 应用
+- 前置：当前 server 仅 Flask + /health，SQLAlchemy/Alembic 与 accounts/usage 等表尚未实现；数据层就绪前，本阶段只能验证 /health，DB 与接口验证待实现后补做。
 - 依据 server/pyproject.toml、.env.example、serve.sh 确定依赖与启动方式。
 - 建 venv 安装依赖；按 .env.example 生成 .env（DATABASE_URL、REDIS_URL、密钥；不入库、不入 git）。
 - .env 关键项：
@@ -156,10 +157,12 @@ Redis：
 - 编写 spendge.service，加 `MemoryMax=700M`，enable。
 - 运行 server/tests 校验。
 
-验收：curl 127.0.0.1:8010/health 正常。
+验收：curl 127.0.0.1:8010/health 正常；应用建库后 `sqlite3 data/spendge/spendge.db "PRAGMA journal_mode;"` 返回 `wal`。
 
 ### 阶段 4 · nginx 反代 + HTTPS（测试端口）
 - server 块：server_name www.orokio.com；proxy_pass http://127.0.0.1:8010；透传 Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto。
+- 请求体上限：`client_max_body_size 4m;`（/v1/parse 接收 2MB 图片，nginx 默认 1m 会 413）。
+- 上游超时：`proxy_read_timeout 120s;` 与 `proxy_send_timeout 120s;`（gunicorn --timeout 90，需大于它，避免解析慢时 504）。
 - 证书放 local/nginx/conf/ssl/，先绑定 8443。
 - 监听 8080（HTTP）、8443（HTTPS）。
 - 预置限流：按 server-design §7 的起步参数配置 limit_req / limit_conn。
@@ -217,7 +220,7 @@ Redis：
 | 备案未完成 | 先用 8080/8443，80/443 后置 |
 | 源码 nginx 无系统服务 | 自写 systemd unit |
 | DNS 残留旧 IP | 执行前复核仅保留本机 |
-| 端口冲突 | 8000/9000 已被占用，已改用 8010 |
+| 端口冲突 | 部署前核实 8010/8080/8443/6379 空闲（8000/9000 等已核实空闲） |
 
 ## 11. 回滚方案
 - 单组件回退：停用对应 systemd 服务。
@@ -227,6 +230,7 @@ Redis：
 ## 12. 待办确认（执行前）
 - 依赖安装需 sudo 权限。
 - 证书文件到位路径。
-- 9000 / 8000 端口进程身份确认。
+- 部署前复核 8010/8080/8443/6379 仍空闲。
+- 应用数据层（SQLAlchemy + Alembic + 表）实现后，方可完成阶段 2/3 的 DB 验证。
 - 生成 Redis 密码并写入 .env 与 redis.conf（不入库）。
 - 当前已用的约 1G 内存归属查清。
