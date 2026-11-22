@@ -1,7 +1,7 @@
 # 服务端设计
 
 > 状态：v0.2 草案（2026-11-22）· 模型方案待定
-> 部署：腾讯云 2C2G 单机 · nginx + gunicorn + Flask + SQLite + Redis
+> 部署：见 [deploy-plan.md](deploy-plan.md)
 > 原则：客户端本地优先，服务端只做客户端做不了的事
 
 ## 1. 定位与边界
@@ -122,7 +122,7 @@ POST /v1/parse        multipart：text 或 image（二选一）+ clientRequestId
 
 ## 6. 数据模型（SQLite）
 
-单文件数据库，路径 `/var/lib/spendge/spendge.db`，WAL 模式。选它的理由只有一个：2C2G 的机器上，省下的 200–400M 常驻内存比并发写能力更值钱。
+单文件数据库，WAL 模式；路径与权限由部署决定（见 [deploy-plan.md](deploy-plan.md)）。选它的理由只有一个：2C2G 的机器上，省下的 200–400M 常驻内存比并发写能力更值钱。
 
 ```sql
 accounts            id TEXT PK, display_name TEXT, status TEXT,
@@ -175,9 +175,7 @@ PRAGMA cache_size = -8192;
 
 ### 备份
 
-- 每天 `sqlite3 <db> ".backup <目标>"` 压缩后上传 COS，保留 30 天
-- **禁止直接 `cp` 数据库文件**：写入过程中复制会拿到不一致的页
-- 每季度恢复演练一次，核对账号数与权益截止时间
+具体命令、频率与恢复演练见 [deploy-plan.md](deploy-plan.md)。设计上只约束一条：**禁止直接 `cp` 正在使用的库文件**，必须走 SQLite 的备份接口。
 
 ### 约定
 
@@ -195,10 +193,10 @@ PRAGMA cache_size = -8192;
   │
   ├─ nginx       TLS、limit_req / limit_conn、请求体上限、超时、WAF
   │
-  ├─ gunicorn    2–4 worker × 4 threads
+  ├─ gunicorn    WSGI 应用服务器
   │     │
   │     ├─ 应用层：App Attest、token 鉴权、按账号限流、幂等
-  │     ├─ Redis：滑动窗口计数、幂等键、热点缓存（内网、带密码、不暴露公网）
+  │     ├─ Redis：滑动窗口计数、幂等键、热点缓存
   │     └─ SQLite：单文件、WAL、单写者；写事务必须短
 ```
 
@@ -215,7 +213,7 @@ PRAGMA cache_size = -8192;
 - 应用：匿名 20 次/分/设备；已注册 60 次/分/账号
 - 解析：免费额度按设备计，付费按账号计，额度检查在 Redis，落库以 `usage` 唯一键兜底
 
-选型说明：SQLite 适合单机、低并发写；迁移触发条件见 §11。以后需要独立数据库服务时，目标是 MariaDB（比 MySQL 8 轻 100–150M、协议兼容），不是 MySQL 8。表不建外键约束，关系与唯一性由应用层和唯一索引保证，迁移时不碍事；连接时仍保留 `PRAGMA foreign_keys=ON`，以后补约束时行为一致。
+选型说明：SQLite 适合单机、低并发写；迁移触发条件见 [deploy-plan.md](deploy-plan.md) 的「运行与升级触发」。以后需要独立数据库服务时，目标是 MariaDB（比 MySQL 8 轻 100–150M、协议兼容），不是 MySQL 8。表不建外键约束，关系与唯一性由应用层和唯一索引保证，迁移时不碍事；连接时仍保留 `PRAGMA foreign_keys=ON`，以后补约束时行为一致。
 
 ## 8. 可观测性
 
@@ -243,65 +241,7 @@ PRAGMA cache_size = -8192;
 5. 业务事件与告警
 6. 压测与限流调参
 
-## 11. 部署形态（2C2G 单机）
-
-所有组件同机，不买托管数据库：
-
-```
-nginx → gunicorn（2 worker × 4 线程）→ Flask
-                         ├─ SQLite 文件 /var/lib/spendge/spendge.db
-                         └─ Redis（127.0.0.1:6379）
-```
-
-内存预算：
-
-| 组件 | 预计常驻 |
-|---|---|
-| 系统（Ubuntu 24.04） | 250–350M |
-| nginx | 15M |
-| gunicorn 2×4 | 180–220M |
-| SQLite | 进程内，页缓存几十 MB |
-| Redis（maxmemory 128M） | 60M |
-| 合计 | 约 0.6–0.7G |
-
-前提是已用的约 1G 能查清并释放；否则先升 4G 再上。
-
-### Redis
-
-```conf
-bind 127.0.0.1
-protected-mode yes
-requirepass <随机长密码>
-maxmemory 128mb
-maxmemory-policy volatile-lru
-save ""
-appendonly no
-```
-
-只存限流计数与幂等键，重启丢失不影响正确性（`usage` 唯一键兜底）；所有键必须带 TTL。禁用 `FLUSHALL` / `CONFIG` / `KEYS`。
-
-### gunicorn
-
-```bash
-gunicorn -w 2 --threads 4 -b 127.0.0.1:8010 \
-  --timeout 90 --max-requests 800 --max-requests-jitter 100 \
-  app.main:app
-```
-
-### 系统
-
-- `vm.swappiness=10`
-- journald `SystemMaxUse=200M`
-- gunicorn 的 systemd 单元加 `MemoryMax=700M`
-- 安全组只开 22 / 80 / 443；Redis 与 SQLite 都不对外
-
-### 监控与升级触发
-
-- 监控：内存 >85%、swap 占用 >300M、磁盘 >80%、gunicorn 5xx、解析 P95
-- 升到 4G：swap 持续占用、出现 OOM kill、部署时接口明显抖动
-- 迁到 MariaDB：需要多实例部署、写事务排队明显、需要慢查询日志或主从
-
-## 12. 未决
+## 11. 未决
 
 - 模型供应商（境内，具体待定）与金句集
 - 埋点最终选型（友盟+ / 腾讯云移动分析）

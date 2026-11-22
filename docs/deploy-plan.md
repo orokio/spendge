@@ -1,23 +1,24 @@
 # 后端部署计划（spendge server）
 
 > 状态：待执行 ｜ 最后更新：2026-11-22 ｜ 适用主机：腾讯云 Ubuntu 24.04（124.223.27.87）
+> 本文是部署的唯一依据；架构与接口见 [server-design.md](server-design.md)。
 
 ## 1. 概述
 
-为 spendge App 部署后端服务。代码位于 spendge/server（Flask），采用 nginx 反向代理 + gunicorn + MySQL 8.0 的单机架构。基础软件采用"源码/二进制包放 package、安装到 local"的自管理方式，便于版本控制与后续容器化。
+为 spendge App 部署后端服务。代码位于 spendge/server（Flask），采用 nginx 反向代理 + gunicorn + SQLite + Redis 的单机架构。基础软件采用"源码/二进制包放 package、安装到 local"的自管理方式，便于版本控制与后续容器化；SQLite、Redis 用系统包，不单独编译。
 
 ### 架构
 
-    用户浏览器
+    用户
        │ HTTP/HTTPS
        ▼
     nginx（反向代理）   测试 8080/8443 → 备案后 80/443
-       │ proxy_pass 127.0.0.1:8000
+       │ proxy_pass 127.0.0.1:8010
        ▼
-    gunicorn + Flask（2 worker）   仅 127.0.0.1:8000
+    gunicorn + Flask（2 worker × 4 线程）
        │
-       ▼
-    MySQL 8.0   仅 127.0.0.1:3306
+       ├── SQLite  /home/ubuntu/data/spendge/spendge.db（WAL）
+       └── Redis   127.0.0.1:6379（限流与幂等）
 
 ## 2. 环境基线
 
@@ -29,20 +30,21 @@
 | 磁盘 | 50G（可用约 35G） |
 | 公网 IP | 124.223.27.87 |
 | 域名 | www.orokio.com（ICP 备案进行中） |
-| 已装服务 | 无 nginx / 无 mysql |
+| 已装服务 | 无 nginx / 无 mysql / 无 redis |
 
-已占用端口（需规避）：9000（python3，公网）、9001、9003、3080、22、53。
+已占用端口（需规避）：9000（python3，公网）、9001、9003、3080、22、53、8000（python3）。
 
 ## 3. 目录规划
 
     /home/ubuntu/
     ├── spendge/          # 代码仓库（server/、docs/）
     ├── package/          # 源包 / 二进制压缩包（已建）
-    ├── local/            # 安装前缀：local/nginx、local/mysql（已建）
-    ├── data/mysql/       # MySQL 数据目录（待建）
-    ├── etc/              # nginx.conf、my.cnf、systemd unit（待建）
-    ├── logs/             # nginx、mysql、spendge 日志（待建）
-    └── backup/           # 数据库备份（已建；暂放项目备份/配置）
+    ├── local/            # 安装前缀：local/nginx（已建）
+    ├── data/spendge/     # SQLite 库文件与 WAL（待建）
+    ├── data/redis/       # Redis 工作目录（待建）
+    ├── etc/              # nginx.conf、redis 配置备份、systemd unit（待建）
+    ├── logs/             # nginx、spendge 日志（待建）
+    └── backup/           # 数据库备份（已建）
 
 ## 4. 端口规划
 
@@ -50,18 +52,21 @@
 |---|---|---|---|
 | nginx | 8080 / 8443 | 是 | 测试期 |
 | nginx | 80 / 443 | 是 | 备案后 |
-| gunicorn | 127.0.0.1:8000 | 否 | 全程 |
-| MySQL | 127.0.0.1:3306 | 否 | 全程 |
+| gunicorn | 127.0.0.1:8010 | 否 | 全程 |
+| Redis | 127.0.0.1:6379 | 否 | 全程 |
+
+> gunicorn 用 8010：8000 已被本机 python3 服务占用，且与本地 serve.sh 默认端口一致。
 
 ## 5. 技术选型与版本
 
 | 组件 | 选型 |
 |---|---|
 | nginx | 最新 stable，源码编译到 local/nginx |
-| MySQL | 8.0.x 官方二进制 tarball（glibc2.28），装到 local/mysql |
-| 应用服务器 | gunicorn 2 worker，127.0.0.1:8000 |
+| SQLite | 系统 sqlite3（apt），库文件放 data/spendge |
+| Redis | 系统 redis-server（apt，7.x），仅本机 |
+| 应用服务器 | gunicorn 2 worker × 4 线程，127.0.0.1:8010 |
 | Python | 系统 python3 + venv |
-| 进程管理 | systemd（nginx / mysqld / spendge 三个 unit） |
+| 进程管理 | systemd（nginx / redis-server / spendge 三个 unit；SQLite 无服务） |
 | HTTPS | 腾讯云免费证书（Nginx 格式） |
 
 nginx 编译参数（关键模块）：
@@ -71,14 +76,27 @@ nginx 编译参数（关键模块）：
       --with-http_realip_module --with-http_gzip_static_module \
       --with-threads
 
-## 6. 部署阶段
+## 6. 内存预算（1.9G）
+
+| 组件 | 预计常驻 |
+|---|---|
+| 系统（Ubuntu 24.04） | 250–350M |
+| nginx | 15M |
+| gunicorn 2×4 | 180–220M |
+| SQLite | 进程内，页缓存几十 MB |
+| Redis（maxmemory 128M） | 60M |
+| 合计 | 约 0.6–0.7G |
+
+剩余给 page cache 与突发；swap 只做兜底。上表成立的前提是当前已用的约 1G 能查清并释放，否则先升 4G。
+
+## 7. 部署阶段
 
 ### 阶段 0 · 准备
-- 创建 data/ etc/ logs/{nginx,mysql,spendge}。
-- 安装依赖：build-essential libpcre2-dev zlib1g-dev libssl-dev libaio1t64 python3-venv。
-- 腾讯云安全组放行 22、8080、8443（备案后加 80、443）。
+- 创建 data/spendge、data/redis、etc/、logs/{nginx,spendge}。
+- 安装依赖：build-essential libpcre2-dev zlib1g-dev libssl-dev python3-venv sqlite3 redis-server。
+- 腾讯云安全组放行 22、8080、8443（备案后加 80、443）；6379 与 8010 不对外。
 - 复核 DNS：www.orokio.com 仅指向 124.223.27.87。
-- 确认 9000 端口进程身份。
+- 确认 9000 与 8000 端口进程身份，避免后续冲突。
 
 验收：目录齐备、依赖可装、安全组已开。
 
@@ -90,32 +108,67 @@ nginx 编译参数（关键模块）：
 
 验收：nginx -t 通过；curl -I localhost:8080 返回 200。
 
-### 阶段 2 · MySQL 8.0 二进制安装
-- 下载 mysql-8.0.x-linux-glibc2.28-x86_64.tar.xz 到 package/，解压到 local/mysql。
-- etc/my.cnf：basedir、datadir=data/mysql、bind-address=127.0.0.1、innodb_buffer_pool_size=256M、utf8mb4、socket 与日志路径。
-- mysqld --initialize 初始化，妥善保存临时 root 密码。
-- 编写 mysqld.service，enable；执行安全初始化。
-- 建库 spendge（utf8mb4），建应用账号（仅 localhost、最小权限）。
+### 阶段 2 · SQLite 与 Redis 初始化
 
-验收：本地连接成功，SELECT 1 正常，应用账号可访问 spendge 库。
+SQLite：
+
+- 创建 data/spendge，属主 ubuntu，目录权限 750。
+- 库文件由应用首次启动时创建（Alembic 迁移）；不要手工建表。
+- 启动后确认：`sqlite3 data/spendge/spendge.db "PRAGMA journal_mode;"` 返回 `wal`。
+- 设置每日备份：
+
+      sqlite3 data/spendge/spendge.db \
+        ".backup backup/spendge-$(date +%F).db"
+
+- **禁止直接 cp 库文件**：写入过程中复制会得到不一致的页。
+
+Redis：
+
+- 修改 /etc/redis/redis.conf：
+
+      bind 127.0.0.1
+      protected-mode yes
+      requirepass <随机长密码>
+      maxmemory 128mb
+      maxmemory-policy volatile-lru
+      save ""
+      appendonly no
+
+- `systemctl enable --now redis-server`，用 `REDISCLI_AUTH=... redis-cli ping` 验证，避免密码进 history。
+- 所有键必须带 TTL；Redis 只存限流计数与幂等键，重启丢失不影响正确性（usage 唯一键兜底）。
+
+验收：SQLite 可写入且为 WAL；Redis 返回 PONG；6379 不对公网。
 
 ### 阶段 3 · Flask 应用
 - 依据 server/pyproject.toml、.env.example、serve.sh 确定依赖与启动方式。
-- 建 venv 安装依赖；按 .env.example 生成 .env（数据库连接、密钥等；密钥不入库、不入 git）。
-- gunicorn --workers 2 --bind 127.0.0.1:8000 启动，编写 spendge.service。
+- 建 venv 安装依赖；按 .env.example 生成 .env（DATABASE_URL、REDIS_URL、密钥；不入库、不入 git）。
+- .env 关键项：
+
+      DATABASE_URL=sqlite:////home/ubuntu/data/spendge/spendge.db
+      REDIS_URL=redis://:<密码>@127.0.0.1:6379/0
+
+- 启动：
+
+      gunicorn -w 2 --threads 4 -b 127.0.0.1:8010 \
+        --timeout 90 --max-requests 800 --max-requests-jitter 100 \
+        app.main:app
+
+- 编写 spendge.service，加 `MemoryMax=700M`，enable。
 - 运行 server/tests 校验。
 
-验收：curl 127.0.0.1:8000/health 正常。
+验收：curl 127.0.0.1:8010/health 正常。
 
 ### 阶段 4 · nginx 反代 + HTTPS（测试端口）
-- server 块：server_name www.orokio.com；proxy_pass http://127.0.0.1:8000；透传 Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto。
+- server 块：server_name www.orokio.com；proxy_pass http://127.0.0.1:8010；透传 Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto。
 - 证书放 local/nginx/conf/ssl/，先绑定 8443。
 - 监听 8080（HTTP）、8443（HTTPS）。
+- 预置限流：按 server-design §7 的起步参数配置 limit_req / limit_conn。
 
 验收：https://www.orokio.com:8443 命中应用，证书有效，真实 IP 透传。
 
 ### 阶段 5 · 全链路验证
-- 8080/8443 访问、健康检查、核心接口冒烟、MySQL 读写、日志落盘。
+- 8080/8443 访问、健康检查、核心接口冒烟、SQLite 读写、Redis PING、日志落盘。
+- 手动执行一次备份，并恢复到临时目录验证可用。
 
 ### 阶段 6 · 备案后切正式端口
 - nginx 改监听 80/443，加 80→443 跳转。
@@ -124,37 +177,56 @@ nginx 编译参数（关键模块）：
 验收：https://www.orokio.com 正常。
 
 ### 阶段 7 · 运维加固
-- logrotate 轮转日志。
-- crontab 定时 mysqldump 到 backup/。
-- 三服务 enable 开机自启。
-- 最小暴露面：3306/8000 不对外；关注内存与 OOM。
+- logrotate 轮转 nginx 与应用日志；journald SystemMaxUse=200M。
+- crontab 每日 SQLite 备份到 backup/，并上传 COS 保留 30 天。
+- nginx / redis-server / spendge 三个 unit enable 开机自启。
+- 系统：`vm.swappiness=10`；最小暴露面：6379/8010 不对外。
+- 关注内存与 OOM，配置告警。
 
-## 7. 验证清单
+## 8. 运行与升级触发
+
+监控项：
+
+- 内存 >85%、swap 占用 >300M、磁盘 >80%
+- gunicorn 5xx 比例、解析 P95 延迟
+- Redis 出现 evicted keys（volatile-lru 下不应影响业务键）
+
+触发动作：
+
+- **升到 4G**：swap 持续占用、出现 OOM kill、部署时接口明显抖动
+- **迁到 MariaDB**：需要多实例部署、写事务排队明显、需要慢查询日志或主从（不使用 MySQL 8：比 MariaDB 多吃 100–150M）
+- **Redis 故障**：非付费路径降级放行，付费与额度路径失败即拒绝
+
+## 9. 验证清单
 - [ ] nginx -t 通过，8080/8443 可访问
-- [ ] MySQL 本地连接、应用账号可用
-- [ ] gunicorn /health 正常
+- [ ] SQLite 库为 WAL 模式，可读写
+- [ ] Redis 有密码、仅本机、maxmemory 生效
+- [ ] gunicorn /health 正常（8010）
 - [ ] HTTPS 证书生效、真实 IP 透传
-- [ ] 三服务开机自启
-- [ ] 备份任务可执行
+- [ ] 三服务（nginx / redis / spendge）开机自启
+- [ ] 备份任务可执行，且恢复演练通过
 - [ ] 备案后 80/443 正常
 
-## 8. 风险与对策
+## 10. 风险与对策
 
 | 风险 | 对策 |
 |---|---|
-| 内存紧张（1.9G） | MySQL buffer pool 256M、gunicorn 2 worker、保留 1.9G swap |
+| 内存紧张（1.9G） | SQLite 省掉数据库常驻；Redis maxmemory 128M；gunicorn 2×4；保留 1.9G swap |
+| SQLite 单写者 | 写事务短、不跨模型调用；busy_timeout 5s；单机部署 |
+| SQLite 备份不一致 | 只用 `.backup` / `VACUUM INTO`，禁止 cp |
 | 备案未完成 | 先用 8080/8443，80/443 后置 |
-| Ubuntu 24.04 libaio 库名 | 安装 libaio1t64 |
 | 源码 nginx 无系统服务 | 自写 systemd unit |
 | DNS 残留旧 IP | 执行前复核仅保留本机 |
-| 端口冲突 | 已规避 9000 等，执行前再确认 |
+| 端口冲突 | 8000/9000 已被占用，已改用 8010 |
 
-## 9. 回滚方案
+## 11. 回滚方案
 - 单组件回退：停用对应 systemd 服务。
-- 源码/二进制安装：删除 local/nginx、local/mysql 即干净卸载。
-- 数据保护：变更前 mysqldump 至 backup/。
+- 源码安装：删除 local/nginx 即干净卸载；Redis 用 apt 卸载并清配置。
+- 数据保护：变更前执行 SQLite 备份；回滚时用备份覆盖库文件，WAL 旁文件一并处理。
 
-## 10. 待办确认（执行前）
+## 12. 待办确认（执行前）
 - 依赖安装需 sudo 权限。
 - 证书文件到位路径。
-- 9000 端口进程身份确认。
+- 9000 / 8000 端口进程身份确认。
+- 生成 Redis 密码并写入 .env 与 redis.conf（不入库）。
+- 当前已用的约 1G 内存归属查清。
