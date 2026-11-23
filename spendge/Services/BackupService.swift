@@ -198,15 +198,15 @@ final class BackupService {
             }
             switch kind {
             case .countLimit:
-                guard (1...InputLimits.countTargetMax).contains(goal.targetValue) else {
+                guard (0...InputLimits.countTargetMax).contains(goal.targetValue) else {
                     throw BackupValidationError.invalidValue("目标数值")
                 }
             case .categorySum:
-                guard goal.targetValue > 0 else {
+                guard goal.targetValue >= 0 else {
                     throw BackupValidationError.invalidValue("目标数值")
                 }
             case .shareCap:
-                guard (1...100).contains(goal.targetValue) else {
+                guard (0...100).contains(goal.targetValue) else {
                     throw BackupValidationError.invalidValue("目标数值")
                 }
             }
@@ -228,9 +228,8 @@ final class BackupService {
 
         var trophyIDs = Set<String>()
         for item in file.trophies ?? [] {
-            guard TrophyID(rawValue: item.trophyID) != nil else {
-                throw BackupValidationError.invalidValue("奖杯")
-            }
+            // 目录以后可能改名或删项；未知奖杯恢复时会被跳过，不阻断整份备份
+            guard TrophyID(rawValue: item.trophyID) != nil else { continue }
             guard trophyIDs.insert(item.trophyID).inserted else {
                 throw BackupValidationError.duplicate("奖杯")
             }

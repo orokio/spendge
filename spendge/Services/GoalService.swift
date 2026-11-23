@@ -110,15 +110,16 @@ final class GoalService {
 
         switch kind {
         case .countLimit:
-            guard (1...InputLimits.countTargetMax).contains(targetValue) else {
+            // 0 是合法上限：「本月奶茶 0 次」
+            guard (0...InputLimits.countTargetMax).contains(targetValue) else {
                 throw SpendgeError.invalidGoalTarget
             }
         case .categorySum:
-            guard targetValue > 0, Int64(targetValue) <= InputLimits.amountCentsMax else {
+            guard targetValue >= 0, Int64(targetValue) <= InputLimits.amountCentsMax else {
                 throw SpendgeError.invalidGoalTarget
             }
         case .shareCap:
-            guard (1...100).contains(targetValue) else {
+            guard (0...100).contains(targetValue) else {
                 throw SpendgeError.invalidGoalTarget
             }
         }
