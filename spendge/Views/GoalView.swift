@@ -237,6 +237,7 @@ struct GoalView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onboardingAnchor(.budget)
     }
 
     /// 进度条下的三个数：日均可用、实际日均、额度比

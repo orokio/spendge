@@ -5,10 +5,55 @@ import SwiftData
 /// 记录页与编辑页仍然挂在根上全屏呈现，右滑即可关闭。
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Query private var allTransactions: [Transaction]
+    @Query private var allGoals: [Goal]
+    @Query private var allBudgets: [Budget]
+    @Query private var allConfirmations: [DayConfirmation]
+    @AppStorage(PreferenceKey.onboardingHomeSeen) private var onboardingHomeSeen = false
+    @AppStorage(PreferenceKey.onboardingBudgetSeen) private var onboardingBudgetSeen = false
 
     private enum Tab: Hashable {
         case today, review, goal, settings
     }
+
+    /// 首页三步聚光灯
+    private enum HomeOnboardingStep: Int, CaseIterable {
+        case emotion, noSpend, record
+
+        var target: OnboardingTarget {
+            switch self {
+            case .emotion: return .emotion
+            case .noSpend: return .noSpend
+            case .record: return .recordFab
+            }
+        }
+
+        var step: OnboardingStep {
+            switch self {
+            case .emotion:
+                return OnboardingStep(title: "顶部这句话",
+                                      detail: "它会随着你的记录变化，不用自己写。",
+                                      indexText: "1 / 3")
+            case .noSpend:
+                return OnboardingStep(title: "今天没花钱",
+                                      detail: "真的没花钱，点一下确认，别让这天空着。",
+                                      indexText: "2 / 3")
+            case .record:
+                return OnboardingStep(title: "记一笔",
+                                      detail: "以后记一笔就从这里开始。",
+                                      indexText: "3 / 3",
+                                      circular: true)
+            }
+        }
+    }
+
+    private struct ActiveOnboardingStep {
+        let target: OnboardingTarget
+        let info: OnboardingStep
+    }
+
+    @State private var homeOnboardingStep = 0
+    @State private var onboardingAnchors: [OnboardingTarget: Anchor<CGRect>] = [:]
 
     @State private var tab: Tab = .today
     /// 每个 tab 自己的一套二级页，切走隐藏、切回还在，互不覆盖
@@ -62,6 +107,7 @@ struct RootView: View {
             resetSecondaryPages()
             refreshTrophies(celebrate: false)
         }
+        .onPreferenceChange(OnboardingAnchorKey.self) { onboardingAnchors = $0 }
         // 四个 tab 页里只有目标抽屉有输入框，整体不避让键盘，抽屉就不会被压矮
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .overlay {
@@ -75,6 +121,73 @@ struct RootView: View {
                 .zIndex(13)
             }
         }
+        .overlay {
+            GeometryReader { proxy in
+                if let step = activeOnboardingStep,
+                   let anchor = onboardingAnchors[step.target] {
+                    OnboardingSpotlight(hole: proxy[anchor],
+                                        step: step.info,
+                                        onNext: advanceOnboarding,
+                                        onSkip: skipOnboarding)
+                        .transition(.opacity)
+                }
+            }
+            .ignoresSafeArea()
+            .zIndex(14)
+        }
+    }
+
+    private var isLedgerEmpty: Bool {
+        allTransactions.isEmpty && allGoals.isEmpty && allBudgets.isEmpty && allConfirmations.isEmpty
+    }
+
+    /// 首页三步按顺序；走完后切到目标页看预算
+    private var activeOnboardingStep: ActiveOnboardingStep? {
+        if !onboardingHomeSeen, isLedgerEmpty, tab == .today {
+            let step = HomeOnboardingStep(rawValue: homeOnboardingStep) ?? .emotion
+            return ActiveOnboardingStep(target: step.target, info: step.step)
+        }
+
+        if onboardingHomeSeen, !onboardingBudgetSeen, tab == .goal {
+            return ActiveOnboardingStep(
+                target: .budget,
+                info: OnboardingStep(title: "本月预算",
+                                     detail: "点这里设一个数，也可以顺手定一个目标。",
+                                     indexText: "1 / 1")
+            )
+        }
+
+        return nil
+    }
+
+    private func advanceOnboarding() {
+        guard let step = activeOnboardingStep else { return }
+
+        if step.target == .budget {
+            withAnimation(.easeOut(duration: 0.2)) {
+                onboardingBudgetSeen = true
+            }
+            return
+        }
+
+        if homeOnboardingStep + 1 < HomeOnboardingStep.allCases.count {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                homeOnboardingStep += 1
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                onboardingHomeSeen = true
+            }
+            homeOnboardingStep = 0
+        }
+    }
+
+    private func skipOnboarding() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            onboardingHomeSeen = true
+            onboardingBudgetSeen = true
+        }
+        homeOnboardingStep = 0
     }
 
     /// 二级页：每个 tab 各自一套，互不覆盖；底部导航保留

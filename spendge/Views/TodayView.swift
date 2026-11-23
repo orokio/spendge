@@ -200,6 +200,7 @@ struct TodayView: View {
                         .lineLimit(1)
                 }
             }
+            .onboardingAnchor(.emotion)
         }
         .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
     }
@@ -374,7 +375,7 @@ struct TodayView: View {
             }
 
             if group.transactions.isEmpty {
-                noSpendCard(group.day)
+                noSpendCard(group.day, anchored: group.day == dayGroups.first?.day)
             } else {
                 TransactionCard(
                     transactions: group.transactions,
@@ -400,7 +401,7 @@ struct TodayView: View {
 
     /// 没有支出的一天：已确认的显示勾，今天还没记录的给一个「没花钱」入口
     /// 没有支出的一天：已确认的留一个安静的勾，今天还没记录的给一个小按钮
-    private func noSpendCard(_ day: Date) -> some View {
+    private func noSpendCard(_ day: Date, anchored: Bool = false) -> some View {
         let confirmed = confirmations.contains { calendar.isDate($0.day, inSameDayAs: day) }
         let today = calendar.isDateInToday(day)
 
@@ -454,6 +455,7 @@ struct TodayView: View {
             // 两种状态用同一个高度，卡片不会忽高忽低
             .frame(height: 26)
         }
+        .onboardingAnchor(.noSpend, isActive: anchored)
     }
 
     // MARK: - FAB
@@ -470,6 +472,7 @@ struct TodayView: View {
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
         }
         .buttonStyle(.plain)
+        .onboardingAnchor(.recordFab)
         .padding(.trailing, 22)
         .padding(.bottom, 20)
     }
