@@ -33,6 +33,7 @@ struct SettingsView: View {
 
     @State private var sharedFile: SharedFile?
     @State private var toast: String?
+    @State private var errorMessage: String?
     @State private var showImporter = false
     @State private var pendingRestore: Data?
     @State private var notice: Notice?
@@ -76,6 +77,7 @@ struct SettingsView: View {
         }
         .contentShape(Rectangle())
         .toast($toast)
+        .errorToast($errorMessage)
         .overlay {
             ZStack {
                 if showDebugPanel {
@@ -192,7 +194,7 @@ struct SettingsView: View {
             try text.data(using: .utf8)?.write(to: url)
             sharedFile = SharedFile(url: url)
         } catch {
-            notice = Notice(title: "导出失败", message: "\(error)")
+            errorMessage = ErrorText.message(for: error)
         }
     }
 
@@ -204,7 +206,7 @@ struct SettingsView: View {
             try data.write(to: url)
             sharedFile = SharedFile(url: url)
         } catch {
-            notice = Notice(title: "备份失败", message: "\(error)")
+            errorMessage = ErrorText.message(for: error)
         }
     }
 
@@ -213,13 +215,26 @@ struct SettingsView: View {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else {
-            notice = Notice(title: "读取失败", message: "这个文件读不出来")
+            errorMessage = "这个文件读不出来"
             return
         }
+        guard data.count <= InputLimits.backupFileBytes else {
+            errorMessage = "备份文件超过 20MB，不像是这个 App 导出的备份"
+            return
+        }
+
+        let file: BackupFile
+        do {
+            file = try BackupService(context: context).validateBackupData(data)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+
         pendingRestore = data
         notice = Notice(
             title: "从备份恢复？",
-            message: "会用备份里的内容替换当前所有记录、预算、目标和「没花钱」确认。建议先导出一份当前备份。",
+            message: "将恢复 \(file.transactions.count) 笔记录、\(file.budgets.count) 条预算、\(file.goals?.count ?? 0) 个目标，并替换当前全部数据。建议先导出一份当前备份。",
             isConfirm: true,
             confirmTitle: "覆盖恢复",
             onConfirm: {
@@ -235,7 +250,7 @@ struct SettingsView: View {
             Toast.show("已恢复 \(count) 笔记录", into: $toast)
         } catch {
             pendingRestore = nil
-            notice = Notice(title: "恢复失败", message: "\(error)")
+            errorMessage = ErrorText.message(for: error)
         }
     }
 
@@ -262,7 +277,7 @@ struct SettingsView: View {
             try context.save()
             Toast.show("已清空全部记录", into: $toast)
         } catch {
-            notice = Notice(title: "清除失败", message: "\(error)")
+            errorMessage = ErrorText.message(for: error)
         }
     }
 

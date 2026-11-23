@@ -237,6 +237,11 @@ struct RecordPage: View {
             // 只在结束时解析会让备注和金额对不上。
             applyVoice(text)
         }
+        .onChange(of: note) { _, newValue in
+            guard newValue.count > InputLimits.noteLength else { return }
+            note = String(newValue.prefix(InputLimits.noteLength))
+            saveError = "备注最多 \(InputLimits.noteLength) 个字"
+        }
         .onChange(of: noteEditing) { _, editing in
             // 备注写完收起键盘时，按「包含范围」帮他选分类
             if !editing { autoCategorizeFromNote() }

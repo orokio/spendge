@@ -65,6 +65,7 @@ final class GoalService {
         targetValue: Int
     ) throws -> Goal {
         try FaultInjection.current.check(.goalWrite)
+        try validate(title: title, kind: kind, targetValue: targetValue)
         let existing = try goals()
         let goal = Goal(
             title: title,
@@ -83,6 +84,7 @@ final class GoalService {
     func update(_ goal: Goal, title: String, kind: GoalKind,
                 categoryCodes: [String], period: GoalPeriod, targetValue: Int) throws {
         try FaultInjection.current.check(.goalWrite)
+        try validate(title: title, kind: kind, targetValue: targetValue)
         goal.title = title
         goal.kindRawValue = kind.rawValue
         goal.categoryCodes = categoryCodes
@@ -99,6 +101,27 @@ final class GoalService {
         try materializeAchievements(for: goal)
         context.delete(goal)
         try context.save()
+    }
+
+    private func validate(title: String, kind: GoalKind, targetValue: Int) throws {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw SpendgeError.invalidGoalTarget }
+        guard trimmed.count <= InputLimits.goalTitleLength else { throw SpendgeError.goalTitleTooLong }
+
+        switch kind {
+        case .countLimit:
+            guard (1...InputLimits.countTargetMax).contains(targetValue) else {
+                throw SpendgeError.invalidGoalTarget
+            }
+        case .categorySum:
+            guard targetValue > 0, Int64(targetValue) <= InputLimits.amountCentsMax else {
+                throw SpendgeError.invalidGoalTarget
+            }
+        case .shareCap:
+            guard (1...100).contains(targetValue) else {
+                throw SpendgeError.invalidGoalTarget
+            }
+        }
     }
 
     // MARK: - 达成记录

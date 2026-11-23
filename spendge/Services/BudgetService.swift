@@ -57,6 +57,7 @@ final class BudgetService {
     ) throws -> Budget {
         try FaultInjection.current.check(.budgetWrite)
         guard amountCents >= 0 else { throw SpendgeError.invalidAmount }
+        guard amountCents <= InputLimits.amountCentsMax else { throw SpendgeError.amountTooLarge }
         if let existing = try budget(category: category, year: year, month: month) {
             existing.amountCents = amountCents
             existing.isRecurring = isRecurring

@@ -7,6 +7,30 @@ enum BackupScope {
     case currentMonth
 }
 
+/// 备份校验失败：文案直接给用户看，不暴露解码细节。
+enum BackupValidationError: LocalizedError {
+    case unsupportedVersion
+    case missingCoreData
+    case duplicate(String)
+    case unknownReference(String)
+    case invalidValue(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedVersion:
+            return "备份文件版本不受支持"
+        case .missingCoreData:
+            return "备份文件缺少账户或分类"
+        case .duplicate(let label):
+            return "备份文件里有重复的\(label)"
+        case .unknownReference(let label):
+            return "备份文件引用了不存在的\(label)"
+        case .invalidValue(let label):
+            return "备份文件里的\(label)不合法"
+        }
+    }
+}
+
 /// 导出与恢复：CSV 给人看，JSON 给机器搬。
 @MainActor
 final class BackupService {
@@ -94,10 +118,136 @@ final class BackupService {
         return try decoder.decode(BackupFile.self, from: data)
     }
 
+    func validateBackupData(_ data: Data) throws -> BackupFile {
+        let file = try decodeBackup(data)
+        try validate(file)
+        return file
+    }
+
+    /// 只校验，不落库：所有检查通过后才允许清空
+    func validate(_ file: BackupFile) throws {
+        guard file.version == BackupFile.currentVersion else {
+            throw BackupValidationError.unsupportedVersion
+        }
+        guard !file.accounts.isEmpty, !file.categories.isEmpty else {
+            throw BackupValidationError.missingCoreData
+        }
+
+        try ensureUnique(file.accounts.map(\.id), "账户")
+        try ensureUnique(file.categories.map(\.id), "分类")
+        try ensureUnique(file.transactions.map(\.id), "账单")
+        try ensureUnique(file.budgets.map(\.id), "预算")
+        try ensureUnique((file.goals ?? []).map(\.id), "目标")
+        try ensureUnique((file.achievements ?? []).map(\.id), "达成记录")
+
+        for account in file.accounts {
+            guard AccountKind(rawValue: account.kindRawValue) != nil,
+                  !account.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw BackupValidationError.invalidValue("账户")
+            }
+        }
+
+        for category in file.categories {
+            guard TransactionKind(rawValue: category.kindRawValue) != nil,
+                  CategoryDomain(rawValue: category.domainRawValue) != nil,
+                  !category.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw BackupValidationError.invalidValue("分类")
+            }
+        }
+
+        let accountIDs = Set(file.accounts.map(\.id))
+        let categoryIDs = Set(file.categories.map(\.id))
+        let today = calendar.startOfDay(for: .now)
+
+        for txn in file.transactions {
+            guard txn.amountCents > 0 else {
+                throw BackupValidationError.invalidValue("账单金额")
+            }
+            guard TransactionKind(rawValue: txn.kindRawValue) != nil else {
+                throw BackupValidationError.invalidValue("账单类型")
+            }
+            guard accountIDs.contains(txn.accountID) else {
+                throw BackupValidationError.unknownReference("账户")
+            }
+            if let categoryID = txn.categoryID, !categoryIDs.contains(categoryID) {
+                throw BackupValidationError.unknownReference("分类")
+            }
+            guard calendar.startOfDay(for: txn.date) <= today else {
+                throw BackupValidationError.invalidValue("账单日期")
+            }
+        }
+
+        for budget in file.budgets {
+            guard budget.amountCents >= 0,
+                  (2000...2100).contains(budget.year), (1...12).contains(budget.month) else {
+                throw BackupValidationError.invalidValue("预算")
+            }
+            if let categoryID = budget.categoryID, !categoryIDs.contains(categoryID) {
+                throw BackupValidationError.unknownReference("分类")
+            }
+        }
+
+        for goal in file.goals ?? [] {
+            let title = goal.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else {
+                throw BackupValidationError.invalidValue("目标名称")
+            }
+            guard GoalPeriod(rawValue: goal.periodRawValue) != nil,
+                  let kind = GoalKind(rawValue: goal.kindRawValue) else {
+                throw BackupValidationError.invalidValue("目标类型")
+            }
+            switch kind {
+            case .countLimit:
+                guard (1...InputLimits.countTargetMax).contains(goal.targetValue) else {
+                    throw BackupValidationError.invalidValue("目标数值")
+                }
+            case .categorySum:
+                guard goal.targetValue > 0 else {
+                    throw BackupValidationError.invalidValue("目标数值")
+                }
+            case .shareCap:
+                guard (1...100).contains(goal.targetValue) else {
+                    throw BackupValidationError.invalidValue("目标数值")
+                }
+            }
+        }
+
+        for item in file.achievements ?? [] {
+            guard item.targetValue > 0, item.currentValue >= 0,
+                  GoalPeriod(rawValue: item.periodRawValue) != nil else {
+                throw BackupValidationError.invalidValue("达成记录")
+            }
+        }
+
+        var confirmedDays = Set<Date>()
+        for item in file.dayConfirmations {
+            guard confirmedDays.insert(calendar.startOfDay(for: item.day)).inserted else {
+                throw BackupValidationError.duplicate("没花钱确认")
+            }
+        }
+
+        var trophyIDs = Set<String>()
+        for item in file.trophies ?? [] {
+            guard TrophyID(rawValue: item.trophyID) != nil else {
+                throw BackupValidationError.invalidValue("奖杯")
+            }
+            guard trophyIDs.insert(item.trophyID).inserted else {
+                throw BackupValidationError.duplicate("奖杯")
+            }
+        }
+    }
+
+    private func ensureUnique<T: Hashable>(_ values: [T], _ label: String) throws {
+        guard Set(values).count == values.count else {
+            throw BackupValidationError.duplicate(label)
+        }
+    }
+
     /// 覆盖恢复：先清空，再按备份重建；返回恢复的账单数
     @discardableResult
     func restore(from data: Data) throws -> Int {
         let file = try decodeBackup(data)
+        try validate(file)
 
         // 清空（先删有引用的，再删被引用的）
         for item in try context.fetch(FetchDescriptor<GoalAchievement>()) { context.delete(item) }

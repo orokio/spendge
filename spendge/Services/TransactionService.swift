@@ -67,7 +67,7 @@ final class TransactionService {
         account: Account
     ) throws -> Transaction {
         try FaultInjection.current.check(.transactionWrite)
-        guard amountCents > 0 else { throw SpendgeError.invalidAmount }
+        try validate(amountCents: amountCents, date: date, note: note)
         let transaction = Transaction(
             amountCents: amountCents,
             kind: kind,
@@ -93,8 +93,8 @@ final class TransactionService {
         account: Account? = nil
     ) throws {
         try FaultInjection.current.check(.transactionWrite)
+        try validate(amountCents: amountCents, date: date, note: note)
         if let amountCents {
-            guard amountCents > 0 else { throw SpendgeError.invalidAmount }
             transaction.amountCents = amountCents
         }
         if let kind { transaction.kind = kind }
@@ -104,6 +104,22 @@ final class TransactionService {
         if let account { transaction.account = account }
         transaction.updatedAt = .now
         try context.save()
+    }
+
+    /// 只校验传入的字段；nil 表示这次不改
+    private func validate(amountCents: Int64?, date: Date?, note: String?) throws {
+        if let amountCents {
+            guard amountCents > 0 else { throw SpendgeError.invalidAmount }
+            guard amountCents <= InputLimits.amountCentsMax else { throw SpendgeError.amountTooLarge }
+        }
+        if let date {
+            guard calendar.startOfDay(for: date) <= calendar.startOfDay(for: .now) else {
+                throw SpendgeError.futureDate
+            }
+        }
+        if let note, note.count > InputLimits.noteLength {
+            throw SpendgeError.noteTooLong
+        }
     }
 
     /// 删一笔。

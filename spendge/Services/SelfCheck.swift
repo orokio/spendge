@@ -55,6 +55,7 @@ enum SelfCheck {
             let txnCount = ((try? transactionService.transactions(from: nil, to: nil)) ?? []).count
             expect(decoded.transactions.count == txnCount, "备份应包含全部账单")
             expect(decoded.categories.count > 0, "备份应包含分类")
+            expect((try? backupService.validate(decoded)) != nil, "导出的备份应通过校验")
         }
 
         // 3a2. 目标进度：方向、剩余、区间
