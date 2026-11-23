@@ -36,6 +36,7 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var pendingRestore: Data?
     @State private var notice: Notice?
+    @State private var showDebugPanel = false
 
     var body: some View {
         ZStack {
@@ -63,6 +64,8 @@ struct SettingsView: View {
                     Item(icon: "info.circle", title: "关于", detail: "0.1"),
                 ])
 
+                DebugSettingsEntry(isPresented: $showDebugPanel)
+
             }
             .padding(.horizontal, PageLayout.pageInset)
             .padding(.bottom, 110)
@@ -73,6 +76,15 @@ struct SettingsView: View {
         }
         .contentShape(Rectangle())
         .toast($toast)
+        .overlay {
+            ZStack {
+                if showDebugPanel {
+                    DebugPanelView(onClose: closeDebugPanel)
+                        .transition(.move(edge: .trailing))
+                }
+            }
+            .animation(.spring(response: 0.34, dampingFraction: 0.9), value: showDebugPanel)
+        }
         .sheet(item: $sharedFile) { file in
             ShareSheet(url: file.url) { completed in
                 sharedFile = nil
@@ -100,6 +112,12 @@ struct SettingsView: View {
                 message: Text(notice.message),
                 dismissButton: .default(Text("好"))
             )
+        }
+    }
+
+    private func closeDebugPanel() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            showDebugPanel = false
         }
     }
 

@@ -11,39 +11,43 @@ struct RootView: View {
     }
 
     @State private var tab: Tab = .today
+    /// 每个 tab 自己的一套二级页，切走隐藏、切回还在，互不覆盖
+    private struct TabPages {
+        var showRecord = false
+        var recordDate = Date()
+        var editing: Transaction?
+        var categoryScope: CategoryScope?
+        var showTrophies = false
+    }
+
     /// 首页要聚焦的日期：启动/回前台为今天，记完一笔为那笔的日期
     @State private var focusedDay: Date?
-    /// 记一笔时带过去的日期
-    @State private var recordDate = Date()
-
-    /// 记录页挂在根上全屏呈现，不跟着页面切换走
-    @State private var showRecord = false
-    /// 正在编辑的那一笔；非空时弹出编辑页
-    @State private var editingTransaction: Transaction?
-    /// 奖杯墙整页
-    @State private var showTrophies = false
+    @State private var todayPages = TabPages()
+    @State private var reviewPages = TabPages()
+    @State private var goalPages = TabPages()
     /// 本次要庆祝的新奖杯
     @State private var celebration: [TrophySpec] = []
     /// 记录页还开着时先攒着，等它收起再庆祝
     @State private var pendingCelebration: [TrophySpec] = []
-    /// 统计页下钻的分类明细
-    @State private var categoryScope: CategoryScope?
     /// 选择目标整页
 
     var body: some View {
         TabView(selection: $tab) {
             TodayView(onOpenRecord: openRecord(at:), onEdit: openEdit, focus: focusedDay)
                 .background(AppBackground())
+                .overlay { secondaryPages($todayPages) }
                 .tabItem { Label { Text("记账").foregroundStyle(tab == .today ? Color.brand : Color.textSecondary) } icon: { brandIcon("SpongeMark", selected: tab == .today) } }
                 .tag(Tab.today)
 
             ReviewView(onEdit: openEdit, onOpenCategory: openCategoryDetail)
                 .background(AppBackground())
+                .overlay { secondaryPages($reviewPages) }
                 .tabItem { Label { Text("统计").foregroundStyle(tab == .review ? Color.brand : Color.textSecondary) } icon: { tabIcon("chart.bar.xaxis", selected: tab == .review) } }
                 .tag(Tab.review)
 
             GoalView(onOpenTrophies: openTrophies)
                 .background(AppBackground())
+                .overlay { secondaryPages($goalPages) }
                 .tabItem { Label { Text("目标").foregroundStyle(tab == .goal ? Color.brand : Color.textSecondary) } icon: { tabIcon("trophy", selected: tab == .goal) } }
                 .tag(Tab.goal)
 
@@ -54,23 +58,13 @@ struct RootView: View {
         }
         .tint(Color.brand)
         .task { refreshTrophies(celebrate: false) }
-        .onChange(of: tab) { _, _ in refreshTrophies(celebrate: false) }
+        .onChange(of: tab) { _, _ in
+            resetSecondaryPages()
+            refreshTrophies(celebrate: false)
+        }
         // 四个 tab 页里只有目标抽屉有输入框，整体不避让键盘，抽屉就不会被压矮
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .overlay {
-            if let categoryScope {
-                CategoryRecordsView(scope: categoryScope, onEdit: openEdit, onClose: closeCategoryDetail)
-                    .geometryGroup()
-                    .transition(.move(edge: .trailing))
-                    .zIndex(1)
-            }
-
-            if showTrophies {
-                AchievementView(onClose: closeTrophies)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(4)
-            }
-
             if !celebration.isEmpty {
                 TrophyCelebrationView(trophies: celebration) {
                     withAnimation(.easeOut(duration: 0.22)) {
@@ -80,20 +74,40 @@ struct RootView: View {
                 .transition(.opacity)
                 .zIndex(13)
             }
+        }
+    }
 
-            if showRecord {
-                RecordPage(initialDate: recordDate, onClose: closeRecord, onSaved: { date in
-                    focusedDay = date
-                    refreshTrophies(celebrate: true)
-                })
-                    // 转场期间冻结内部布局，页面整体作为一个图层滑入
+    /// 二级页：每个 tab 各自一套，互不覆盖；底部导航保留
+    @ViewBuilder
+    private func secondaryPages(_ pages: Binding<TabPages>) -> some View {
+        ZStack {
+            if let scope = pages.wrappedValue.categoryScope {
+                CategoryRecordsView(scope: scope, onEdit: openEdit, onClose: { closeCategoryDetail(in: pages) })
+                    .geometryGroup()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
+            }
+
+            if pages.wrappedValue.showTrophies {
+                AchievementView(onClose: { closeTrophies(in: pages) })
+                    .transition(.move(edge: .trailing))
+                    .zIndex(4)
+            }
+
+            if pages.wrappedValue.showRecord {
+                RecordPage(initialDate: pages.wrappedValue.recordDate,
+                           onClose: { closeRecord(in: pages) },
+                           onSaved: { date in
+                               focusedDay = date
+                               refreshTrophies(celebrate: true)
+                           })
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(2)
             }
 
-            if let editingTransaction {
-                RecordPage(editing: editingTransaction, onClose: closeEdit, onSaved: { _ in })
+            if let transaction = pages.wrappedValue.editing {
+                RecordPage(editing: transaction, onClose: { closeEdit(in: pages) }, onSaved: { _ in })
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(3)
@@ -137,16 +151,35 @@ struct RootView: View {
         return Image(uiImage: rendered.withRenderingMode(.alwaysOriginal))
     }
 
-    private func openRecord(at date: Date) {
-        recordDate = date
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            showRecord = true
+    private func pages(for target: Tab) -> Binding<TabPages> {
+        switch target {
+        case .today: return $todayPages
+        case .review: return $reviewPages
+        case .goal: return $goalPages
+        case .settings: return .constant(TabPages())
         }
     }
 
-    private func closeRecord() {
+    private var isRecordOpen: Bool { todayPages.showRecord || reviewPages.showRecord }
+
+    /// 切 tab 一律回到根页：不保留任何二级页，也不排队庆祝
+    private func resetSecondaryPages() {
+        todayPages = TabPages()
+        reviewPages = TabPages()
+        goalPages = TabPages()
+        pendingCelebration = []
+    }
+
+    private func openRecord(at date: Date) {
+        todayPages.recordDate = date
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            todayPages.showRecord = true
+        }
+    }
+
+    private func closeRecord(in pages: Binding<TabPages>) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            showRecord = false
+            pages.wrappedValue.showRecord = false
         }
         guard !pendingCelebration.isEmpty else { return }
         let queued = pendingCelebration
@@ -166,7 +199,7 @@ struct RootView: View {
 
         Task {
             try? await Task.sleep(for: .milliseconds(520))
-            if showRecord {
+            if isRecordOpen {
                 pendingCelebration = newly
             } else {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
@@ -178,37 +211,39 @@ struct RootView: View {
 
     private func openTrophies() {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            showTrophies = true
+            goalPages.showTrophies = true
         }
     }
 
-    private func closeTrophies() {
+    private func closeTrophies(in pages: Binding<TabPages>) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            showTrophies = false
+            pages.wrappedValue.showTrophies = false
         }
     }
 
     private func openCategoryDetail(_ scope: CategoryScope) {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            categoryScope = scope
+            reviewPages.categoryScope = scope
         }
     }
 
-    private func closeCategoryDetail() {
+    private func closeCategoryDetail(in pages: Binding<TabPages>) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            categoryScope = nil
+            pages.wrappedValue.categoryScope = nil
         }
     }
 
     private func openEdit(_ transaction: Transaction) {
+        let target = pages(for: tab)
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            editingTransaction = transaction
+            target.wrappedValue.editing = transaction
         }
     }
 
-    private func closeEdit() {
+    private func closeEdit(in pages: Binding<TabPages>) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            editingTransaction = nil
+            pages.wrappedValue.editing = nil
         }
     }
 }
+

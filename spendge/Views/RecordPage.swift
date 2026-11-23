@@ -27,7 +27,6 @@ struct RecordPage: View {
     @State private var note = ""
     @State private var voiceHint: String?
     @StateObject private var transcriber = SpeechTranscriber()
-    @State private var dragOffset: CGFloat = 0
     /// 键盘高度：自己算，不用系统安全区（系统在收起时偶尔不归还高度）
     @State private var keyboardInset: CGFloat = 0
     @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
@@ -35,6 +34,7 @@ struct RecordPage: View {
     /// 用户手动点过分类：之后不再用备注自动改他的选择
     @State private var categoryPicked = false
     @State private var toast: String?
+    @State private var saveError: String?
 
     private let calendar = Calendar.current
 
@@ -152,62 +152,64 @@ struct RecordPage: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Text(editing == nil ? "记一笔" : "编辑")
-                .font(Typography.sectionTitle)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 56)
+        SecondaryPage(onClose: onClose,
+                      scrollable: false,
+                      backgroundColor: Color.surfaceElevated,
+                      backgroundTap: { noteEditing = false }) {
+            VStack(spacing: 0) {
+                Text(editing == nil ? "记一笔" : "编辑")
+                    .font(Typography.sectionTitle)
+                    .frame(maxWidth: .infinity)
 
-            HStack(spacing: 0) {
-                kindSegment(.expense, title: "支出")
-                kindSegment(.income, title: "收入")
-            }
-            .padding(3)
-            .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal, PageLayout.pageInset)
-            .padding(.top, 12)
-
-            // 剩余空间全交给两列，底部自然贴屏幕
-            GeometryReader { inner in
-                HStack(alignment: .top, spacing: 16) {
-                    tagRail
-                        .padding(.top, 24)
-                        .frame(height: inner.size.height)
-
-                    VStack(spacing: 12) {
-                        Text(dateLabel)
-                            .font(Typography.label)
-                            .foregroundStyle(Color.brand)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 24)
-
-                        amountView
-                        // 输入备注时收起数字键盘，把空间让给系统键盘和备注框
-                        if !noteEditing {
-                            keypad
-                        }
-                        // 固定占位：提示出现时不会把下面的备注顶动
-                        Text(voiceHint ?? " ")
-                            .font(Typography.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .frame(height: 16)
-                        noteField
-                        HStack(alignment: .bottom, spacing: 10) {
-                            saveButton
-                            micButton
-                        }
-                    }
-                    .frame(height: inner.size.height, alignment: .top)
+                HStack(spacing: 0) {
+                    kindSegment(.expense, title: "支出")
+                    kindSegment(.income, title: "收入")
                 }
+                .padding(3)
+                .background(Color.surface, in: RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, PageLayout.pageInset)
+                .padding(.top, 12)
+
+                // 剩余空间全交给两列，底部自然贴屏幕
+                GeometryReader { inner in
+                    HStack(alignment: .top, spacing: 16) {
+                        tagRail
+                            .padding(.top, 24)
+                            .frame(height: inner.size.height)
+
+                        VStack(spacing: 12) {
+                            Text(dateLabel)
+                                .font(Typography.label)
+                                .foregroundStyle(Color.brand)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 24)
+
+                            amountView
+                            // 输入备注时收起数字键盘，把空间让给系统键盘和备注框
+                            if !noteEditing {
+                                keypad
+                            }
+                            // 固定占位：提示出现时不会把下面的备注顶动
+                            Text(voiceHint ?? " ")
+                                .font(Typography.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(height: 16)
+                            noteField
+                            HStack(alignment: .bottom, spacing: 10) {
+                                saveButton
+                                micButton
+                            }
+                        }
+                        .frame(height: inner.size.height, alignment: .top)
+                    }
+                    .padding(.horizontal, PageLayout.pageInset)
+                }
+                .padding(.top, 12)
             }
-            .padding(.top, 12)
+            .padding(.bottom, 26 + keyboardInset)
         }
-        // 与首页 ＋ 号距安全区底部的距离一致
-        .padding(.bottom, 26 + keyboardInset)
-        // 不让系统按键盘收缩布局：否则键盘收起后高度可能不归还，内容会挤在一起
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
@@ -221,34 +223,9 @@ struct RecordPage: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             withAnimation(.easeOut(duration: 0.22)) { keyboardInset = 0 }
         }
-        .background(
-            Color.surfaceElevated
-                .ignoresSafeArea()
-                .onTapGesture { noteEditing = false }
-        )
-        // 返回放在标题上方的留白里，不参与排版，内容不会下移
-        .overlay(alignment: .topLeading) {
-            BackButton(action: onClose)
-                .padding(.leading, PageLayout.pageInset)
-                .padding(.top, 12)
-        }
-        // 顶部浮出，像一条系统通知；与「我的」页共用同一套样式
         .toast($toast)
-        .offset(x: max(0, dragOffset))
-        .gesture(
-            DragGesture(minimumDistance: 30)
-                .onChanged { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    dragOffset = max(0, value.translation.width)
-                }
-                .onEnded { value in
-                    if value.translation.width > 90 {
-                        onClose()
-                    } else {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { dragOffset = 0 }
-                    }
-                }
-        )
+        .errorToast($saveError)
+        .onDisappear { transcriber.stop() }
         .task {
             bootstrap()
             transcriber.onFinish = { text in
@@ -571,30 +548,40 @@ struct RecordPage: View {
 
         // 编辑：改完就返回，不做连续记账
         if let editing {
-            try? TransactionService(context: context).update(
-                editing,
-                amountCents: amountCents,
-                kind: kind,
-                date: date,
-                note: trimmed,
-                category: category,
-                account: account
-            )
+            do {
+                try TransactionService(context: context).update(
+                    editing,
+                    amountCents: amountCents,
+                    kind: kind,
+                    date: date,
+                    note: trimmed,
+                    category: category,
+                    account: account
+                )
+            } catch {
+                saveError = ErrorText.message(for: error)
+                return
+            }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onSaved?(date)
             onClose()
             return
         }
 
-        _ = try? TransactionService(context: context).add(
-            amountCents: amountCents,
-            kind: kind,
-            date: date,
-            note: trimmed.isEmpty ? nil : trimmed,
-            source: .manual,
-            category: category,
-            account: account
-        )
+        do {
+            _ = try TransactionService(context: context).add(
+                amountCents: amountCents,
+                kind: kind,
+                date: date,
+                note: trimmed.isEmpty ? nil : trimmed,
+                source: .manual,
+                category: category,
+                account: account
+            )
+        } catch {
+            saveError = ErrorText.message(for: error)
+            return
+        }
 
         onSaved?(date)
 

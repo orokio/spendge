@@ -14,7 +14,7 @@
 | `PageLayout` | 间距、圆角、页面边距 |
 | `Typography` | 字阶角色 |
 | `Palette` + `Color` 扩展 | 颜色语义 token |
-| `Components` | `CardContainer` / `BackButton` / `TopDrawer` |
+| `Components` | `CardContainer` / `BackButton` / `TopDrawer` / `SecondaryPage` |
 
 原则：
 
@@ -48,25 +48,28 @@ pages        组合 + 文案               ← 不写数值
 可覆盖的情况：
 
 - 同权重的卡片连续堆叠时，卡片间距可以降到行间距（10），让页面更紧凑。
-- 覆盖页的顶部起点可以略小于 tab 页（例如 52 vs 56），但不低于 44。
+- 二级页的顶部起点由 `pageTopInset + backButtonSize + backToTitleGap` 推出（12 + 32 + 12 = 56），页面里不再手填。
 
 ## 3. 页面骨架
 
 ```
 ┌────────────────────────────────┐  ← 安全区下方
-│  ← 12（覆盖页；浮在留白里）      │
+│  ← 12                            │  返回按钮 32
+│  ↕ 12                            │  backToTitleGap
 │  页面标题                        │  ← 从 56 开始
 │                                │
 │  区块 A                         │  ← 区块间距
 │  区块 B                         │
 │                                │
-│  （tab 页底部留出底栏 + FAB 的高度）│
+│  （二级页底部留出悬浮底栏的高度）   │
 └────────────────────────────────┘
    ←20                       20→
 ```
 
 - **不用系统导航栏**：标题画在内容里，避免导航栏重算安全区。
-- 覆盖页的返回按钮绝对定位在标题上方的留白里，**不参与布局**。
+- **底部导航常驻**：二级页挂在所属 tab 的内容区，不盖住底栏；切 tab 时关闭二级页，回到该 tab 的根页。
+- **返回按钮两种落位**：滚动页放在内容顶部（随内容滚走）；固定高度的编辑器（记一笔）浮在留白里，内容从 56 开始。
+- 滚动页底部统一留 `tabBarClearance`（110），让最后一项能滚出悬浮底栏。
 - 滚动条一律隐藏。
 
 ## 4. 组件母版
@@ -106,11 +109,25 @@ pages        组合 + 文案               ← 不写数值
 
 **FAB**：58 圆，右下 22 / 20，轻投影。
 
-**返回按钮**：32 × 32，`brand`，绝对定位在左上留白。
+**返回按钮**：`backButtonSize`（32 × 32），`brand`。滚动页随内容；固定页浮在左上留白，距顶部 `pageTopInset`。
 
 **顶部抽屉**：遮罩 `scrim`，底板只圆下两角（28），向上铺到屏幕最上沿。
 
-**右侧滑入页**：`.transition(.move(edge: .trailing))` + `.geometryGroup()`，根层 overlay 呈现。
+**二级页容器 `SecondaryPage`**
+
+```
+SecondaryPage(onClose:) {
+    scrollable: true          // 默认滚动；记一笔传 false
+    swipeBackEnabled: true    // 浮层打开时可关掉
+    backgroundColor: nil      // nil = 全局渐变底；记录页传 surfaceElevated
+    backgroundTap: nil        // 记录页用来点空白收键盘
+    content
+}
+```
+
+容器负责：背景、返回按钮、顶部 `pageTopInset`、返回与标题间距 `backToTitleGap`、滚动页底部 `tabBarClearance`、右滑返回（水平位移 > 120 关闭，纵向手势不拦截）。
+
+页面只写内容，不写背景、返回、偏移、手势；转场由路由层统一 `.move(edge: .trailing)` + `.geometryGroup()`。
 
 ## 5. 字阶角色
 
@@ -125,7 +142,7 @@ pages        组合 + 文案               ← 不写数值
 | `label` / `caption` / `captionStrong` | 说明与角标 |
 | `axisLabel` | 图表刻度 |
 
-- 重量只用 regular / medium / semibold；bold 只给数值输入。
+- 重量用 regular / medium / semibold；bold 只给数值输入与首页情绪句。
 - rounded 只给标题和数字，正文用系统字体。
 
 ## 6. 颜色角色
@@ -168,6 +185,7 @@ pages        组合 + 文案               ← 不写数值
 - 抽屉、浮层关闭时同时收键盘。
 - 空态只留一行灰字，不套卡片、不放大插画。
 - 删除最后一条时自动退回上一级。
+- 二级页统一右滑返回：水平位移超过 120 触发，纵向滑动交给内容滚动。
 
 ## 10. 不要做
 

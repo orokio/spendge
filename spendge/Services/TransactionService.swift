@@ -66,6 +66,7 @@ final class TransactionService {
         category: Category? = nil,
         account: Account
     ) throws -> Transaction {
+        try FaultInjection.current.check(.transactionWrite)
         guard amountCents > 0 else { throw SpendgeError.invalidAmount }
         let transaction = Transaction(
             amountCents: amountCents,
@@ -91,6 +92,7 @@ final class TransactionService {
         category: Category? = nil,
         account: Account? = nil
     ) throws {
+        try FaultInjection.current.check(.transactionWrite)
         if let amountCents {
             guard amountCents > 0 else { throw SpendgeError.invalidAmount }
             transaction.amountCents = amountCents
@@ -106,6 +108,7 @@ final class TransactionService {
 
     /// 删一笔。
     func delete(_ transaction: Transaction) throws {
+        try FaultInjection.current.check(.transactionWrite)
         context.delete(transaction)
         try context.save()
     }

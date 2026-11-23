@@ -15,6 +15,7 @@ struct GoalView: View {
     private var achievements: [GoalAchievement]
 
     @State private var showBudgetEditor = false
+    @State private var errorMessage: String?
     @State private var showGoalForm = false
     @State private var formTarget: Goal?
 
@@ -60,12 +61,10 @@ struct GoalView: View {
                         initialCents: monthBudget?.amountCents,
                         initialRecurring: monthBudget?.isRecurring ?? false,
                         onSave: { cents, recurring in
-                            saveBudget(cents, recurring)
-                            closeBudget()
+                            if saveBudget(cents, recurring) { closeBudget() }
                         },
                         onClear: {
-                            clearBudget()
-                            closeBudget()
+                            if clearBudget() { closeBudget() }
                         }
                     )
                     .background {
@@ -99,17 +98,16 @@ struct GoalView: View {
                         initialCents: monthBudget?.amountCents,
                         initialRecurring: monthBudget?.isRecurring ?? false,
                         onSave: { cents, recurring in
-                            saveBudget(cents, recurring)
-                            closeBudget()
+                            if saveBudget(cents, recurring) { closeBudget() }
                         },
                         onClear: {
-                            clearBudget()
-                            closeBudget()
+                            if clearBudget() { closeBudget() }
                         }
                     )
                 }
             }
         }
+        .errorToast($errorMessage)
     }
 
     // MARK: - 顶部
@@ -477,47 +475,84 @@ struct GoalView: View {
     }
 
     private func togglePause(_ goal: Goal) {
+        do {
+            try FaultInjection.current.check(.goalWrite)
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+            return
+        }
         goal.isActive.toggle()
         goal.updatedAt = .now
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            goal.isActive.toggle()
+            errorMessage = ErrorText.message(for: error)
+        }
     }
 
     private func delete(_ goal: Goal) {
-        try? GoalService(context: context).delete(goal)
+        do {
+            try GoalService(context: context).delete(goal)
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+        }
     }
 
     private func createTakeoutBudgetGoal() {
-        _ = try? GoalService(context: context).create(
-            title: "本月外卖 ≤ 800 元",
-            kind: .categorySum,
-            categoryCodes: [CategoryCode.takeout.rawValue],
-            period: .month, targetValue: 80_000
-        )
+        do {
+            _ = try GoalService(context: context).create(
+                title: "本月外卖 ≤ 800 元",
+                kind: .categorySum,
+                categoryCodes: [CategoryCode.takeout.rawValue],
+                period: .month, targetValue: 80_000
+            )
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+        }
     }
 
     private func createDrinkLimitGoal() {
-        _ = try? GoalService(context: context).create(
-            title: "本月奶茶 ≤ 4 次",
-            kind: .countLimit,
-            categoryCodes: [CategoryCode.drink.rawValue],
-            period: .month, targetValue: 4
-        )
+        do {
+            _ = try GoalService(context: context).create(
+                title: "本月奶茶 ≤ 4 次",
+                kind: .countLimit,
+                categoryCodes: [CategoryCode.drink.rawValue],
+                period: .month, targetValue: 4
+            )
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+        }
     }
 
-    private func saveBudget(_ cents: Int64, _ recurring: Bool) {
+    @discardableResult
+    private func saveBudget(_ cents: Int64, _ recurring: Bool) -> Bool {
         let comps = calendar.dateComponents([.year, .month], from: monthStart)
-        try? BudgetService(context: context).setBudget(
-            category: nil,
-            amountCents: cents,
-            year: comps.year ?? 2026,
-            month: comps.month ?? 1,
-            isRecurring: recurring
-        )
+        do {
+            try BudgetService(context: context).setBudget(
+                category: nil,
+                amountCents: cents,
+                year: comps.year ?? 2026,
+                month: comps.month ?? 1,
+                isRecurring: recurring
+            )
+            return true
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+            return false
+        }
     }
 
-    private func clearBudget() {
-        guard let budget = monthBudget else { return }
-        try? BudgetService(context: context).deleteBudget(budget)
+    @discardableResult
+    private func clearBudget() -> Bool {
+        guard let budget = monthBudget else { return true }
+        do {
+            try BudgetService(context: context).deleteBudget(budget)
+            return true
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+            return false
+        }
     }
 }
 

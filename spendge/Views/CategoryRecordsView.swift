@@ -20,7 +20,7 @@ struct CategoryRecordsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var allTransactions: [Transaction]
 
-    @State private var dragOffset: CGFloat = 0
+    @State private var errorMessage: String?
 
     private var calendar: Calendar { .current }
 
@@ -44,76 +44,51 @@ struct CategoryRecordsView: View {
     }
 
     var body: some View {
-        ZStack {
-            AppBackground()
-                .ignoresSafeArea()
+        SecondaryPage(onClose: onClose) {
+            VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
+                header
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
-                    BackButton(action: onClose)
+                if groups.isEmpty {
+                    Text("这个分类在这段时间没有记录了")
+                        .font(Typography.body)
+                        .foregroundStyle(Color.textSecondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 24) {
+                        ForEach(groups, id: \.day) { group in
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 10) {
+                                    Text(dayTitle(group.day))
+                                        .font(Typography.label)
+                                        .foregroundStyle(Color.textSecondary)
 
-                    header
-
-                    if groups.isEmpty {
-                        Text("这个分类在这段时间没有记录了")
-                            .font(Typography.body)
-                            .foregroundStyle(Color.textSecondary)
-                    } else {
-                        VStack(alignment: .leading, spacing: 24) {
-                            ForEach(groups, id: \.day) { group in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack(spacing: 10) {
-                                        Text(dayTitle(group.day))
-                                            .font(Typography.label)
-                                            .foregroundStyle(Color.textSecondary)
-
-                                        CategoryDashedLine()
-                                            .stroke(Color.textSecondary.opacity(0.22),
-                                                    style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
-                                            .frame(height: 1)
-                                    }
-
-                                    TransactionCard(
-                                        transactions: group.items,
-                                        onDelete: { txn in
-                                            try? TransactionService(context: context).delete(txn)
-                                        },
-                                        onTap: onEdit
-                                    )
+                                    CategoryDashedLine()
+                                        .stroke(Color.textSecondary.opacity(0.22),
+                                                style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                                        .frame(height: 1)
                                 }
+
+                                TransactionCard(
+                                    transactions: group.items,
+                                    onDelete: { txn in
+                                        do {
+                                            try TransactionService(context: context).delete(txn)
+                                        } catch {
+                                            errorMessage = ErrorText.message(for: error)
+                                        }
+                                    },
+                                    onTap: onEdit
+                                )
                             }
                         }
                     }
                 }
-                .padding(.horizontal, PageLayout.pageInset)
-                .padding(.top, 12)
-                .padding(.bottom, 60)
             }
-            .scrollIndicators(.hidden)
         }
-        .offset(x: max(0, dragOffset))
-        .gesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { value in
-                    guard value.translation.width > 0,
-                          abs(value.translation.width) > abs(value.translation.height) else { return }
-                    dragOffset = value.translation.width
-                }
-                .onEnded { value in
-                    if value.translation.width > 120 {
-                        onClose()
-                        dragOffset = 0
-                    } else {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                            dragOffset = 0
-                        }
-                    }
-                }
-        )
         .onChange(of: records.count) { oldValue, newValue in
             // 删掉或改走最后一笔时，页面自动退回
             if oldValue > 0, newValue == 0 { onClose() }
         }
+        .errorToast($errorMessage)
     }
 
     private var header: some View {

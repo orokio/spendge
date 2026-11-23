@@ -21,6 +21,17 @@ enum PageLayout {
     /// 同权重卡片连续堆叠：卡片之间统一 12，比区块间距紧
     static let stackedCardGap: CGFloat = 12
 
+    // MARK: - 二级页
+
+    /// 二级页顶部留白（返回按钮上方）
+    static let pageTopInset: CGFloat = 12
+    /// 返回按钮的点击区与图标框
+    static let backButtonSize: CGFloat = 32
+    /// 返回按钮与页面标题之间：所有二级页统一
+    static let backToTitleGap: CGFloat = 12
+    /// 滚动页底部留白：给悬浮底部导航让位
+    static let tabBarClearance: CGFloat = 110
+
     /// 行内元素：情绪文字↔副标题、同一行的标签
     static let inlineGap: CGFloat = 8
 

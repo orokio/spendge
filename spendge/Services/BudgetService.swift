@@ -55,6 +55,7 @@ final class BudgetService {
         month: Int,
         isRecurring: Bool = false
     ) throws -> Budget {
+        try FaultInjection.current.check(.budgetWrite)
         guard amountCents >= 0 else { throw SpendgeError.invalidAmount }
         if let existing = try budget(category: category, year: year, month: month) {
             existing.amountCents = amountCents
@@ -90,6 +91,7 @@ final class BudgetService {
     }
 
     func deleteBudget(_ budget: Budget) throws {
+        try FaultInjection.current.check(.budgetWrite)
         context.delete(budget)
         try context.save()
     }

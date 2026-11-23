@@ -14,11 +14,11 @@ struct AchievementView: View {
 
     @State private var snapshot: AchievementSnapshot?
     @State private var selected: TrophyState?
-    @State private var dragOffset: CGFloat = 0
     /// 关闭详情后的短暂冷却：避免同一触摸落到卡片上再次弹出
     @State private var suppressTaps = false
     @State private var shareFile: SharedFile?
     @State private var toast: String?
+    @State private var shareError: String?
 
     private struct SharedFile: Identifiable {
         let id = UUID()
@@ -28,53 +28,21 @@ struct AchievementView: View {
     private var calendar: Calendar { .current }
 
     var body: some View {
-        ZStack {
-            AppBackground()
-                .ignoresSafeArea()
-
-            ScrollView {
+        SecondaryPage(onClose: onClose, swipeBackEnabled: selected == nil && !suppressTaps) {
+            VStack(alignment: .leading, spacing: PageLayout.stackedCardGap) {
+                header
+                progressCard
+                if let nearest { heroCard(nearest) }
                 VStack(alignment: .leading, spacing: PageLayout.stackedCardGap) {
-                    BackButton(action: onClose)
-
-                    header
-                    progressCard
-                    if let nearest { heroCard(nearest) }
-                    VStack(alignment: .leading, spacing: PageLayout.stackedCardGap) {
-                        ForEach(TrophySeries.allCases, id: \.self) { series in
-                            if let section = section(for: series) {
-                                sectionView(section)
-                            }
+                    ForEach(TrophySeries.allCases, id: \.self) { series in
+                        if let section = section(for: series) {
+                            sectionView(section)
                         }
                     }
                 }
-                .padding(.horizontal, PageLayout.pageInset)
-                .padding(.top, 12)
-                .padding(.bottom, 48)
             }
-            .scrollIndicators(.hidden)
             .allowsHitTesting(selected == nil && !suppressTaps)
         }
-        .offset(x: max(0, dragOffset))
-        .gesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { value in
-                    guard selected == nil, !suppressTaps,
-                          value.translation.width > 0,
-                          abs(value.translation.width) > abs(value.translation.height) else { return }
-                    dragOffset = value.translation.width
-                }
-                .onEnded { value in
-                    guard selected == nil, !suppressTaps else { return }
-                    if value.translation.width > 120 {
-                        onClose()
-                        dragOffset = 0
-                    } else {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                            dragOffset = 0
-                        }
-                    }
-                }
-        )
         .task { reload() }
         .onChange(of: unlocks.count) { _, _ in reload() }
         .overlay { detailOverlay }
@@ -85,6 +53,7 @@ struct AchievementView: View {
             }
         }
         .toast($toast)
+        .errorToast($shareError)
     }
 
     // MARK: - 顶部
@@ -345,14 +314,28 @@ struct AchievementView: View {
     }
 
     private func share(_ state: TrophyState) {
+        do {
+            try FaultInjection.current.check(.shareExport)
+        } catch {
+            shareError = ErrorText.message(for: error)
+            return
+        }
         guard let unlockedAt = state.unlockedAt else { return }
         let card = TrophyShareCard(spec: state.spec, unlockedAt: unlockedAt)
         let renderer = ImageRenderer(content: card)
         renderer.scale = 3
-        guard let image = renderer.uiImage, let data = image.pngData() else { return }
+        guard let image = renderer.uiImage, let data = image.pngData() else {
+            shareError = "没有生成分享图片，请再试一次。"
+            return
+        }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("海绵记账-奖杯.png")
-        try? data.write(to: url)
+        do {
+            try data.write(to: url)
+        } catch {
+            shareError = ErrorText.message(for: error)
+            return
+        }
 
         closeDetail()
         Task {
@@ -585,7 +568,7 @@ private struct TrophyShareCard: View {
                     .multilineTextAlignment(.center)
             }
 
-            Text("spendge")
+            Text("Spendge")
                 .font(Typography.label.weight(.semibold))
                 .foregroundStyle(Color.brand)
         }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// 首页：一句话 + 当月柱图 + 当天明细。
 /// 左右滑动切换日期；从后台回来、启动、记完一笔都会把视图聚焦到对应那天。
@@ -15,6 +16,8 @@ struct TodayView: View {
     @Query private var confirmations: [DayConfirmation]
 
     @State private var insight: Insight?
+    @State private var debugToast: String?
+    @State private var errorMessage: String?
     /// 流水区滚到顶部的日期：柱图指示器和记账日期都跟着它走
     @State private var visibleDay: Date?
     /// 程序触发的滚动过程中不要让偏移量改日期，否则会打断动画
@@ -169,6 +172,8 @@ struct TodayView: View {
                 try? DayConfirmationService(context: context).remove(on: selectedDay)
             }
         }
+        .errorToast($errorMessage)
+        .toast($debugToast)
     }
 
     // MARK: - 顶部：情绪句（今天）或日期
@@ -183,6 +188,10 @@ struct TodayView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(Color.brand)
                     .fixedSize(horizontal: false, vertical: true)
+                    .debugUnlockTap {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        Toast.show("开发者模式已开启", into: $debugToast)
+                    }
 
                 if let detail = insight?.detail {
                     Text(detail)
@@ -369,7 +378,13 @@ struct TodayView: View {
             } else {
                 TransactionCard(
                     transactions: group.transactions,
-                    onDelete: { txn in try? TransactionService(context: context).delete(txn) },
+                    onDelete: { txn in
+                        do {
+                            try TransactionService(context: context).delete(txn)
+                        } catch {
+                            errorMessage = ErrorText.message(for: error)
+                        }
+                    },
                     onTap: onEdit
                 )
             }
@@ -393,7 +408,11 @@ struct TodayView: View {
             HStack(spacing: 6) {
                 if confirmed {
                     Button {
-                        try? DayConfirmationService(context: context).remove(on: day)
+                        do {
+                            try DayConfirmationService(context: context).remove(on: day)
+                        } catch {
+                            errorMessage = ErrorText.message(for: error)
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark.circle.fill")
@@ -413,7 +432,11 @@ struct TodayView: View {
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 12)
                     Button {
-                        try? DayConfirmationService(context: context).confirmNoSpend(on: day)
+                        do {
+                            try DayConfirmationService(context: context).confirmNoSpend(on: day)
+                        } catch {
+                            errorMessage = ErrorText.message(for: error)
+                        }
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "circle")

@@ -31,6 +31,7 @@ final class DayConfirmationService {
     /// 幂等：同一天重复确认不会产生多条记录。
     @discardableResult
     func confirmNoSpend(on date: Date = .now) throws -> DayConfirmation {
+        try FaultInjection.current.check(.dayConfirmationWrite)
         if let existing = try confirmation(on: date) { return existing }
         let item = DayConfirmation(day: calendar.startOfDay(for: date))
         context.insert(item)
@@ -39,6 +40,7 @@ final class DayConfirmationService {
     }
 
     func remove(on date: Date) throws {
+        try FaultInjection.current.check(.dayConfirmationWrite)
         guard let existing = try confirmation(on: date) else { return }
         context.delete(existing)
         try context.save()

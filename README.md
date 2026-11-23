@@ -1,65 +1,62 @@
 # Spendge · 海绵记账
 
-一个 iOS 记账应用（个人项目）。当前处于早期验证阶段：**核心交互已实现，正在试用验证留存假设**。
+一个 iOS 记账应用（个人项目）。当前处于 **M3 收尾**：四个 tab 的核心体验已完成，只剩首启引导；服务端开发暂停，后续在云端环境继续。
 
 产品方向：不做功能堆叠的账簿工具，而是让「记账这个动作」有意义——记录靠选择，选择靠积累，回看讲生活不讲报表。
 
 ## 技术栈
 
-- SwiftUI + SwiftData
-- 本地优先（无网络依赖），后续接 CloudKit
-- 部署目标 iOS 17.0
+- SwiftUI + SwiftData，本地优先；账本同步走 CloudKit（未开始）
+- 仅中文，目标 iOS 17.0
+- 服务端骨架：Flask（`server/`），尚未接入客户端
 
 ## 目录结构
 
 ```
 spendge/
-├── Models/
-│   ├── Account / Category / Transaction / Budget
-│   ├── DayConfirmation.swift   # 「今天没花钱」的确认记录
-│   ├── Money.swift             # 分/元转换
-│   ├── SpendgeEnums.swift      # 收支类型 / 账户类型 / 分类 code 与领域 / 内部标签
-│   └── DefaultData.swift       # 种子：11 个动作分类 + 4 个收入分类 + 现金账户
-├── Services/
-│   ├── TransactionService.swift     # 记账/查询/月度汇总/覆盖率/金额建议
-│   ├── InsightService.swift         # 首屏那句话（确定性模板）
-│   ├── DayConfirmationService.swift # 每日确认，幂等
-│   ├── CategoryService / AccountService / BudgetService
-│   ├── SelfCheck.swift              # DEBUG 只读自检，结果写 Documents/selfcheck.log
-│   ├── ModelContainerProvider.swift
-│   └── SpendgeError.swift
-├── Views/
-│   ├── RootView.swift      # 无 Tab：今天 ←→ 回看，横向拖动切换
-│   ├── TodayView.swift     # hero 一句话 + 今日流水 + FAB
-│   ├── RecordSheet.swift   # 半屏记录面板：日期轴 + 金额 + 分类胶囊
-│   ├── ReviewView.swift    # 回看：覆盖率 / 笔数柱状图 / 吃的结构 / 领域分布
-│   └── Components.swift
+├── Models/       # Transaction / Category / Budget / Goal / TrophyUnlock 等
+├── Services/     # 记账、统计、目标、奖杯判定、备份、语音解析
+├── Views/        # 四个 tab + 记录页 + 目标抽屉 + 奖杯墙
+├── Assets.xcassets
 └── spendgeApp.swift
+
+server/           # 服务端骨架（Flask + health + serve.sh），暂停
+docs/             # 产品、计划、架构、界面规范、服务端设计
 ```
 
 ## 当前能力
 
-- **今天**：一句话（如「这周点了 2 次外卖，比上周少 4 次」）+ 今日流水 + 「今天没花钱」
-- **记一笔**：点分类 → 金额已预填（或给档位，显示为 ≈¥30）→ 记下；14 天日期轴；备注常驻底部
-- **回看**：覆盖率（按已过天数算）、记录密度柱状图、吃的结构、领域分布、预算
-- **业务层**：记账 / 查询 / 月度汇总 / 余额 / 预算进度 / 数据覆盖率 / 自适应金额建议
+- **记账**：一句话情绪句 + 固定柱图 + 连续日期流水；全屏记录页（金额、分类、备注、语音）
+- **统计**：储蓄卡、支出 / 收入切换；支出结构与分类饼图（可下钻明细）；收入来源与近 6 个月结余
+- **目标**：本月预算、目标进度环与状态、暂停 / 恢复、顶部抽屉表单
+- **奖杯墙**：30 枚三态网格（已解锁 / 进行中 / 未解锁）、系列卡片与「下一档」提示、详情与分享、记账后的解锁庆祝
+- **设置**：导出 CSV / JSON 备份、从备份恢复、清空数据
 
 ## 开发
 
-```
+```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild -project spendge.xcodeproj -scheme spendge \
-  -destination 'generic/platform=iOS Simulator' build
+  -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO
 ```
 
-- DEBUG 启动会跑 SelfCheck（11 项只读不变量），结果同时写到 App 沙盒 `Documents/selfcheck.log`
-- 种子版本（`spendge.seedVersion`）变化时，**创建容器前删除 store 文件**，不做迁移
-- 结构变更相关坑见 [docs/architecture.md](docs/architecture.md) 的「已知坑」
+- 带 `-selfcheck` 启动才跑 SelfCheck（49 项只读不变量），结果写到沙盒 `Documents/selfcheck.log`
+- 覆盖安装：先尝试迁移，迁移失败才清库；不再按种子版本无条件删库
+- 结构变更与踩坑记录见 [docs/architecture.md](docs/architecture.md)
+
+## 服务端
+
+代码在 `server/`，目前只有 Flask 健康检查与本地起停脚本，**开发暂停，后续在云端继续**。设计与部署见：
+
+- [docs/server-design.md](docs/server-design.md)
+- [docs/deploy-plan.md](docs/deploy-plan.md)
 
 ## 文档
 
 - 产品方向：[docs/product-plan.md](docs/product-plan.md)
 - 开发计划：[docs/dev-plan.md](docs/dev-plan.md)
 - 技术设计：[docs/architecture.md](docs/architecture.md)
-- UI 规范（可复用搭架子）：[docs/ui-spec.md](docs/ui-spec.md)
+- UI 规范：[docs/ui-spec.md](docs/ui-spec.md) / [docs/visual-language.md](docs/visual-language.md)
+- 成就体系：[docs/achievements.md](docs/achievements.md)
+- 调试工具：[docs/debug-tools.md](docs/debug-tools.md)
 - 试用反馈：[docs/feedback.md](docs/feedback.md)

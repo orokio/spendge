@@ -160,7 +160,7 @@ struct BackButton: View {
             Image(systemName: "chevron.left")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.brand)
-                .frame(width: 32, height: 32, alignment: .leading)
+                .frame(width: PageLayout.backButtonSize, height: PageLayout.backButtonSize, alignment: .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

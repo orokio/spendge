@@ -64,6 +64,7 @@ final class GoalService {
         period: GoalPeriod,
         targetValue: Int
     ) throws -> Goal {
+        try FaultInjection.current.check(.goalWrite)
         let existing = try goals()
         let goal = Goal(
             title: title,
@@ -81,6 +82,7 @@ final class GoalService {
     /// 修改参数：只动目标本身，已经固化的达成记录不受影响
     func update(_ goal: Goal, title: String, kind: GoalKind,
                 categoryCodes: [String], period: GoalPeriod, targetValue: Int) throws {
+        try FaultInjection.current.check(.goalWrite)
         goal.title = title
         goal.kindRawValue = kind.rawValue
         goal.categoryCodes = categoryCodes
@@ -93,6 +95,7 @@ final class GoalService {
     /// 删除目标：先把已经走完的周期固化下来，再删。
     /// 记录不会跟着删——用户不想做了，但已经做到的事要留着。
     func delete(_ goal: Goal) throws {
+        try FaultInjection.current.check(.goalWrite)
         try materializeAchievements(for: goal)
         context.delete(goal)
         try context.save()

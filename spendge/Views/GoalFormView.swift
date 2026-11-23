@@ -16,6 +16,7 @@ struct GoalFormView: View {
     @State private var categoryCode: String
     @State private var valueText: String
     @State private var toast: String?
+    @State private var errorMessage: String?
     /// 抽屉滑完再亮提示，避免它比面板先到
     @State private var hintReady = false
     /// 打开时不要自己抢焦点，等用户点了再弹键盘
@@ -201,6 +202,7 @@ struct GoalFormView: View {
         // 键盘出现时不要压缩高度，否则抽屉会缩一下
         .fixedSize(horizontal: false, vertical: true)
         .toast($toast)
+        .errorToast($errorMessage)
         .onAppear {
             // 打开时显式放掉焦点，键盘不自己弹出来
             nameFocused = false
@@ -276,9 +278,21 @@ struct GoalFormView: View {
 
     private func togglePauseGoal() {
         guard let goal else { return }
+        do {
+            try FaultInjection.current.check(.goalWrite)
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+            return
+        }
         goal.isActive.toggle()
         goal.updatedAt = .now
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            goal.isActive.toggle()
+            errorMessage = ErrorText.message(for: error)
+            return
+        }
         onClose()
     }
 
@@ -288,12 +302,17 @@ struct GoalFormView: View {
         let finalTitle = trimmedTitle.isEmpty ? fallbackTitle() : trimmedTitle
         let service = GoalService(context: context)
 
-        if let goal {
-            try? service.update(goal, title: finalTitle, kind: kind,
-                                categoryCodes: codes, period: .month, targetValue: value)
-        } else {
-            _ = try? service.create(title: finalTitle, kind: kind,
-                                    categoryCodes: codes, period: .month, targetValue: value)
+        do {
+            if let goal {
+                try service.update(goal, title: finalTitle, kind: kind,
+                                   categoryCodes: codes, period: .month, targetValue: value)
+            } else {
+                _ = try service.create(title: finalTitle, kind: kind,
+                                       categoryCodes: codes, period: .month, targetValue: value)
+            }
+        } catch {
+            errorMessage = ErrorText.message(for: error)
+            return
         }
         onClose()
     }
