@@ -11,6 +11,9 @@ struct RootView: View {
     @Query private var allConfirmations: [DayConfirmation]
     @AppStorage(PreferenceKey.onboardingHomeSeen) private var onboardingHomeSeen = false
     @AppStorage(PreferenceKey.onboardingBudgetSeen) private var onboardingBudgetSeen = false
+    @AppStorage(PreferenceKey.privacyChoice) private var privacyChoice = ""
+    @AppStorage(PreferenceKey.privacyVersionSeen) private var privacyVersionSeen = 0
+    @State private var showPrivacyPolicy = false
 
     private enum Tab: Hashable {
         case today, review, goal, settings
@@ -102,7 +105,13 @@ struct RootView: View {
                 .tag(Tab.settings)
         }
         .tint(Color.brand)
-        .task { refreshTrophies(celebrate: false) }
+        .task {
+            refreshTrophies(celebrate: false)
+            CrashReporter.startIfAuthorized()
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
+        }
         .onChange(of: tab) { _, _ in
             resetSecondaryPages()
             refreshTrophies(celebrate: false)
@@ -135,15 +144,38 @@ struct RootView: View {
             .ignoresSafeArea()
             .zIndex(14)
         }
+        .overlay {
+            if needsPrivacyDecision {
+                PrivacyConsentView(
+                    onAccept: acceptPrivacy,
+                    onOpenPolicy: { showPrivacyPolicy = true }
+                )
+                .transition(.opacity)
+                .zIndex(20)
+            }
+        }
     }
 
     private var isLedgerEmpty: Bool {
         allTransactions.isEmpty && allGoals.isEmpty && allBudgets.isEmpty && allConfirmations.isEmpty
     }
 
+    /// 配了 Bugly 时，先让用户做隐私选择，再出引导
+    private var needsPrivacyDecision: Bool {
+        CrashReporter.isConfigured && privacyVersionSeen < PrivacyConsent.version
+    }
+
+    private var privacyReadyForOnboarding: Bool { !needsPrivacyDecision }
+
+    private func acceptPrivacy() {
+        privacyChoice = "granted"
+        privacyVersionSeen = PrivacyConsent.version
+        CrashReporter.startIfAuthorized()
+    }
+
     /// 首页三步按顺序；走完后切到目标页看预算
     private var activeOnboardingStep: ActiveOnboardingStep? {
-        if !onboardingHomeSeen, isLedgerEmpty, tab == .today {
+        if !onboardingHomeSeen, isLedgerEmpty, tab == .today, privacyReadyForOnboarding {
             let step = HomeOnboardingStep(rawValue: homeOnboardingStep) ?? .emotion
             return ActiveOnboardingStep(target: step.target, info: step.step)
         }

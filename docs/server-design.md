@@ -20,41 +20,44 @@
 - 不做通用 AI 对话
 - 不做自建崩溃/埋点平台
 
-## 2. 账号
+## 2. 账号与标识
 
-### 状态机
+### 两层身份
 
-```
-匿名（anonymous） --绑定 Apple ID--> 已注册（registered）
-     |                                  |
-     +----------- 删除账号 <------------+
-```
+| 标识 | 生成方 | 存储 | 用途 |
+|---|---|---|---|
+| deviceId | 客户端 UUID | Keychain | 本地使用、日志、设备级限流 |
+| accountId | 服务端 UUID | 服务端数据库 | 跨设备账号、权益、日志归并 |
 
-- 首次启动：`POST /v1/accounts/anonymous` 发放 `account_id` + 长期 token，客户端存 **Keychain**
-- 匿名账号可改昵称（默认「海绵用户 8f3a」），可正常使用全部免费功能
-- 注册不是新建账号，而是给同一个 `account_id` 绑定登录方式，额度与权益不迁移
-- 换机或 Keychain 丢失：用 Sign in with Apple 登录，恢复到已绑定的账号；本地匿名账号作废，由清理任务回收
+- 首次启动只生成 deviceId，不访问服务端
+- 纯本地用户永远只有 deviceId，没有账号
+- accountId 只在用户开启 iCloud 同步、走 Sign in with Apple 时创建
 
-### 登录方式（方案 A：无密码）
+### 绑定流程（方案 B：同步优先，关联可补）
 
-- 主登录：**Sign in with Apple**，客户端传 `identityToken`，服务端校验 Apple 公钥与 nonce
-- 不设密码，因此没有「忘记密码 / 验证码」流程
-- 邮箱只作为可选联系方式（收据、通知），不做登录凭据
-- 不做短信验证码：成本与到达率都不划算
-- 不做实名认证；生成式 AI 若触发额外要求，等模型方案确定后单独评估
+1. 用户打开 iCloud 同步 → 发起 Sign in with Apple
+2. 服务端校验 identityToken，按 `apple_subject` 查找或创建 accountId，绑定当前 deviceId，返回账号 token
+3. 第二台设备用同一个 Apple ID 登录 → 服务端认出同一 accountId，追加绑定它的 deviceId
+4. **服务端不可用时**：不阻塞 CloudKit 同步；账号关联进入重试队列，期间日志只带 deviceId，恢复后由服务端按 deviceId 回填
+
+### 登录方式
+
+- 只用 Sign in with Apple；不设密码、不做短信验证码
+- 只保存 Apple 的稳定用户标识（`apple_subject`），不主动申请邮箱与姓名
+- 不做实名认证
 
 ### Token
 
 - 访问 token：随机 256 位，服务端只存哈希，有效期 7 天
-- 刷新 token：有效期 90 天，刷新时轮换，旧 token 立即作废
-- 设备绑定：token 与 `device_id`（App Attest key 哈希）关联，换设备需重新登录
-- 所有接口用 `Authorization: Bearer <token>`
+- 刷新 token：有效期 90 天，刷新时轮换
+- token 绑定 deviceId；换设备重新 Sign in with Apple
 
 ### 账号删除（上架硬要求）
 
-- App 内提供入口，二次确认，写清三件事：会员剩余时长如何处理、iCloud 数据不受影响、App Store 订阅需另行取消
-- 服务端：撤销全部 token、软删账号、清除身份绑定；财务流水保留去标识化的交易记录
-- 删除后本地数据仍在本机，由用户决定是否清空
+- App 内提供入口，二次确认
+- 服务端：撤销 token、解绑全部 deviceId、删除账号；保留去标识化的日志统计
+- iCloud 账本由 Apple 保管，删除账号不影响 iCloud 数据，需在文案里写清
+- 纯本地用户没有账号，不需要删除入口
 
 ## 3. 会员与 StoreKit
 
@@ -70,25 +73,44 @@
 | | 归属 | 说明 |
 |---|---|---|
 | 账单、目标、预算 | iCloud（CloudKit） | 跟 Apple ID 走，换设备自动同步 |
-| 账号、昵称、会员、额度 | 自有服务端 | 跟 App 账号走 |
+| 账号、权益、额度、诊断日志 | 自有服务端 | 跟 accountId 走 |
 
-设置页分成「账号」与「iCloud」两张卡，文案明确：登录账号不会同步账单。避免用户误以为登录即同步。
+账号只在开启 iCloud 同步时通过 Sign in with Apple 建立；同步本身仍由 CloudKit 完成。设置页把「iCloud 同步」和「账号」分开写，避免用户误以为登录账号才会同步账单。
 
 ## 5. 接口（v1）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/v1/accounts/anonymous` | 发放匿名账号与 token |
-| PATCH | `/v1/accounts/me` | 改昵称 |
-| POST | `/v1/accounts/bind/apple` | 绑定 Apple ID，完成注册 |
-| POST | `/v1/accounts/signin/apple` | 已有账号登录（换机恢复） |
-| DELETE | `/v1/accounts/me` | 删除账号 |
+| POST | `/v1/accounts/apple` | Sign in with Apple：创建/找回 accountId，绑定 deviceId，返回 token |
+| POST | `/v1/devices/register` | 可选：仅登记 deviceId，用于限流与匿名日志 |
+| DELETE | `/v1/accounts/me` | 删除账号，解绑全部 deviceId |
 | POST | `/v1/sessions/refresh` | 轮换 token |
-| GET | `/v1/me` | 账号状态、权益、剩余额度 |
+| GET | `/v1/me` | 账号、已绑定设备、权益、额度 |
+| POST | `/v1/diagnostics` | 诊断日志批量上报（无财务内容） |
 | POST | `/v1/parse` | 解析代理（模型待定） |
 | POST | `/v1/appstore/notifications` | App Store 服务端通知 |
 | POST | `/v1/events` | 业务事件批量上报（可选） |
 | GET | `/health` | 健康检查 |
+
+### /v1/diagnostics 契约
+
+```json
+POST /v1/diagnostics
+{
+  "deviceId": "uuid",
+  "accountId": "uuid 或省略",
+  "appVersion": "1.0 (12)",
+  "events": [
+    { "at": "2026-11-23T18:20:00Z", "name": "record_save", "result": "failed", "code": "amountTooLarge" }
+  ]
+}
+200 { "accepted": 1 }
+```
+
+- 一次最多 200 条，单条只保留动作、结果、错误码、时间
+- 不接收金额、备注、商户、图片或任何账本内容
+- 保留 30 天，按 deviceId / accountId 归并，不用于广告
+- 服务端不可用时客户端本地排队，下次启动重试
 
 ### /v1/parse 契约（不随模型变）
 
@@ -125,23 +147,25 @@ POST /v1/parse        multipart：text 或 image（二选一）+ clientRequestId
 单文件数据库，WAL 模式；路径与权限由部署决定（见 [deploy-plan.md](deploy-plan.md)）。选它的理由只有一个：2C2G 的机器上，省下的 200–400M 常驻内存比并发写能力更值钱。
 
 ```sql
-accounts            id TEXT PK, display_name TEXT, status TEXT,
-                    registered_at TEXT, created_at TEXT
-account_identities  id TEXT PK, account_id TEXT, provider TEXT,
-                    identifier_hash TEXT, created_at TEXT,
-                    UNIQUE(provider, identifier_hash)
-devices             id TEXT PK, account_id TEXT, attest_key_hash TEXT,
-                    last_seen_at TEXT
+accounts            id TEXT PK,              -- server accountId
+                    apple_subject TEXT UNIQUE,
+                    created_at TEXT
+devices             id TEXT PK,              -- client deviceId
+                    account_id TEXT NULL,
+                    created_at TEXT, last_seen_at TEXT
 sessions            token_hash TEXT PK, account_id TEXT, device_id TEXT,
                     expires_at TEXT, created_at TEXT
 entitlements        id TEXT PK, account_id TEXT,
                     original_transaction_id TEXT UNIQUE, product_id TEXT,
                     expires_at TEXT, status TEXT, updated_at TEXT
-usage               id INTEGER PK AUTOINCREMENT, account_id TEXT, device_id TEXT,
-                    idempotency_key TEXT UNIQUE, kind TEXT, tokens INTEGER,
-                    result TEXT, created_at TEXT
-events              id INTEGER PK AUTOINCREMENT, account_id TEXT,
-                    name TEXT, props TEXT, created_at TEXT
+usage               id INTEGER PK AUTOINCREMENT, account_id TEXT NULL,
+                    device_id TEXT, idempotency_key TEXT UNIQUE,
+                    kind TEXT, tokens INTEGER, result TEXT, created_at TEXT
+diagnostics         id INTEGER PK AUTOINCREMENT, device_id TEXT,
+                    account_id TEXT NULL, app_version TEXT,
+                    name TEXT, result TEXT, code TEXT, at TEXT, created_at TEXT
+events              id INTEGER PK AUTOINCREMENT, account_id TEXT NULL,
+                    device_id TEXT, name TEXT, props TEXT, created_at TEXT
 ```
 
 类型约定：

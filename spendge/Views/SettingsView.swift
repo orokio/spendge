@@ -30,6 +30,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
 
     @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
+    @State private var showPrivacyPolicy = false
 
     @State private var sharedFile: SharedFile?
     @State private var toast: String?
@@ -61,6 +62,8 @@ struct SettingsView: View {
 
                 dataGroup
 
+                privacyGroup
+
                 group([
                     Item(icon: "info.circle", title: "关于", detail: "0.1"),
                 ])
@@ -86,6 +89,9 @@ struct SettingsView: View {
                 }
             }
             .animation(.spring(response: 0.34, dampingFraction: 0.9), value: showDebugPanel)
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
         }
         .sheet(item: $sharedFile) { file in
             ShareSheet(url: file.url) { completed in
@@ -121,6 +127,17 @@ struct SettingsView: View {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             showDebugPanel = false
         }
+    }
+
+    // MARK: - 隐私
+
+    private var privacyGroup: some View {
+        VStack(spacing: 0) {
+            actionRow(icon: "doc.text", title: "隐私政策", detail: "") {
+                showPrivacyPolicy = true
+            }
+        }
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
     }
 
     // MARK: - 数据

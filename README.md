@@ -45,6 +45,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 - 覆盖安装：先尝试迁移，迁移失败才清库；不再按种子版本无条件删库
 - 结构变更与踩坑记录见 [docs/architecture.md](docs/architecture.md)
 
+## 崩溃上报（Bugly）
+
+- 把 `Bugly.xcframework` 放到仓库根目录的 `Frameworks/`（二进制不入库，clone 后需要手动放一次）
+- 在 `spendge/Info.plist` 的 `BuglyAppId` 填入 Bugly 控制台的 App ID；App Key 按官方说明留空即可
+- 首次启动展示隐私页，同意后才初始化；App ID 为空时 SDK 不启动
+- 设置 → 隐私与数据 可查看隐私政策
+
 ## 服务端
 
 代码在 `server/`，目前只有 Flask 健康检查与本地起停脚本，**开发暂停，后续在云端继续**。设计与部署见：
@@ -60,4 +67,6 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 - UI 规范：[docs/ui-spec.md](docs/ui-spec.md) / [docs/visual-language.md](docs/visual-language.md)
 - 成就体系：[docs/achievements.md](docs/achievements.md)
 - 调试工具：[docs/debug-tools.md](docs/debug-tools.md)
+- 上架清单：[docs/release-checklist.md](docs/release-checklist.md)
+- iCloud 同步设计：[docs/icloud-sync-design.md](docs/icloud-sync-design.md)
 - 试用反馈：[docs/feedback.md](docs/feedback.md)
