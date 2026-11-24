@@ -12,6 +12,7 @@ struct DebugPanelView: View {
     @State private var errorMessage: String?
     @State private var toast: String?
     @State private var faultRowsVersion = 0
+    @State private var confirmingCrash = false
     private let implementedFaults: [FaultPoint] = [
         .transactionWrite, .goalWrite, .budgetWrite, .dayConfirmationWrite, .shareExport,
     ]
@@ -22,6 +23,7 @@ struct DebugPanelView: View {
                 header
                 faultSection
                 scenarioSection
+                crashSection
                 closeSection
             }
         }
@@ -39,6 +41,14 @@ struct DebugPanelView: View {
             Button("取消", role: .cancel) { pendingScenario = nil }
         } message: {
             Text(pendingScenario?.detail ?? "")
+        }
+        .confirmationDialog("模拟崩溃？",
+                            isPresented: $confirmingCrash,
+                            titleVisibility: .visible) {
+            Button("触发崩溃", role: .destructive) { simulateCrash() }
+            Button("取消", role: .cancel) { confirmingCrash = false }
+        } message: {
+            Text("App 会立刻退出。重新打开后 Bugly 才会上报，几分钟后到后台看崩溃列表。")
         }
     }
 
@@ -94,6 +104,32 @@ struct DebugPanelView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private var crashSection: some View {
+        section(title: "崩溃验证") {
+            Button {
+                confirmingCrash = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "bolt.trianglebadge.exclamationmark")
+                        .font(Typography.body)
+                        .foregroundStyle(Color.danger)
+                        .frame(width: 24)
+                    Text("模拟一次崩溃")
+                        .font(Typography.body)
+                        .foregroundStyle(Color.danger)
+                    Spacer(minLength: 8)
+                    Text("会退出 App")
+                        .font(Typography.label)
+                        .foregroundStyle(Color.textSecondary)
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 50)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -169,6 +205,14 @@ struct DebugPanelView: View {
                 faultRowsVersion += 1
             }
         )
+    }
+
+    /// 给 Bugly 做端到端验证：等点击动画走完再触发，避免崩在半帧
+    private func simulateCrash() {
+        confirmingCrash = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            fatalError("Bugly 验证：手动触发的测试崩溃")
+        }
     }
 
     private func runPending() {
