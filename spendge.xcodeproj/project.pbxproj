@@ -10,9 +10,20 @@
 		351D59D13023386B005AFCE3 /* Bugly.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 351D59D03023386B005AFCE3 /* Bugly.xcframework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D4000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 351D599D3023386B005AFCE3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 351D59A43023386B005AFCE3;
+			remoteInfo = spendge;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		351D59A53023386B005AFCE3 /* spendge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = spendge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		351D59D03023386B005AFCE3 /* Bugly.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Bugly.xcframework; path = Frameworks/Bugly.xcframework; sourceTree = "<group>"; };
+		A1B2C3D40000000000000002 /* spendgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = spendgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -34,6 +45,11 @@
 			path = spendge;
 			sourceTree = "<group>";
 		};
+		A1B2C3D40000000000000009 /* spendgeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = spendgeTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,6 +61,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D40000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -52,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				351D59A73023386B005AFCE3 /* spendge */,
+				A1B2C3D40000000000000009 /* spendgeTests */,
 				351D59D03023386B005AFCE3 /* Bugly.xcframework */,
 				351D59A63023386B005AFCE3 /* Products */,
 			);
@@ -61,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				351D59A53023386B005AFCE3 /* spendge.app */,
+				A1B2C3D40000000000000002 /* spendgeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -90,6 +115,29 @@
 			productReference = 351D59A53023386B005AFCE3 /* spendge.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A1B2C3D40000000000000001 /* spendgeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D40000000000000006 /* Build configuration list for PBXNativeTarget "spendgeTests" */;
+			buildPhases = (
+				A1B2C3D40000000000000003 /* Sources */,
+				A1B2C3D40000000000000004 /* Frameworks */,
+				A1B2C3D40000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D4000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D40000000000000009 /* spendgeTests */,
+			);
+			name = spendgeTests;
+			packageProductDependencies = (
+			);
+			productName = spendgeTests;
+			productReference = A1B2C3D40000000000000002 /* spendgeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -102,6 +150,10 @@
 				TargetAttributes = {
 					351D59A43023386B005AFCE3 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					A1B2C3D40000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 351D59A43023386B005AFCE3;
 					};
 				};
 			};
@@ -120,12 +172,20 @@
 			projectRoot = "";
 			targets = (
 				351D59A43023386B005AFCE3 /* spendge */,
+				A1B2C3D40000000000000001 /* spendgeTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		351D59A33023386B005AFCE3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D40000000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -142,7 +202,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D40000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D4000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 351D59A43023386B005AFCE3 /* spendge */;
+			targetProxy = A1B2C3D4000000000000000B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		351D59AE3023386B005AFCE3 /* Debug */ = {
@@ -349,6 +424,46 @@
 			};
 			name = Release;
 		};
+		A1B2C3D40000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T8H6Y9A282;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.orokio.spendge.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/spendge.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/spendge";
+			};
+			name = Debug;
+		};
+		A1B2C3D40000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T8H6Y9A282;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.orokio.spendge.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/spendge.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/spendge";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -366,6 +481,15 @@
 			buildConfigurations = (
 				351D59B13023386B005AFCE3 /* Debug */,
 				351D59B23023386B005AFCE3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D40000000000000006 /* Build configuration list for PBXNativeTarget "spendgeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40000000000000007 /* Debug */,
+				A1B2C3D40000000000000008 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

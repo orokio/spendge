@@ -12,12 +12,12 @@
 | 数据模型 | Account / Category / Transaction / Budget / DayConfirmation / Goal / GoalAchievement / TrophyUnlock 齐全，Category 带 code + domain + scope（包含范围），金额存 Int64 分 | 可用，缺 merchant 与 `kind: .transfer` |
 | 服务层 | Transaction / Account / Category / Budget / Insight / DayConfirmation / Goal / Achievement / Backup / VoiceParser（含 CategoryMatcher）齐全 | 已收口，所有方法都有调用方 |
 | UI 层 | 四个 tab：记账 · 统计 · 目标 · 设置；首页「情绪句 + 固定柱图 + 连续日期流水」；统计页「储蓄卡 + 收支切换 + 支出结构 / 分类饼图 + 收入来源 / 结构 / 结余」，分类可下钻明细；目标页「预算卡 + 目标环 + 顶部抽屉」；奖杯墙「三态网格 + 系列卡 + 详情分享 + 解锁庆祝」 | 可用 |
-| 工程 | 无 test target；DEBUG 下带 `-selfcheck` 参数启动才跑 SelfCheck（49 项）；编译需 DEVELOPER_DIR 指向 Xcode.app | 回归靠 SelfCheck，属技术债 |
+| 工程 | `spendgeTests` 单测 target（38 项，覆盖核心不变量 + 边界/备份往返）；SelfCheck 已删除，开发者面板保留（故障注入 / 数据模拟）；编译需 DEVELOPER_DIR 指向 Xcode.app | 回归可自动跑，`xcodebuild test` 一条命令 |
 
 已知断点（2026-11-22 复核）：
 
 1. **首启引导没做**：第一次打开不知道该记什么、目标在哪设、预算在哪改。
-2. 没有 test target → 回归依赖手动跑 SelfCheck。
+2. ~~没有 test target~~ ✅ 2026-11-24：`spendgeTests` 已建，回归不再只靠手动跑 SelfCheck。
 3. 转账类记录无处安放（`kind` 只有收入 / 支出）；退款还没有录入开关。
 4. 深色模式没有明确锁死（M5 要求先锁 Light）。
 5. 失败态仍是多数 `try?` 静默失败，核心写路径缺可见提示。
@@ -100,6 +100,8 @@
 
 ### M0-3 测试基线
 
+**状态（2026-11-24）**：已被 §5.6 第 3 条的 `spendgeTests` 取代，App 内 SelfCheck 与开发者面板一并删除。以下为当时的取舍记录。
+
 采用最轻的形式，**不新建 test target**：`Services/SelfCheck.swift`（#if DEBUG）用内存容器跑核心不变量。
 
 运行方式：只在启动参数带 `-selfcheck` 时执行（`xcrun simctl launch <device> com.orokio.spendge -selfcheck`），结果写到 Documents/selfcheck.log。这样日常调试启动不再每次都跑一遍。
@@ -121,7 +123,7 @@
 
 **本阶段不做**：任何新功能、Goal、回看改版、CloudKit。
 
-**状态（2026-11-12）**：M0-2 分类体系重构已完成；M0-4 服务层基本收口（只剩 setBudget / update 没有调用方）；M0-3 测试基线**未做**，暂由 app 内 SelfCheck（30 项）顶替；M0-1 文档同步部分完成。
+**状态（2026-11-12）**：M0-2 分类体系重构已完成；M0-4 服务层基本收口（只剩 setBudget / update 没有调用方）；M0-3 测试基线未做，当时暂由 app 内 SelfCheck 顶替，2026-11-24 已由 `spendgeTests` 补齐；M0-1 文档同步部分完成。
 
 ---
 
@@ -392,7 +394,7 @@ Budget 保留为「月度总额上限」这一种特殊 Goal，暂不与 Goal �
 
 1. ~~**首启引导**~~ ✅ 2026-11-23：聚光灯模式。首页三步（顶部情绪句 → 今天没花钱 → 记一笔），首次切到目标页高亮预算卡；点屏幕任意处下一步，可跳过，跳过不再出现。首页三步只在「从未看过 + 账本为空」时显示。P0 随后完成：失败提示、输入边界、备份恢复校验（见 §5.7）。
 2. **观测接入**：Bugly 已接入（xcframework、依赖库、按官方关闭多余采集、App ID/Key）；首启隐私页已完成（同意后初始化）。待 dSYM 上传配置；最小埋点集与本地日志未开始。
-3. **测试 target**：把 SelfCheck 的 49 项搬成单测，补边界月份、跨年、备份往返、同步用例。
+3. ~~**测试 target**~~ ✅ 2026-11-24：`spendgeTests` 已建（38 项全绿）。SelfCheck 的 50 项断言逐条搬成单测，另补跨年、闰月、空库、金额/备注上限、未来日期、备份往返与损坏备份拒绝。运行：`xcodebuild test -project spendge.xcodeproj -scheme spendge -destination 'platform=iOS Simulator,id=<UDID>' CODE_SIGNING_ALLOWED=NO`。同步用例等 iCloud 接入后再补。
 4. **iCloud 同步 + P1 鲁棒性**：CloudKit 接入、去唯一约束、冲突与墓碑、同步状态与降级；iCloud 不可用时自动纯本地。
 5. **数据形态收口**：退款（负数支出）开关、`kind: .transfer`、merchant。放在同步之后会迁移两次，所以尽量在 iCloud 稳定后、正式用起来之前完成。
 6. **M5 上架准备**：隐私清单、隐私政策 / 支持页、截图、锁 Light、中国区备案（见 §6.5）。
@@ -407,7 +409,7 @@ Budget 保留为「月度总额上限」这一种特殊 Goal，暂不与 Goal �
 
 **P0 · 现在做（与首启引导同批）**
 
-- ~~核心写路径失败可见~~ ✅ 2026-11-23：记账保存、账单与分类明细删除、没花钱确认、目标增删暂停、预算保存与清除、分享图片，统一走顶部红色 toast；失败不再关闭页面。故障注入与开发者面板见 [debug-tools.md](debug-tools.md)
+- ~~核心写路径失败可见~~ ✅ 2026-11-23：记账保存、账单与分类明细删除、没花钱确认、目标增删暂停、预算保存与清除、分享图片，统一走顶部红色 toast；失败不再关闭页面。故障注入与开发者面板见 [debug-tools.md](debug-tools.md)；面板里的自检入口已于 2026-11-24 移除
 - ~~输入边界~~ ✅ 2026-11-23：单笔金额上限 ¥9,999,999、备注 100 字（超出截断并提示）、未来日期拒绝、目标名称 20 字与数值范围；错误统一走顶部 toast
 - 数据异常兜底：分类或账户缺失、库损坏、恢复失败时的可读提示
 - ~~备份恢复校验~~ ✅ 2026-11-23：版本、账户/分类完整性、重复 ID、引用关系、金额与日期、重复奖杯与没花钱确认全部先校验；不通过直接顶部提示，不清库
@@ -531,7 +533,7 @@ Budget 保留为「月度总额上限」这一种特殊 Goal，暂不与 Goal �
 
 ### C. 质量
 
-- 手动回归清单（SelfCheck 35 项只覆盖数据层，交互仍需人工过一遍）；
+- 手动回归清单（38 项单测只覆盖数据层，交互仍需人工过一遍）；
 - 大数据量：5000 条流水时的列表滚动、月度统计、饼图性能；
 - 边界：跨月、跨年、午夜前后记账、时区切换；
 - 崩溃收集：无后端时用 MetricKit 或轻量 SDK。

@@ -83,10 +83,12 @@ struct SettingsView: View {
         .errorToast($errorMessage)
         .overlay {
             ZStack {
+                #if DEBUG
                 if showDebugPanel {
                     DebugPanelView(onClose: closeDebugPanel)
                         .transition(.move(edge: .trailing))
                 }
+                #endif
             }
             .animation(.spring(response: 0.34, dampingFraction: 0.9), value: showDebugPanel)
         }

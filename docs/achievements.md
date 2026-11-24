@@ -110,7 +110,7 @@
 - `Models/Trophy.swift`：`TrophyID` / `TrophySpec` / `TrophyCatalog`（30 枚目录）+ `TrophyUnlock`（只存解锁日期）。
 - `Services/AchievementService.swift`：一次扫描算出所需统计量（笔数 / 天数 / 连续 / 目标达成 / 预算 / 备注 / 分类 / 时段），再按 id 取（当前, 目标）；`refreshUnlocks` 幂等补写。
 - `Views/AchievementView.swift`：奖杯墙、徽章（`TrophyBadge`）、详情弹层、分享卡、全屏庆祝。
-- 解锁也进备份（`BackupFile.trophies`），清空数据一并清掉；SelfCheck 增加目录与文案校验。
+- 解锁也进备份（`BackupFile.trophies`），清空数据一并清掉；单测覆盖目录与文案校验。
 
 ## 未决
 

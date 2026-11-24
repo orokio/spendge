@@ -41,7 +41,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO
 ```
 
-- 带 `-selfcheck` 启动才跑 SelfCheck（49 项只读不变量），结果写到沙盒 `Documents/selfcheck.log`
+- 单元测试：`xcodebuild test -project spendge.xcodeproj -scheme spendge -destination 'platform=iOS Simulator,id=<UDID>' CODE_SIGNING_ALLOWED=NO`
 - 覆盖安装：先尝试迁移，迁移失败才清库；不再按种子版本无条件删库
 - 结构变更与踩坑记录见 [docs/architecture.md](docs/architecture.md)
 

@@ -12,13 +12,6 @@ struct DebugPanelView: View {
     @State private var errorMessage: String?
     @State private var toast: String?
     @State private var faultRowsVersion = 0
-    @State private var shareFile: SharedFile?
-
-    private struct SharedFile: Identifiable {
-        let id = UUID()
-        let url: URL
-    }
-
     private let implementedFaults: [FaultPoint] = [
         .transactionWrite, .goalWrite, .budgetWrite, .dayConfirmationWrite, .shareExport,
     ]
@@ -29,15 +22,11 @@ struct DebugPanelView: View {
                 header
                 faultSection
                 scenarioSection
-                diagnosticSection
                 closeSection
             }
         }
         .toast($toast)
         .errorToast($errorMessage)
-        .sheet(item: $shareFile) { file in
-            ShareSheet(url: file.url) { _ in shareFile = nil }
-        }
         .confirmationDialog(
             pendingScenario?.title ?? "生成调试数据",
             isPresented: Binding(
@@ -105,27 +94,6 @@ struct DebugPanelView: View {
                 }
                 .buttonStyle(.plain)
             }
-        }
-    }
-
-    private var diagnosticSection: some View {
-        section(title: "诊断") {
-            Button {
-                SelfCheck.run(context: context)
-                Toast.show("自检已运行，结果写入 Documents/selfcheck.log", into: $toast, duration: 2.4)
-            } label: {
-                actionLabel(icon: "checkmark.seal", title: "运行 SelfCheck", detail: "49 项")
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            Button {
-                shareLog()
-            } label: {
-                actionLabel(icon: "doc.text", title: "自检日志", detail: "导出")
-            }
-            .buttonStyle(.plain)
         }
     }
 
@@ -201,16 +169,6 @@ struct DebugPanelView: View {
                 faultRowsVersion += 1
             }
         )
-    }
-
-    private func shareLog() {
-        guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-        let url = directory.appendingPathComponent("selfcheck.log")
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            toast = "还没有自检日志，先运行一次"
-            return
-        }
-        shareFile = SharedFile(url: url)
     }
 
     private func runPending() {
