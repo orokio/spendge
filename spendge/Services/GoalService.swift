@@ -62,7 +62,8 @@ final class GoalService {
         kind: GoalKind,
         categoryCodes: [String] = [],
         period: GoalPeriod,
-        targetValue: Int
+        targetValue: Int,
+        isRecurring: Bool = false
     ) throws -> Goal {
         try FaultInjection.current.check(.goalWrite)
         try validate(title: title, kind: kind, targetValue: targetValue)
@@ -72,7 +73,9 @@ final class GoalService {
             kind: kind,
             categoryCodes: categoryCodes,
             period: period,
+            periodStart: calendar.dateInterval(of: .month, for: .now)?.start,
             targetValue: targetValue,
+            isRecurring: isRecurring,
             sortOrder: (existing.map(\.sortOrder).max() ?? 0) + 1
         )
         context.insert(goal)
@@ -83,7 +86,8 @@ final class GoalService {
 
     /// 修改参数：只动目标本身，已经固化的达成记录不受影响
     func update(_ goal: Goal, title: String, kind: GoalKind,
-                categoryCodes: [String], period: GoalPeriod, targetValue: Int) throws {
+                categoryCodes: [String], period: GoalPeriod, targetValue: Int,
+                isRecurring: Bool? = nil) throws {
         try FaultInjection.current.check(.goalWrite)
         try validate(title: title, kind: kind, targetValue: targetValue)
         goal.title = title
@@ -91,6 +95,7 @@ final class GoalService {
         goal.categoryCodes = categoryCodes
         goal.periodRawValue = period.rawValue
         goal.targetValue = targetValue
+        if let isRecurring { goal.isRecurring = isRecurring }
         goal.updatedAt = .now
         try context.save()
     }
@@ -147,42 +152,77 @@ final class GoalService {
         }
     }
 
+    /// 每个月一份目标：只给这一份目标所属的月份固化一条记录
     func materializeAchievements(for goal: Goal, asOf date: Date = .now) throws {
-        let component: Calendar.Component = goal.period == .week ? .weekOfYear : .month
-        var recorded = Set(try achievements(forGoalID: goal.id).map { $0.periodStart })
+        guard let currentStart = calendar.dateInterval(of: .month, for: date)?.start else { return }
+        guard goal.monthStart < currentStart else { return }
 
-        guard var cursor = calendar.dateInterval(of: component, for: goal.createdAt)?.start,
-              let currentStart = calendar.dateInterval(of: component, for: date)?.start else { return }
+        let recorded = Set(try achievements(forGoalID: goal.id).map { $0.periodStart })
+        guard !recorded.contains(goal.monthStart) else { return }
 
-        while cursor < currentStart {
-            guard let range = calendar.dateInterval(of: component, for: cursor) else { break }
-            if !recorded.contains(range.start) {
-                let progress = try progress(for: goal, asOf: range.start)
-                let achieved = progress.isAtMost
-                    ? progress.current <= progress.target
-                    : progress.current >= progress.target
-                context.insert(GoalAchievement(
-                    goalID: goal.id,
-                    title: goal.title,
-                    period: goal.period,
-                    periodStart: range.start,
-                    achieved: achieved,
-                    currentValue: progress.current,
-                    targetValue: progress.target,
-                    unit: progress.unit
-                ))
-                recorded.insert(range.start)
-            }
-            guard let next = calendar.date(byAdding: component, value: 1, to: range.start) else { break }
-            cursor = next
-        }
+        let progress = try progress(for: goal)
+        let achieved = progress.isAtMost
+            ? progress.current <= progress.target
+            : progress.current >= progress.target
+        context.insert(GoalAchievement(
+            goalID: goal.id,
+            title: goal.title,
+            period: goal.period,
+            periodStart: goal.monthStart,
+            achieved: achieved,
+            currentValue: progress.current,
+            targetValue: progress.target,
+            unit: progress.unit
+        ))
         try context.save()
+    }
+
+    /// 上个月勾了「循环应用」的目标，这个月自动建一份一样的（新对象，不复用）
+    func carryForwardIfNeeded(asOf date: Date = .now) throws {
+        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
+              let previousStart = calendar.date(byAdding: .month, value: -1, to: monthStart) else { return }
+
+        // 硬幂等：每个月只补一次，之后用户删了也不会再生成
+        let comps = calendar.dateComponents([.year, .month], from: monthStart)
+        let carryKey = "goal.carry.\(comps.year ?? 0)-\(comps.month ?? 0)"
+        guard !UserDefaults.standard.bool(forKey: carryKey) else { return }
+
+        let all = try goals()
+        let current = all.filter {
+            calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month)
+        }
+        let sources = all.filter {
+            $0.isRecurring && calendar.isDate($0.monthStart, equalTo: previousStart, toGranularity: .month)
+        }
+
+        var created = false
+        for source in sources {
+            let exists = current.contains {
+                $0.kind == source.kind && $0.categoryCodes.sorted() == source.categoryCodes.sorted()
+            }
+            guard !exists else { continue }
+            context.insert(Goal(
+                title: source.title,
+                kind: source.kind,
+                categoryCodes: source.categoryCodes,
+                period: source.period,
+                periodStart: monthStart,
+                targetValue: source.targetValue,
+                isRecurring: true,
+                sortOrder: source.sortOrder
+            ))
+            created = true
+        }
+        if created { try context.save() }
+        UserDefaults.standard.set(true, forKey: carryKey)
     }
 
     /// 是否已有同类型、同分类范围、同周期的目标（阈值不同也算同一个）
     func existingGoal(kind: GoalKind, categoryCodes: [String], period: GoalPeriod) throws -> Goal? {
         let codes = categoryCodes.sorted()
+        let monthStart = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
         return try goals().first {
+            calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) &&
             $0.kind == kind && $0.categoryCodes.sorted() == codes && $0.period == period
         }
     }
@@ -190,7 +230,7 @@ final class GoalService {
     // MARK: - 进度
 
     func progress(for goal: Goal, asOf date: Date = .now) throws -> GoalProgress {
-        let range = try periodRange(goal.period, asOf: date)
+        let range = try periodRange(goal.period, asOf: goal.monthStart)
         let unit: GoalProgress.Unit
         let current: Int
         let isAtMost: Bool
@@ -232,7 +272,7 @@ final class GoalService {
     // MARK: - 区间与取样
 
     func periodRange(_ period: GoalPeriod, asOf date: Date = .now) throws -> (start: Date, end: Date) {
-        let component: Calendar.Component = period == .week ? .weekOfYear : .month
+        let component: Calendar.Component = .month
         guard let interval = calendar.dateInterval(of: component, for: date) else {
             throw SpendgeError.invalidDate
         }

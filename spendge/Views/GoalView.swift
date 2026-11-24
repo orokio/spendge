@@ -14,14 +14,22 @@ struct GoalView: View {
     @Query(sort: [SortDescriptor(\GoalAchievement.periodStart, order: .reverse)])
     private var achievements: [GoalAchievement]
 
+    /// 正在查看的月份：默认当月，可回看历史
+    @State private var selectedMonth = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
+    @State private var showMonthPicker = false
     @State private var showBudgetEditor = false
     @State private var errorMessage: String?
     @State private var showGoalForm = false
     @State private var formTarget: Goal?
 
     private var calendar: Calendar { .current }
-    private var goals: [Goal] { allGoals.filter(\.isActive) }
-    private var pausedGoals: [Goal] { allGoals.filter { !$0.isActive } }
+    /// 每个月一份目标：只看该月自己的那些
+    private var goals: [Goal] {
+        allGoals.filter { $0.isActive && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) }
+    }
+    private var pausedGoals: [Goal] {
+        allGoals.filter { !$0.isActive && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) }
+    }
 
     var body: some View {
         let _ = LaunchTrace.once("goal.body")
@@ -34,11 +42,15 @@ struct GoalView: View {
                     header
                     budgetCard
 
-                    if goals.isEmpty && pausedGoals.isEmpty {
-                        presetSection
+                    if isCurrentMonth {
+                        if goals.isEmpty && pausedGoals.isEmpty {
+                            presetSection
+                        } else {
+                            if !goals.isEmpty { activeSection }
+                            if !pausedGoals.isEmpty { pausedSection }
+                        }
                     } else {
-                        if !goals.isEmpty { activeSection }
-                        if !pausedGoals.isEmpty { pausedSection }
+                        historySection
                     }
                 }
                 .padding(.horizontal, PageLayout.pageInset)
@@ -108,6 +120,18 @@ struct GoalView: View {
                 }
             }
         }
+        .sheet(isPresented: $showMonthPicker) {
+            PeriodPickerSheet(options: monthOptions.map { .month($0) },
+                              selected: .month(monthStart)) { picked in
+                if case .month(let date) = picked {
+                    selectedMonth = date
+                }
+                showMonthPicker = false
+            }
+            .presentationDetents([.fraction(0.45)])
+            .presentationCornerRadius(24)
+            .presentationBackground(Color.surfaceElevated)
+        }
         .errorToast($errorMessage)
     }
 
@@ -115,9 +139,19 @@ struct GoalView: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            Text("目标")
-                .font(Typography.pageTitle)
+            Button {
+                showMonthPicker = true
+            } label: {
+                HStack(spacing: 5) {
+                    Text(monthTitle)
+                        .font(Typography.pageTitle)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
                 .foregroundStyle(Color.textPrimary)
+            }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 12)
 
@@ -137,7 +171,15 @@ struct GoalView: View {
     // MARK: - 预算
 
     private var monthStart: Date {
-        calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+        calendar.dateInterval(of: .month, for: selectedMonth)?.start ?? selectedMonth
+    }
+
+    private var monthEnd: Date {
+        calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
+    }
+
+    private var isCurrentMonth: Bool {
+        calendar.isDate(selectedMonth, equalTo: .now, toGranularity: .month)
     }
 
     private var monthBudget: Budget? {
@@ -152,9 +194,8 @@ struct GoalView: View {
     }
 
     private var monthExpenseCents: Int64 {
-        let end = calendar.dateInterval(of: .month, for: .now)?.end ?? .now
         return allTransactions
-            .filter { $0.kind == .expense && $0.date >= monthStart && $0.date < end }
+            .filter { $0.kind == .expense && $0.date >= monthStart && $0.date < monthEnd }
             .reduce(into: Int64(0)) { $0 += $1.amountCents }
     }
 
@@ -172,17 +213,23 @@ struct GoalView: View {
 
     private var budgetCard: some View {
         Button {
+            guard isCurrentMonth else { return }
             openBudget()
         } label: {
             VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
                 HStack {
-                    Text("本月预算")
+                    Text(isCurrentMonth ? "本月预算" : "当月预算")
                         .font(Typography.bodyStrong)
                     Spacer()
                     HStack(spacing: 6) {
                         Text(monthTitle)
-                        Text("·")
-                        Text("还剩 \(daysLeft) 天")
+                        if isCurrentMonth {
+                            Text("·")
+                            Text("还剩 \(daysLeft) 天")
+                        } else {
+                            Text("·")
+                            Text("已结束")
+                        }
                     }
                     .font(Typography.caption)
                     .foregroundStyle(.secondary)
@@ -297,25 +344,55 @@ struct GoalView: View {
                     .font(Typography.sectionTitle)
                     .foregroundStyle(Color.textPrimary)
                 Spacer(minLength: 12)
-                Button {
-                    openForm(nil)
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("新增")
-                            .font(Typography.label)
+                if isCurrentMonth {
+                    Button {
+                        openForm(nil)
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("新增")
+                                .font(Typography.label)
+                        }
+                        .foregroundStyle(Color.brand)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(Color.brand)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             ForEach(goals) { goal in
                 goalRow(goal)
             }
         }
+    }
+
+    /// 历史月份：用达成记录渲染，目标被删了也还能看到当时的结果
+    /// 历史月份：展示那个月自己的目标对象（每月一份），结果看达成状态
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: PageLayout.blockGap) {
+            Text("已完成")
+                .font(Typography.sectionTitle)
+                .foregroundStyle(Color.textPrimary)
+
+            if goals.isEmpty && pausedGoals.isEmpty {
+                Text("这个月还没有目标记录")
+                    .font(Typography.label)
+                    .foregroundStyle(Color.textSecondary)
+            } else {
+                ForEach(goals + pausedGoals) { goal in
+                    historyCard(goal)
+                }
+            }
+        }
+    }
+
+    private func historyCard(_ goal: Goal) -> some View {
+        let progress = progress(for: goal)
+        return GoalCard(goal: goal,
+                        progress: progress,
+                        streak: 0,
+                        status: progress.map { status(for: $0, closed: true) })
     }
 
     private var pausedSection: some View {
@@ -326,6 +403,7 @@ struct GoalView: View {
 
             ForEach(pausedGoals) { goal in
                 Button {
+                    guard isCurrentMonth else { return }
                     openForm(goal)
                 } label: {
                     GoalCard(goal: goal,
@@ -335,6 +413,7 @@ struct GoalView: View {
                              isPaused: true)
                 }
                 .buttonStyle(.plain)
+                .disabled(!isCurrentMonth)
             }
         }
     }
@@ -342,9 +421,10 @@ struct GoalView: View {
     /// 左侧点击进操作层，右半边长按删除
     private func goalRow(_ goal: Goal) -> some View {
         let p = progress(for: goal)
-        return         HoldToDeleteRow(onDelete: { delete(goal) },
+        return         HoldToDeleteRow(onDelete: { if isCurrentMonth { delete(goal) } },
                                cornerRadius: PageLayout.cardRadius) {
             Button {
+                guard isCurrentMonth else { return }
                 openForm(goal)
             } label: {
                 GoalCard(goal: goal,
@@ -416,7 +496,8 @@ struct GoalView: View {
     // MARK: - 判定
 
     /// 拿「用了多少」和「过了多少时间」比：同一个 50%，月初和月底完全不同
-    private func status(for progress: GoalProgress) -> GoalStatus {
+    /// closed=true 用于历史月：整月都过完了，按“月底”这个时间点判断
+    private func status(for progress: GoalProgress, closed: Bool = false) -> GoalStatus {
         if progress.target == 0 {
             return progress.current == 0 ? .perfect : .over
         }
@@ -425,8 +506,9 @@ struct GoalView: View {
         if usage > 1 { return .over }
         if progress.current == 0 { return .perfect }
 
-        let dayCount = calendar.range(of: .day, in: .month, for: .now)?.count ?? 30
-        let timeProgress = Double(daysPassed) / Double(dayCount)
+        let dayCount = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 30
+        let passed = closed ? dayCount : daysPassed
+        let timeProgress = Double(passed) / Double(dayCount)
 
         if usage <= timeProgress { return .healthy }
         if usage > timeProgress + 0.2 || usage > 0.8 { return .warning }
@@ -436,7 +518,31 @@ struct GoalView: View {
     // MARK: - 动作
 
     private func progress(for goal: Goal) -> GoalProgress? {
-        try? GoalService(context: context).progress(for: goal)
+        let asOf = isCurrentMonth ? Date.now : monthEnd.addingTimeInterval(-1)
+        return try? GoalService(context: context).progress(for: goal, asOf: asOf)
+    }
+
+    /// 可选月份：从最早有数据的那个月到当月，和统计页同一口径
+    private var monthOptions: [Date] {
+        let current = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+        let transactionDates = allTransactions.map(\.date)
+        let goalDates = allGoals.map(\.createdAt)
+        let achievementDates = achievements.map(\.periodStart)
+        let budgetDates = budgets.compactMap {
+            calendar.date(from: DateComponents(year: $0.year, month: $0.month))
+        }
+        let earliest = (transactionDates + goalDates + achievementDates + budgetDates)
+            .min()
+            .flatMap { calendar.dateInterval(of: .month, for: $0)?.start } ?? current
+
+        var result: [Date] = []
+        var cursor = current
+        while cursor >= earliest {
+            result.append(cursor)
+            guard let previous = calendar.date(byAdding: .month, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return result
     }
 
     /// 最近连续达成的周期数：从最新一条往前数，断了就停

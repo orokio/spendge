@@ -44,7 +44,6 @@ extension GoalKind {
 }
 
 enum GoalPeriod: String, CaseIterable {
-    case week
     case month
 }
 
@@ -65,10 +64,14 @@ final class Goal {
     /// 参与聚合的分类 code；为空表示全部分类
     var categoryCodes: [String] = []
     var periodRawValue: String
+    /// 目标归属的月份（该月 1 号）；每个月是一份独立的目标对象
+    var periodStart: Date?
     /// 计数类目标存次数 / 天数，金额类目标存分
     var targetValue: Int
     var basisRawValue: String = GoalBasis.fixed.rawValue
     var isActive: Bool = true
+    /// 循环应用：下个月自动建一份一样的目标
+    var isRecurring: Bool = false
     var sortOrder: Int = 0
     var createdAt: Date
     var updatedAt: Date
@@ -79,9 +82,11 @@ final class Goal {
         kind: GoalKind,
         categoryCodes: [String] = [],
         period: GoalPeriod,
+        periodStart: Date? = nil,
         targetValue: Int,
         basis: GoalBasis = .fixed,
         isActive: Bool = true,
+        isRecurring: Bool = false,
         sortOrder: Int = 0,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -91,12 +96,20 @@ final class Goal {
         self.kindRawValue = kind.rawValue
         self.categoryCodes = categoryCodes
         self.periodRawValue = period.rawValue
+        self.periodStart = periodStart
         self.targetValue = targetValue
         self.basisRawValue = basis.rawValue
         self.isActive = isActive
+        self.isRecurring = isRecurring
         self.sortOrder = sortOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    /// 所属月份起点；旧数据没有值时按创建时间推算
+    var monthStart: Date {
+        if let periodStart { return periodStart }
+        return Calendar.current.dateInterval(of: .month, for: createdAt)?.start ?? createdAt
     }
 
     var kind: GoalKind { GoalKind(rawValue: kindRawValue) ?? .countLimit }

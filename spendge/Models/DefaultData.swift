@@ -203,6 +203,17 @@ enum DefaultData {
         UserDefaults.standard.set(15, forKey: key)
     }
 
+    /// 老目标没有归属月份：按创建时间回填，保证每个月各自独立
+    static func backfillGoalMonths(context: ModelContext) {
+        guard let goals = try? context.fetch(FetchDescriptor<Goal>()) else { return }
+        var changed = false
+        for goal in goals where goal.periodStart == nil {
+            goal.periodStart = Calendar.current.dateInterval(of: .month, for: goal.createdAt)?.start
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
+
     /// 幂等：已有数据时不重复写入。
     static func seedIfNeeded(context: ModelContext) {
         let categoryCount = (try? context.fetchCount(FetchDescriptor<Category>())) ?? 0

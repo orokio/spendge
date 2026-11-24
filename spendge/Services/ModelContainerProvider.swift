@@ -23,6 +23,7 @@ enum ModelContainerProvider {
             let context = ModelContext(container)
             DefaultData.migrateCategoriesIfNeeded(context: context)
             DefaultData.seedIfNeeded(context: context)
+            DefaultData.backfillGoalMonths(context: context)
             return container
         }
 
@@ -34,6 +35,7 @@ enum ModelContainerProvider {
                 let context = ModelContext(container)
                 DefaultData.migrateCategoriesIfNeeded(context: context)
                 DefaultData.seedIfNeeded(context: context)
+            DefaultData.backfillGoalMonths(context: context)
                 return container
             }
         }

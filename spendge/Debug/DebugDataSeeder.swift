@@ -9,6 +9,7 @@ enum DebugScenario: String, CaseIterable, Identifiable {
     case nearTrophyUnlock
     case overBudget
     case incomeHeavy
+    case pastGoals
 
     var id: String { rawValue }
 
@@ -20,6 +21,7 @@ enum DebugScenario: String, CaseIterable, Identifiable {
         case .nearTrophyUnlock: return "近解锁"
         case .overBudget: return "超预算"
         case .incomeHeavy: return "收入为主"
+        case .pastGoals: return "过去三个月目标"
         }
     }
 
@@ -31,6 +33,7 @@ enum DebugScenario: String, CaseIterable, Identifiable {
         case .nearTrophyUnlock: return "99 笔记录，再记一笔解锁「一百笔」"
         case .overBudget: return "本月预算 1000 元，账单已超支"
         case .incomeHeavy: return "两笔收入 + 少量支出"
+        case .pastGoals: return "前三个月各生成账单、预算与目标达成记录，用于回看"
         }
     }
 }
@@ -62,6 +65,8 @@ struct DebugDataSeeder {
             try seedOverBudget()
         case .incomeHeavy:
             try seedIncomeHeavy()
+        case .pastGoals:
+            try seedPastGoals()
         }
 
         try context.save()
@@ -178,6 +183,61 @@ struct DebugDataSeeder {
     }
 
     // MARK: - 基础
+
+    /// 前三个月：账单 + 预算 + 两个目标的达成记录（其中一个月故意未达成）
+    private func seedPastGoals() throws {
+        let (account, expenses, _) = try base()
+        var rng = SeededRandom(seed: 20261126)
+        let currentMonth = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+
+        for offset in 1...3 {
+            guard let monthStart = calendar.date(byAdding: .month, value: -offset, to: currentMonth) else { continue }
+
+            for index in 0..<8 {
+                guard let day = calendar.date(byAdding: .day, value: index * 3, to: monthStart) else { continue }
+                let category = expenses[rng.next(expenses.count)]
+                context.insert(Transaction(
+                    amountCents: Int64(2000 + rng.next(8000)),
+                    kind: .expense,
+                    date: day.addingTimeInterval(12 * 3600),
+                    category: category,
+                    account: account
+                ))
+            }
+
+            let comps = calendar.dateComponents([.year, .month], from: monthStart)
+            if let year = comps.year, let month = comps.month {
+                context.insert(Budget(category: nil, amountCents: 300_000, year: year, month: month))
+            }
+        }
+
+        // 每个月都是独立的目标对象，第二个月的计数目标故意没达成
+        for offset in 1...3 {
+            guard let monthStart = calendar.date(byAdding: .month, value: -offset, to: currentMonth) else { continue }
+            let missed = (offset == 2)
+            let month = calendar.component(.month, from: monthStart)
+
+            let countGoal = Goal(title: "\(month)月外卖 4 次以内", kind: .countLimit,
+                                 categoryCodes: [CategoryCode.takeout.rawValue],
+                                 period: .month, periodStart: monthStart,
+                                 targetValue: 4, sortOrder: offset, createdAt: monthStart)
+            let sumGoal = Goal(title: "\(month)月奶茶咖啡 200 元以内", kind: .categorySum,
+                               categoryCodes: [CategoryCode.drink.rawValue],
+                               period: .month, periodStart: monthStart,
+                               targetValue: 20_000, sortOrder: offset, createdAt: monthStart)
+            context.insert(countGoal)
+            context.insert(sumGoal)
+
+            context.insert(GoalAchievement(
+                goalID: countGoal.id, title: countGoal.title, period: .month, periodStart: monthStart,
+                achieved: !missed, currentValue: missed ? 5 : 3, targetValue: 4, unit: .count
+            ))
+            context.insert(GoalAchievement(
+                goalID: sumGoal.id, title: sumGoal.title, period: .month, periodStart: monthStart,
+                achieved: true, currentValue: 15_000, targetValue: 20_000, unit: .cents
+            ))
+        }
+    }
 
     private func base() throws -> (Account, [Category], [Category]) {
         let accounts = try context.fetch(FetchDescriptor<Account>())

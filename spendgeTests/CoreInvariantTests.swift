@@ -112,7 +112,7 @@ final class GoalProgressTests: XCTestCase {
     }
 
     func testCountMinimumProgress() {
-        let progress = GoalProgress(current: 2, target: 3, unit: .count, isAtMost: false, period: .week)
+        let progress = GoalProgress(current: 2, target: 3, unit: .count, isAtMost: false, period: .month)
         XCTAssertFalse(progress.isReached)
         XCTAssertEqual(progress.remaining, 1)
     }
@@ -123,9 +123,9 @@ final class GoalProgressTests: XCTestCase {
         let month = try service.periodRange(.month)
         XCTAssertEqual(Calendar.current.component(.day, from: month.start), 1)
 
-        let week = try service.periodRange(.week)
-        let days = Calendar.current.dateComponents([.day], from: week.start, to: week.end).day
-        XCTAssertEqual(days, 7)
+        let monthRange = try service.periodRange(.month)
+        let days = Calendar.current.dateComponents([.day], from: monthRange.start, to: monthRange.end).day ?? 0
+        XCTAssertGreaterThanOrEqual(days, 28)
     }
 }
 

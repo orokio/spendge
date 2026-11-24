@@ -15,6 +15,7 @@ struct GoalFormView: View {
     @State private var period: GoalPeriod
     @State private var categoryCode: String
     @State private var valueText: String
+    @State private var isRecurring: Bool
     @State private var toast: String?
     @State private var errorMessage: String?
     /// 抽屉滑完再亮提示，避免它比面板先到
@@ -32,6 +33,7 @@ struct GoalFormView: View {
         _categoryCode = State(initialValue: goal?.categoryCodes.first ?? "")
         let raw = goal?.targetValue ?? 0
         _valueText = State(initialValue: goal == nil ? "" : Self.text(kind: kind, value: raw))
+        _isRecurring = State(initialValue: goal?.isRecurring ?? false)
     }
 
     private static func text(kind: GoalKind, value: Int) -> String {
@@ -195,6 +197,24 @@ struct GoalFormView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            Button {
+                isRecurring.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: isRecurring ? "checkmark.circle.fill" : "circle")
+                        .font(Typography.body)
+                        .foregroundStyle(isRecurring ? Color.brand : Color.secondary)
+                    Text("循环应用到下个月")
+                        .font(Typography.label)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // 和上面输入框左边缘对齐，不压到标签列
+            .padding(.leading, 76)
         }
         .padding(.horizontal, PageLayout.pageInset)
         .padding(.bottom, 30)
@@ -305,10 +325,12 @@ struct GoalFormView: View {
         do {
             if let goal {
                 try service.update(goal, title: finalTitle, kind: kind,
-                                   categoryCodes: codes, period: .month, targetValue: value)
+                                   categoryCodes: codes, period: .month, targetValue: value,
+                                   isRecurring: isRecurring)
             } else {
                 _ = try service.create(title: finalTitle, kind: kind,
-                                       categoryCodes: codes, period: .month, targetValue: value)
+                                       categoryCodes: codes, period: .month, targetValue: value,
+                                       isRecurring: isRecurring)
             }
         } catch {
             errorMessage = ErrorText.message(for: error)

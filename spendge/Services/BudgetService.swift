@@ -76,6 +76,10 @@ final class BudgetService {
     func carryForwardIfNeeded(asOf date: Date = .now) throws {
         let comps = calendar.dateComponents([.year, .month], from: date)
         guard let year = comps.year, let month = comps.month else { return }
+        // 硬幂等：每个月只补一次，删掉本月预算后不会在下次启动又冒出来
+        let carryKey = "budget.carry.\(year)-\(month)"
+        guard !UserDefaults.standard.bool(forKey: carryKey) else { return }
+
         guard try budget(category: nil, year: year, month: month) == nil else { return }
 
         let all = try context.fetch(
@@ -89,6 +93,7 @@ final class BudgetService {
                           year: year, month: month, isRecurring: true)
         context.insert(copy)
         try context.save()
+        UserDefaults.standard.set(true, forKey: carryKey)
     }
 
     func deleteBudget(_ budget: Budget) throws {
