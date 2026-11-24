@@ -57,7 +57,7 @@ struct SettingsView: View {
                 privacyGroup
 
                 group([
-                    Item(icon: "info.circle", title: "关于", detail: "0.1"),
+                    Item(icon: "info.circle", title: "关于", detail: appVersionText),
                 ])
 
                 DebugSettingsEntry(isPresented: $showDebugPanel)
@@ -109,6 +109,13 @@ struct SettingsView: View {
     }
 
     // MARK: - 隐私
+
+    /// 关于页显示「1.0 (2)」：主版本 + 构建号，都从 Bundle 读，不写死
+    private var appVersionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(version) (\(build))"
+    }
 
     private var privacyGroup: some View {
         VStack(spacing: 0) {
