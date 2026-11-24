@@ -9,6 +9,7 @@ enum IdentityService {
     private static let service = "com.orokio.spendge.identity"
     private static let deviceAccount = "deviceId"
     private static let tokenAccount = "deviceToken"
+    private static let secretAccount = "deviceSecret"
 
     /// 稳定的设备标识；并发调用也只会生成一次
     static let deviceId: String = {
@@ -36,6 +37,21 @@ enum IdentityService {
             write(newValue, account: tokenAccount)
         }
     }
+
+    /// 设备密钥：首次启动生成，register 时随请求带上；服务端只存哈希。
+    /// 仅知道 deviceId 不足以获取 token，这是没有 App Attest 时的最低凭证。
+    static let deviceSecret: String = {
+        if let existing = read(account: secretAccount), !existing.isEmpty {
+            return existing
+        }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) != errSecSuccess {
+            bytes = Array(UUID().uuidString.utf8)
+        }
+        let value = Data(bytes).base64EncodedString()
+        write(value, account: secretAccount)
+        return value
+    }()
 
     // MARK: - Keychain
 

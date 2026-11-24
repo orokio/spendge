@@ -93,7 +93,9 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 - 只保存 Apple 的稳定用户标识（`apple_subject`），不主动申请邮箱与姓名
 - 不做实名认证
 
-### Token
+### Token（账号 token，M4 绑定账号后使用）
+
+> 与 §5 的**设备 token** 是两套：设备 token 给匿名设备用，本节的账号 token 给绑定账号后的跨设备场景用。
 
 - 访问 token：随机 256 位，服务端只存哈希，有效期 7 天
 - 刷新 token：有效期 90 天，刷新时轮换
@@ -134,6 +136,8 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 同步本身由 CloudKit 完成，**不需要登录**；账号是在 iCloud 卡片下方通过可选引导绑定的（见 §2），不绑也能同步。设置页把「iCloud 同步」和「绑定账号」分开写，避免用户误以为登录才能同步账单。
 
 ## 5. 接口（v1）
+
+> 详细契约（字段、状态码、幂等与限流）以 [api-contract.md](api-contract.md) 为准；本文只保留一览。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
