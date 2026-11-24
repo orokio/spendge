@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// 设备登记：每次启动向 `/v1/devices/register` 上报一次 deviceId。
 ///
@@ -6,6 +7,8 @@ import Foundation
 /// - 失败：不打扰用户，下次启动重试
 /// - 没配 ServerBaseURL：什么都不做
 enum DeviceRegistrar {
+    private static let logger = Logger(subsystem: "com.orokio.spendge", category: "register")
+
     /// 首次签发才返回明文 token；之后的滑动续期不带
     private struct RegisterResponse: Decodable {
         let deviceToken: String?
@@ -35,14 +38,17 @@ enum DeviceRegistrar {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             // 服务端签发设备 token，存 Keychain；M4 的接口用它鉴权
             if let payload = try? JSONDecoder().decode(RegisterResponse.self, from: data),
                let token = payload.deviceToken {
                 IdentityService.deviceToken = token
             }
+            logger.notice("register status=\(status, privacy: .public)")
         } catch {
             // 下次启动再试
+            logger.notice("register failed: \(String(describing: error), privacy: .public)")
         }
     }
 }
