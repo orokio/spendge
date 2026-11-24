@@ -6,11 +6,11 @@
 
 ## 0. 与当前产品状态的对齐（2026-11-24）
 
-v1 上架线是「本地记账 + iCloud + Bugly + 最小埋点」，以下设计暂时用不上，开工时要先按现状调整：
+v1 上架线是「本地记账 + iCloud + Bugly + 最小埋点 + 设备登记」，服务端只做设备登记，以下其余设计暂时用不上，开工时要先按现状调整：
 
 | 章节 | 现状 | 开工前要做的调整 |
 |---|---|---|
-| §1 定位 | 账号、会员、解析、运营四件事，v1 一件都不做 | 把服务端定位收敛为「M4 解析 + 诊断接收」，账号与权益降为可选 |
+| §1 定位 | 账号、会员、解析、运营四件事，v1 都不做 | v1 只做设备登记（`/v1/devices/register`）；定位收敛为「设备登记 + M4 解析 + 诊断接收」，账号与权益降为可选 |
 | §2 身份与账号 | Sign in with Apple、deviceId/accountId 绑定 | **v1 只做 deviceId**：客户端生成并保存，accountId 字段预留但为空、不上传、不显示绑定入口；M4 有云端功能后，老用户升级 App 即可用现有 deviceId 回填关联 |
 | §3 会员与 StoreKit | 按**订阅**设计（Server Notifications、expires_at 校验） | v1 是 **¥18 一次性买断**，客户端用 StoreKit 2 的 currentEntitlements 判定，服务端不参与；将来做订阅时再启用本节，届时 accountId 与 originalTransactionId 都要记 |
 | §5 接口 | accounts / sessions / appstore 通知 | v1 只需要 `/health` 与 `/v1/devices/register`；解析上线时再加 `/v1/parse`、`/v1/diagnostics` |
@@ -99,6 +99,13 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 - 刷新 token：有效期 90 天，刷新时轮换
 - token 绑定 deviceId；换设备重新 Sign in with Apple
 
+### 设备 token（v1，register 签发）
+
+- register 签发 **opaque** 设备 token（非 JWT），**有效期 3 个月**，每次 register 滑动续期
+- 服务端只存哈希，绑定 deviceId，可吊销；明文只在首次签发时返回，客户端存 Keychain
+- 签发与复用必须校验 **deviceSecret**（客户端生成、存 Keychain、服务端存哈希）；仅知道 deviceId 不能获取 token
+- 续期须携带现有 `Authorization: Bearer`；未携带时不重新发放明文 token
+
 ### 账号删除（上架硬要求）
 
 - App 内提供入口，二次确认
@@ -143,38 +150,37 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 
 ### /v1/devices/register 契约（v1）
 
-客户端在隐私同意后**每次启动上报一次**；失败下次启动重试，不打扰用户。
+客户端在隐私同意后**每次启动上报一次**；失败下次启动重试，不打扰用户。这是唯一不需要 Bearer 的接口，但**必须携带 deviceSecret**。
 
-```json
-POST /v1/devices/register
-{
-  "deviceId": "uuid",
-  "appVersion": "1.0",
-  "build": "2",
-  "platform": "ios"
-}
-```
+    POST /v1/devices/register
+    {
+      "deviceId": "uuid",
+      "deviceSecret": "random-256bit",
+      "appVersion": "1.0",
+      "build": "2",
+      "platform": "ios"
+    }
 
-响应：
+首次签发返回明文 token（之后续期不再返回）：
 
-```json
-{ "deviceToken": "opaque-or-jwt", "expiresAt": "2027-11-24T00:00:00Z" }
-```
+    { "deviceToken": "<opaque-random>", "expiresAt": "2027-02-24T00:00:00Z" }
 
-- 这是唯一的无凭证入口，同时承担“签发设备 token”的职责
-- 幂等：同一 deviceId 重复上报只更新 `last_seen` 与版本号，不产生新行
-- **token 复用**：同一 deviceId 未过期、未吊销时，返回同一个 token，不重新签发
-- 有效期 1 年；每次 register 自动续期（滑动过期），不会因为过期产生额外请求
-- 服务端只存 token 哈希 + 绑定的 deviceId + 过期时间，可随时吊销
-- 只存 deviceId、首次/最后时间、App 版本；不存任何账单或内容
-- 客户端未配置 ServerBaseURL 或未同意隐私时不会发起请求
+- deviceId 与 deviceSecret 都由客户端首次启动生成、存 Keychain，重装不丢
+- 首次 register：服务端存 deviceId 与 secret 哈希，签发 **opaque** 设备 token（仅此一次返回明文），只存 token 哈希
+- 之后每次启动：带 deviceId + deviceSecret（及现有 Bearer）→ 校验通过后续期 expires_at，**不重新返回明文**
+- **凭证校验**：deviceSecret 不匹配即 401/403，不签发、不复用；仅知道 deviceId 拿不到 token
+- 幂等：同一 deviceId 重复上报只更新 last_seen 与版本号，不产生新行
+- token 为 opaque 随机串（非 JWT），**有效期 3 个月**，每次 register 滑动续期，只存哈希，可随时吊销
+- 只存 deviceId、secret 哈希、首次/最后时间、App 版本；不存任何账单或内容
+- 客户端未配置 ServerBaseURL 或未同意隐私时不发起请求
 
 ### 鉴权约定（M4 起使用）
 
 - 除 `/health` 与 `/v1/devices/register` 外，所有接口带 `Authorization: Bearer <deviceToken>`
+- register 不需要 Bearer，但必须带 deviceSecret 校验，否则任何知道 deviceId 的人都能签发/复用 token
 - 中间件：验 token → 取 deviceId → 查 Redis 额度/限流 → 进入业务
-- token 无效或吊销：返回 401 + `code=token_invalid`，客户端静默重新 register 一次后重试
-- 没有 App Attest 时，token 是**会话载体**而不是身份证明；防伪造仍靠限流与后续的 Attest
+- token 无效或吊销：返回 401 + `code=token_invalid`，客户端带 deviceSecret 重新 register（重签/续期）后再重试
+- 没有 App Attest 时，token 是**会话载体**而不是身份证明；deviceSecret + 限流 + 后续 Attest 共同防伪造
 
 ### /v1/diagnostics 契约
 
@@ -235,10 +241,11 @@ accounts            id TEXT PK,              -- server accountId
                     apple_subject TEXT UNIQUE,
                     created_at TEXT
 devices             id TEXT PK,              -- client deviceId
+                    secret_hash TEXT,        -- deviceSecret 哈希
                     account_id TEXT NULL,
                     created_at TEXT, last_seen_at TEXT
-sessions            token_hash TEXT PK, account_id TEXT, device_id TEXT,
-                    expires_at TEXT, created_at TEXT
+sessions            token_hash TEXT PK, account_id TEXT NULL, -- 设备 token 时为空
+                    device_id TEXT, expires_at TEXT, created_at TEXT
 entitlements        id TEXT PK, account_id TEXT,
                     original_transaction_id TEXT UNIQUE, product_id TEXT,
                     expires_at TEXT, status TEXT, updated_at TEXT
@@ -342,7 +349,7 @@ PRAGMA cache_size = -8192;
 
 ## 10. 实施顺序
 
-> **2026-11-24**：暂不排期。恢复时的顺序改为：解析代理 → 诊断接收 →（仅当做订阅）账号与权益；下面列表按旧的订阅方案保留。
+> **2026-11-24**：v1 先做设备登记。顺序：**`/v1/devices/register`（+ devices 表 + 最小部署）→ M4 解析代理 → 诊断接收 →（仅当做订阅）账号与权益**。下面旧列表仅按订阅方案保留备查。
 
 1. 账号：匿名发放、token、改名、绑定 Apple、删除
 2. SQLite 表与 Alembic 迁移；Redis 计数与幂等
@@ -421,4 +428,3 @@ PRAGMA cache_size = -8192;
 - [ ] token 过期或 401 进入游客态，不阻断本地
 - [ ] 主动关停演练：公告 → 只读 → 导出 → 下线，客户端纯本地可用
 - [ ] 服务恢复后自动补同步且幂等，不重复扣额度
-

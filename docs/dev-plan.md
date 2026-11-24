@@ -1,6 +1,6 @@
 # Spendge 开发计划
 
-> 状态：**M3 完成 + P0 收尾完成** · 下一步：v1 中国区上架线（iCloud + 最小埋点 + 商店物料） · 服务端开发暂停 · 最后更新：2026-11-23
+> 状态：**M3 完成 + P0 收尾完成** · 下一步：v1 中国区上架线（iCloud + 最小埋点 + 商店物料） · 服务端 v1 只做设备登记（/v1/devices/register） · 最后更新：2026-11-24
 >
 > 上游文档：[product-plan.md](product-plan.md)（产品方向 v0.3）、[architecture.md](architecture.md)（当前技术设计）、[ui-spec.md](ui-spec.md)（通用 UI 框架）、[visual-language.md](visual-language.md)（当前 App 的实现值）。
 > 本文只回答一个问题：**按什么顺序把产品方案落到代码里**。不重复论证产品方向；方向有疑问回 product-plan。
@@ -21,7 +21,7 @@
 3. 转账类记录无处安放（`kind` 只有收入 / 支出）；退款还没有录入开关。
 4. 深色模式没有明确锁死（M5 要求先锁 Light）。
 5. 失败态仍是多数 `try?` 静默失败，核心写路径缺可见提示。
-6. 服务端开发暂停：`server/` 只有 Flask 健康检查与 serve.sh，设计与部署文档已齐；账号、权益、解析等在云端环境继续。
+6. 服务端 v1 只做设备登记：`server/` 仅 Flask 健康检查 + serve.sh，需补 `/v1/devices/register` 与 devices 表（最小部署）；账号、权益、解析、诊断等在云端后续再做。
 
 ## 1. 阶段总览
 
@@ -448,11 +448,11 @@ Budget 保留为「月度总额上限」这一种特殊 Goal，暂不与 Goal �
 
 ## 5.8 v1 上架线（2026-11-23 定）
 
-第一版只做：**本地记账 + iCloud 同步 + Bugly + 最小埋点**，中国区上架。不做会员、账号、服务端解析，服务端代码保持暂停。
+第一版只做：**本地记账 + iCloud 同步 + Bugly + 最小埋点 + 设备登记**，中国区上架。服务端只做 `/v1/devices/register`（+ devices 表 + 最小部署）；会员、账号、解析、诊断都不做，M4 再开。
 
 - 阻塞项与验收：见 [release-checklist.md](release-checklist.md)
 - 外部前置：App 备案、域名 ICP（如果政策页用自己的域名），越早启动越好
-- 顺序：隐私清单 / 锁浅色 → 最小埋点与隐私页更新（版本 +1）→ iCloud 同步 → **一次性解锁（Entitlement + StoreKit）** → dSYM 上传 → 商店物料 → TestFlight → 提审
+- 顺序：隐私清单 / 锁浅色 → 最小埋点与隐私页更新（版本 +1）→ **服务端 `/v1/devices/register`（+ devices 表 + 最小部署）** → iCloud 同步 → **一次性解锁（Entitlement + StoreKit）** → dSYM 上传 → 商店物料 → TestFlight → 提审
 - 收费模型见 product-plan §11：免费下载 + ¥18 一次性解锁（首发 ¥12），不做订阅；M4 会员留待后续，代码里只保留能力层
 - iCloud 是本期最大工程项：设计稿见 [icloud-sync-design.md](icloud-sync-design.md)，确认后再改模型
 
