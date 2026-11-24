@@ -1,6 +1,6 @@
 # 后端部署计划（spendge server）
 
-> 状态：**进行中**（2026-11-24 更新）｜ v1 需最小部署以承载 `/v1/devices/register` ｜ 开发与调试都在云机器上进行，本地不做服务端开发 ｜ 适用主机：腾讯云 Ubuntu 24.04
+> 状态：**已部署**（2026-11-25）｜ nginx + HTTPS(8443) + gunicorn + SQLite + Redis 已上线，`/v1/devices/register` 可用 ｜ 备案后切 80/443 ｜ 开发与调试都在云机器上进行 ｜ 适用主机：腾讯云 Ubuntu 24.04
 > 本文是部署的唯一依据；架构与接口见 [server-design.md](server-design.md)。
 
 ## 1. 概述
@@ -244,3 +244,73 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 - 生成 Redis 密码并写入 .env 与 redis.conf（不入库）。
 - 实现 devices 表 + `/v1/devices/register`（SQLAlchemy + Alembic）后，方可完成阶段 2/3 的接口验证。
 - 当前已用的约 1G 内存归属查清。
+## 13. 实际部署记录（2026-11-25，可复现）
+
+> 本章是"实际执行 + 踩坑"，上面各章是"计划"。机器丢失时照本章重建最快。
+
+### 13.1 实际版本
+
+| 组件 | 版本 / 来源 |
+|---|---|
+| nginx | 1.28.0（源码编译，package/nginx-1.28.0.tar.gz） |
+| gunicorn | 27.0.1（spendge-server/.venv） |
+| Flask / SQLAlchemy / Alembic / redis-py | 3.1.3 / 2.1.9 / 1.20.1 / 8.2.0 |
+| Redis | 7.0.15（apt） |
+| SQLite | 3.45.1（系统） |
+| 证书 | TrustAsia DV，CN=orokio.com，SAN 含 www.orokio.com，有效至 2027-02-20 |
+
+### 13.2 实际目录
+
+    /home/ubuntu/
+    ├── spendge/            git 源码（稀疏检出 server/、docs/）
+    ├── spendge-server/     运行副本：app/、.venv/、.env、logs/、run/、spendge.service
+    ├── nginx/              sbin/ conf/ logs/ html/、nginx.service、conf/ssl/orokio.com_nginx/
+    ├── sqlite/             spendge.db（含 -wal/-shm）、backup/
+    ├── redis/              数据与日志目录（属 redis:redis）
+    ├── package/            nginx-1.28.0.tar.gz
+    └── backup/             orokio.com_nginx.zip（原始证书）
+
+### 13.3 已完成步骤（按序）
+
+1. 依赖：sudo apt install build-essential libpcre2-dev zlib1g-dev libssl-dev python3.12-venv sqlite3 redis-server
+2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（7 表）；迁移 20f108f0a1fc；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
+3. 后端：pyproject 加 gunicorn/redis；rsync server/ 到 spendge-server/；副本建 venv 并 pip install .；.env 复制
+4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
+5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010
+6. 证书：腾讯云 zip 解压到 nginx/conf/ssl/orokio.com_nginx/（bundle.pem + key）
+7. Redis：apt 装；redis.conf 设 bind 127.0.0.1 / requirepass / maxmemory 128mb / volatile-lru / save "" / appendonly no / dir 与 logfile 指向 /home/ubuntu/redis
+8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M），enable --now
+9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com → 124.223.27.87
+10. 验证：https://www.orokio.com:8443/health 返回 ok；register 签发 token；同 deviceId 第 6 次请求返回 429（限流生效）
+
+### 13.4 踩坑与解决（重点）
+
+1. **venv 创建失败（ensurepip 不可用）** → sudo apt install python3.12-venv 后重建 venv。
+2. **Redis 启动报 dir /home/ubuntu/redis Permission denied**（两个原因叠加）：
+   - /home/ubuntu 权限 750，其他用户无法"穿越"到子目录 → sudo chmod o+x /home/ubuntu（751）；
+   - 即便权限放开，systemd 的 ProtectHome=true 与 ProtectSystem=strict 仍屏蔽 /home、只读系统 → 加 override：
+        sudo mkdir -p /etc/systemd/system/redis-server.service.d
+        [Service]
+        ProtectHome=false
+        ReadWritePaths=/home/ubuntu/redis
+     daemon-reload 后 restart。
+   - 结论：卡点是 **systemd 沙箱**，不是用户；保留专用 redis 用户即可（最小权限），不要改成 ubuntu 跑。
+3. **nginx -t 以普通用户失败**（open() nginx.pid Permission denied）：nginx 由 systemd 以 root 启动，PID 文件属 root → 用 sudo /home/ubuntu/nginx/sbin/nginx -t，或直接 sudo systemctl reload nginx。
+4. **公网 8080/8443 不通（http_code=000）**：安全组未放行 → 腾讯云安全组入站放行 TCP 8080、8443。本机自测公网 IP 也可能因 hairpin 回环失败，以"安全组放行 + 外部访问"为准。
+5. **Redis 密码与 URL**：requirepass 随机密码要拼进 REDIS_URL=redis://:<密码>@127.0.0.1:6379/0 写入 .env（.env 已 gitignore），否则应用连不上、限流降级为放行。
+6. **gunicorn 不在原依赖**：pyproject 原只有 flask → 加 gunicorn；运行副本 spendge-server 需单独建 venv 并 pip install .。
+7. **Alembic env.py 需改**：sys.path 指向 server、from app.db import Base, DATABASE_URL、import app.models、target_metadata=Base.metadata、render_as_batch=True（SQLite 改表）。
+8. **git 浅克隆 + 远程频繁 force push**：push 被拒时用 git fetch --depth 1 后 git checkout -B main origin/main；本地提交用 format-patch + apply 重放到最新（浅克隆下直接 rebase 会重放旧提交而冲突）。
+9. **证书 CN=orokio.com**：部署前用 openssl x509 -text 的 subjectAltName 确认 SAN 含 www.orokio.com，否则 www 访问会证书不匹配。
+
+### 13.5 重装速查（机器丢失时）
+
+1. 建目录：mkdir -p /home/ubuntu/{package,nginx/conf/ssl,nginx/logs,sqlite/backup,redis,spendge-server}；chmod o+x /home/ubuntu
+2. 装依赖（见 13.3 第 1 条）
+3. 拉代码：git clone --depth 1 <repo> spendge && cd spendge && git sparse-checkout init --no-cone && git sparse-checkout set /server/ /docs/
+4. 数据层 + 后端（13.3 第 2-4 条），运行副本单独 venv
+5. nginx 编译 + 配置 + 证书（13.3 第 5-6 条）
+6. Redis（13.3 第 7 条 + 13.4 第 2 条 override）
+7. systemd units（unit 文件放组件目录，软链到 /etc/systemd/system/）
+8. 安全组 + DNS
+9. 全链路验证（13.3 第 10 条）
