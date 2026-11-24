@@ -6,6 +6,10 @@ import Foundation
 /// - 失败：不打扰用户，下次启动重试
 /// - 没配 ServerBaseURL：什么都不做
 enum DeviceRegistrar {
+    private struct RegisterResponse: Decodable {
+        let deviceToken: String
+    }
+
     static func registerIfNeeded() async {
         // 隐私同意前不上报
         guard PrivacyConsent.canStartSDK else { return }
@@ -25,7 +29,11 @@ enum DeviceRegistrar {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
-            _ = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            // 服务端签发设备 token，存 Keychain；M4 的接口用它鉴权
+            if let payload = try? JSONDecoder().decode(RegisterResponse.self, from: data) {
+                IdentityService.deviceToken = payload.deviceToken
+            }
         } catch {
             // 下次启动再试
         }

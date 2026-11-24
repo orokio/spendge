@@ -143,7 +143,7 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 
 ### /v1/devices/register 契约（v1）
 
-客户端在隐私同意后、启动时上报一次；成功打本地标记，失败下次启动重试，不打扰用户。
+客户端在隐私同意后**每次启动上报一次**；失败下次启动重试，不打扰用户。
 
 ```json
 POST /v1/devices/register
@@ -155,10 +155,26 @@ POST /v1/devices/register
 }
 ```
 
-- 幂等：同一 deviceId 重复上报只更新 `last_seen`，不产生新行
+响应：
+
+```json
+{ "deviceToken": "opaque-or-jwt", "expiresAt": "2027-11-24T00:00:00Z" }
+```
+
+- 这是唯一的无凭证入口，同时承担“签发设备 token”的职责
+- 幂等：同一 deviceId 重复上报只更新 `last_seen` 与版本号，不产生新行
+- **token 复用**：同一 deviceId 未过期、未吊销时，返回同一个 token，不重新签发
+- 有效期 1 年；每次 register 自动续期（滑动过期），不会因为过期产生额外请求
+- 服务端只存 token 哈希 + 绑定的 deviceId + 过期时间，可随时吊销
 - 只存 deviceId、首次/最后时间、App 版本；不存任何账单或内容
-- 响应 200 即可，客户端不解析返回体
-- 客户端未配置 ServerBaseURL 时不会发起请求
+- 客户端未配置 ServerBaseURL 或未同意隐私时不会发起请求
+
+### 鉴权约定（M4 起使用）
+
+- 除 `/health` 与 `/v1/devices/register` 外，所有接口带 `Authorization: Bearer <deviceToken>`
+- 中间件：验 token → 取 deviceId → 查 Redis 额度/限流 → 进入业务
+- token 无效或吊销：返回 401 + `code=token_invalid`，客户端静默重新 register 一次后重试
+- 没有 App Attest 时，token 是**会话载体**而不是身份证明；防伪造仍靠限流与后续的 Attest
 
 ### /v1/diagnostics 契约
 

@@ -7,26 +7,39 @@ import Security
 /// 客户端不需要迁移，也不需要现在登录。
 enum IdentityService {
     private static let service = "com.orokio.spendge.identity"
-    private static let account = "deviceId"
+    private static let deviceAccount = "deviceId"
+    private static let tokenAccount = "deviceToken"
 
     /// 稳定的设备标识；并发调用也只会生成一次
     static let deviceId: String = {
-        if let existing = readFromKeychain(), !existing.isEmpty {
+        if let existing = read(account: deviceAccount), !existing.isEmpty {
             return existing
         }
         // 老版本把安装标识存在 UserDefaults，迁移进 Keychain，Bugly 的归组不会断
         if let legacy = UserDefaults.standard.string(forKey: PreferenceKey.installID), !legacy.isEmpty {
-            writeToKeychain(legacy)
+            write(legacy, account: deviceAccount)
             return legacy
         }
         let value = UUID().uuidString
-        writeToKeychain(value)
+        write(value, account: deviceAccount)
         return value
     }()
 
+    /// 服务端签发的设备 token；register 成功后写入，没有就为空
+    static var deviceToken: String? {
+        get {
+            guard let value = read(account: tokenAccount), !value.isEmpty else { return nil }
+            return value
+        }
+        set {
+            guard let newValue, !newValue.isEmpty else { return }
+            write(newValue, account: tokenAccount)
+        }
+    }
+
     // MARK: - Keychain
 
-    private static func baseQuery() -> [String: Any] {
+    private static func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -34,8 +47,8 @@ enum IdentityService {
         ]
     }
 
-    private static func readFromKeychain() -> String? {
-        var query = baseQuery()
+    private static func read(account: String) -> String? {
+        var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -45,17 +58,17 @@ enum IdentityService {
         return String(data: data, encoding: .utf8)
     }
 
-    private static func writeToKeychain(_ value: String) {
+    private static func write(_ value: String, account: String) {
         let data = Data(value.utf8)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]
 
-        let status = SecItemUpdate(baseQuery() as CFDictionary, attributes as CFDictionary)
+        let status = SecItemUpdate(baseQuery(account: account) as CFDictionary, attributes as CFDictionary)
         guard status == errSecItemNotFound else { return }
 
-        var insert = baseQuery()
+        var insert = baseQuery(account: account)
         insert.merge(attributes) { _, new in new }
         SecItemAdd(insert as CFDictionary, nil)
     }
