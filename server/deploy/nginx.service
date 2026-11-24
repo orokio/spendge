@@ -1,0 +1,17 @@
+[Unit]
+Description=nginx (spendge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/home/ubuntu/nginx/logs/nginx.pid
+ExecStartPre=/home/ubuntu/nginx/sbin/nginx -t
+ExecStart=/home/ubuntu/nginx/sbin/nginx
+ExecReload=/home/ubuntu/nginx/sbin/nginx -s reload
+ExecStop=/home/ubuntu/nginx/sbin/nginx -s quit
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

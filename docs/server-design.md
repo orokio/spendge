@@ -334,6 +334,19 @@ PRAGMA cache_size = -8192;
 
 选型说明：SQLite 适合单机、低并发写；迁移触发条件见 [deploy-plan.md](deploy-plan.md) 的「运行与升级触发」。以后需要独立数据库服务时，目标是 MariaDB（比 MySQL 8 轻 100–150M、协议兼容），不是 MySQL 8。表不建外键约束，关系与唯一性由应用层和唯一索引保证，迁移时不碍事；连接时仍保留 `PRAGMA foreign_keys=ON`，以后补约束时行为一致。
 
+### 写入路径（write-behind，所有接口统一）
+
+面向用户的接口**不直接写 SQLite**。统一写路径：
+
+    接口线程: 鉴权/限流 → 读写模型(Redis) → XADD 写队列(Redis Stream) → 立即返回
+    writer 进程: 消费 Stream → 批量 upsert SQLite → XACK
+
+- 接口线程**零 DB 写**；SQLite 只由 writer 进程写入（批量、短事务）。
+- 读走 Redis 读模型；未命中时**只读回源 DB**（cache-aside，不写）。
+- Redis 开 **AOF**（appendonly yes），保证写队列在落库前不丢；Redis 不可用时接口返回 **503**，不回退同步写库。
+- 一致性为最终一致（秒级）；at-least-once（未 ack 会重投），落库用 upsert 保证幂等。
+- **所有新接口都遵循此路径**：写操作入队，由 writer 落库；不允许接口里直接 db.commit()。
+
 ## 8. 可观测性
 
 - **崩溃**：Bugly（免费、国内可用），符号表在构建期上传

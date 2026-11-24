@@ -278,8 +278,8 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
 5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010
 6. 证书：腾讯云 zip 解压到 nginx/conf/ssl/orokio.com_nginx/（bundle.pem + key）
-7. Redis：apt 装；redis.conf 设 bind 127.0.0.1 / requirepass / maxmemory 128mb / volatile-lru / save "" / appendonly no / dir 与 logfile 指向 /home/ubuntu/redis
-8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M），enable --now
+7. Redis：apt 装；redis.conf 设 bind 127.0.0.1 / requirepass / maxmemory 128mb / volatile-lru / save "" / **appendonly yes（AOF，write-behind 写队列持久化）** / dir 与 logfile 指向 /home/ubuntu/redis
+8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M）、spendge-writer.service（write-behind worker，MemoryMax=200M）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
 9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com → 124.223.27.87
 10. 验证：https://www.orokio.com:8443/health 返回 ok；register 签发 token；同 deviceId 第 6 次请求返回 429（限流生效）
 
@@ -302,6 +302,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 7. **Alembic env.py 需改**：sys.path 指向 server、from app.db import Base, DATABASE_URL、import app.models、target_metadata=Base.metadata、render_as_batch=True（SQLite 改表）。
 8. **git 浅克隆 + 远程频繁 force push**：push 被拒时用 git fetch --depth 1 后 git checkout -B main origin/main；本地提交用 format-patch + apply 重放到最新（浅克隆下直接 rebase 会重放旧提交而冲突）。
 9. **证书 CN=orokio.com**：部署前用 openssl x509 -text 的 subjectAltName 确认 SAN 含 www.orokio.com，否则 www 访问会证书不匹配。
+10. **writer 阻塞读超时**：Redis Stream 的 XREADGROUP 用 block≈2000ms，若 redis 连接 socket_timeout 设成 0.5s（接口连接那样）会频繁 TimeoutError；writer 必须用独立连接，不设短 socket_timeout。
 
 ### 13.5 重装速查（机器丢失时）
 
