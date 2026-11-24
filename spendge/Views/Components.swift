@@ -301,3 +301,115 @@ struct TopDrawer<Content: View>: View {
                                         to: nil, from: nil, for: nil)
     }
 }
+
+
+// MARK: - 统一确认弹层
+
+/// 全 App 统一使用的确认请求：遮罩 + 居中卡片，不用系统 alert。
+///
+/// 系统 confirmationDialog 会锚定在被点控件上，靠屏幕底部时向下展开、超出屏幕；
+/// 系统 alert 在 overlay 层里也不一定弹得出来，所以统一自己画。
+struct ConfirmRequest: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    var confirmTitle = "继续"
+    var isDestructive = true
+    /// 为 nil 时只显示一个「好」按钮
+    var onConfirm: (() -> Void)?
+    var onCancel: (() -> Void)?
+}
+
+extension View {
+    /// 挂载统一确认弹层；点遮罩或「取消」关闭
+    func confirmDialog(_ request: Binding<ConfirmRequest?>) -> some View {
+        overlay {
+            if let item = request.wrappedValue {
+                ConfirmOverlayCard(request: item) {
+                    request.wrappedValue = nil
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+}
+
+struct ConfirmOverlayCard: View {
+    let request: ConfirmRequest
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.28)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    request.onCancel?()
+                    onDismiss()
+                }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(request.title)
+                    .font(Typography.bodyStrong)
+                    .foregroundStyle(Color.textPrimary)
+
+                Text(request.message)
+                    .font(Typography.body)
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    if let action = request.onConfirm {
+                        Button {
+                            request.onCancel?()
+                            onDismiss()
+                        } label: {
+                            Text("取消")
+                                .font(Typography.body)
+                                .foregroundStyle(Color.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(Color.surface, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            onDismiss()
+                            action()
+                        } label: {
+                            Text(request.confirmTitle)
+                                .font(Typography.body)
+                                .foregroundStyle(Color.onAccent)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(request.isDestructive ? Color.danger : Color.brand,
+                                            in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button {
+                            onDismiss()
+                        } label: {
+                            Text("好")
+                                .font(Typography.body)
+                                .foregroundStyle(Color.onAccent)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(Color.brand, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 2)
+            }
+            .padding(20)
+            .frame(maxWidth: 320)
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 20))
+            .padding(.horizontal, 32)
+        }
+    }
+}
+

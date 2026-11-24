@@ -8,11 +8,10 @@ struct DebugPanelView: View {
 
     @Environment(\.modelContext) private var context
 
-    @State private var pendingScenario: DebugScenario?
+    @State private var confirm: ConfirmRequest?
     @State private var errorMessage: String?
     @State private var toast: String?
     @State private var faultRowsVersion = 0
-    @State private var confirmingCrash = false
     private let implementedFaults: [FaultPoint] = [
         .transactionWrite, .goalWrite, .budgetWrite, .dayConfirmationWrite, .shareExport,
     ]
@@ -29,27 +28,7 @@ struct DebugPanelView: View {
         }
         .toast($toast)
         .errorToast($errorMessage)
-        .confirmationDialog(
-            pendingScenario?.title ?? "生成调试数据",
-            isPresented: Binding(
-                get: { pendingScenario != nil },
-                set: { if !$0 { pendingScenario = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("会清空当前账本，继续", role: .destructive) { runPending() }
-            Button("取消", role: .cancel) { pendingScenario = nil }
-        } message: {
-            Text(pendingScenario?.detail ?? "")
-        }
-        .confirmationDialog("模拟崩溃？",
-                            isPresented: $confirmingCrash,
-                            titleVisibility: .visible) {
-            Button("触发崩溃", role: .destructive) { simulateCrash() }
-            Button("取消", role: .cancel) { confirmingCrash = false }
-        } message: {
-            Text("App 会立刻退出。重新打开后 Bugly 才会上报，几分钟后到后台看崩溃列表。")
-        }
+        .confirmDialog($confirm)
     }
 
     // MARK: - 分区
@@ -82,7 +61,12 @@ struct DebugPanelView: View {
             ForEach(Array(DebugScenario.allCases.enumerated()), id: \.element) { index, scenario in
                 if index > 0 { divider }
                 Button {
-                    pendingScenario = scenario
+                    confirm = ConfirmRequest(
+                        title: scenario.title,
+                        message: scenario.detail,
+                        confirmTitle: "清空并继续",
+                        onConfirm: { run(scenario) }
+                    )
                 } label: {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -110,7 +94,12 @@ struct DebugPanelView: View {
     private var crashSection: some View {
         section(title: "崩溃验证") {
             Button {
-                confirmingCrash = true
+                confirm = ConfirmRequest(
+                    title: "模拟崩溃？",
+                    message: "App 会立刻退出。重新打开后 Bugly 才会上报，几分钟后到后台看崩溃列表。",
+                    confirmTitle: "触发崩溃",
+                    onConfirm: simulateCrash
+                )
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "bolt.trianglebadge.exclamationmark")
@@ -209,15 +198,12 @@ struct DebugPanelView: View {
 
     /// 给 Bugly 做端到端验证：等点击动画走完再触发，避免崩在半帧
     private func simulateCrash() {
-        confirmingCrash = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             fatalError("Bugly 验证：手动触发的测试崩溃")
         }
     }
 
-    private func runPending() {
-        guard let scenario = pendingScenario else { return }
-        pendingScenario = nil
+    private func run(_ scenario: DebugScenario) {
         do {
             try DebugDataSeeder(context: context).run(scenario)
             Toast.show("已生成：\(scenario.title)", into: $toast, duration: 2.0)

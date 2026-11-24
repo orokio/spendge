@@ -18,15 +18,6 @@ struct SettingsView: View {
         let url: URL
     }
 
-    private struct Notice: Identifiable {
-        let id = UUID()
-        let title: String
-        let message: String
-        var isConfirm = false
-        var confirmTitle = "继续"
-        var onConfirm: (() -> Void)?
-    }
-
     @Environment(\.modelContext) private var context
 
     @AppStorage(PreferenceKey.stayAfterSave) private var stayAfterSave = true
@@ -37,7 +28,7 @@ struct SettingsView: View {
     @State private var errorMessage: String?
     @State private var showImporter = false
     @State private var pendingRestore: Data?
-    @State private var notice: Notice?
+    @State private var notice: ConfirmRequest?
     @State private var showDebugPanel = false
 
     var body: some View {
@@ -108,23 +99,7 @@ struct SettingsView: View {
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
             handleImport(result)
         }
-        .alert(item: $notice) { notice in
-            if notice.isConfirm {
-                return Alert(
-                    title: Text(notice.title),
-                    message: Text(notice.message),
-                    primaryButton: .destructive(Text(notice.confirmTitle)) {
-                        notice.onConfirm?()
-                    },
-                    secondaryButton: .cancel(Text("取消")) { pendingRestore = nil }
-                )
-            }
-            return Alert(
-                title: Text(notice.title),
-                message: Text(notice.message),
-                dismissButton: .default(Text("好"))
-            )
-        }
+        .confirmDialog($notice)
     }
 
     private func closeDebugPanel() {
@@ -165,10 +140,9 @@ struct SettingsView: View {
             }
             divider
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
-                notice = Notice(
+                notice = ConfirmRequest(
                     title: "清除全部记录？",
                     message: "会删除所有账单、预算、目标和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
-                    isConfirm: true,
                     confirmTitle: "清除",
                     onConfirm: { clearAllData() }
                 )
@@ -271,14 +245,14 @@ struct SettingsView: View {
         }
 
         pendingRestore = data
-        notice = Notice(
+        notice = ConfirmRequest(
             title: "从备份恢复？",
             message: "将恢复 \(file.transactions.count) 笔记录、\(file.budgets.count) 条预算、\(file.goals?.count ?? 0) 个目标，并替换当前全部数据。建议先导出一份当前备份。",
-            isConfirm: true,
             confirmTitle: "覆盖恢复",
             onConfirm: {
                 if let data = pendingRestore { performRestore(data) }
-            }
+            },
+            onCancel: { pendingRestore = nil }
         )
     }
 
