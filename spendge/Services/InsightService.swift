@@ -52,23 +52,34 @@ final class InsightService {
 
     // MARK: - 今天的句子
 
+    /// 只看当天最新的一笔：退款说退款、收入说发薪、其余按分类说
     private func todayInsight(_ transactions: [Transaction]) -> Insight {
-        // 发薪日单独说
-        if transactions.contains(where: { $0.category?.categoryCode == .salary }) {
+        guard let newest = transactions.first else {
+            return Insight(title: "今天还空着", detail: nil)
+        }
+
+        // 最新一笔是退款：钱回来了，但不算花
+        if newest.refundOfID != nil {
+            return Insight(title: "钱退回来了", detail: "那笔不算花")
+        }
+
+        let code = newest.category?.categoryCode
+
+        if code == .salary {
             return Insight(title: "发薪日", detail: "今天你说了算")
         }
 
-        let takeoutCount = transactions.filter { $0.category?.categoryCode == .takeout }.count
-        if takeoutCount >= 2 {
-            return Insight(
-                title: "第 \(takeoutCount) 顿外卖",
-                detail: "锅：我还能用"
-            )
+        // 外卖连点：退款不算顿数
+        if code == .takeout {
+            let takeoutCount = transactions.filter {
+                $0.refundOfID == nil && $0.category?.categoryCode == .takeout
+            }.count
+            if takeoutCount >= 2 {
+                return Insight(title: "第 \(takeoutCount) 顿外卖", detail: "锅：我还能用")
+            }
         }
 
-        // 取今天最有「事」的一笔：优先非收入、有分类的
-        let candidate = transactions.first { $0.category != nil } ?? transactions[0]
-        guard let code = candidate.category?.categoryCode else {
+        guard let code else {
             return Insight(title: "记下了", detail: nil)
         }
         return copy(for: code)
@@ -142,7 +153,7 @@ final class InsightService {
     private func transactions(from start: Date, to end: Date) throws -> [Transaction] {
         let descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.date >= start && $0.date <= end },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
+            sortBy: [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         )
         return try context.fetch(descriptor)
     }

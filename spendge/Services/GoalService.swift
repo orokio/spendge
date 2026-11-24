@@ -199,9 +199,10 @@ final class GoalService {
         case .countLimit:
             unit = .count
             isAtMost = true
+            // 退款不是一次消费，计数型目标不计入
             current = try transactions(
                 from: range.start, to: range.end, codes: goal.categoryCodes, kind: .expense
-            ).count
+            ).filter { $0.refundOfID == nil }.count
         case .categorySum:
             unit = .cents
             isAtMost = true
