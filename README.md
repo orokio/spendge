@@ -69,5 +69,6 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 - 成就体系：[docs/achievements.md](docs/achievements.md)
 - 调试工具：[docs/debug-tools.md](docs/debug-tools.md)
 - 上架清单：[docs/release-checklist.md](docs/release-checklist.md)
+- 网络调用清单：[docs/network-inventory.md](docs/network-inventory.md)
 - iCloud 同步设计：[docs/icloud-sync-design.md](docs/icloud-sync-design.md)
 - 试用反馈：[docs/feedback.md](docs/feedback.md)

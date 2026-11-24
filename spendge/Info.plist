@@ -28,6 +28,8 @@
 	<string>7d54d7a8-3702-4bc3-9a29-b87a791d19d0</string>
 	<key>UMAppKey</key>
 	<string>6b04263e863270068cd8de53</string>
+	<key>ServerBaseURL</key>
+	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>用语音填写备注时需要麦克风</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

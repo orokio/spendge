@@ -2,7 +2,7 @@ import Foundation
 
 enum PrivacyConsent {
     /// 隐私政策版本：内容变更时加一，下次启动重新询问
-    static let version = 2
+    static let version = 3
 
     static var isGranted: Bool {
         UserDefaults.standard.string(forKey: PreferenceKey.privacyChoice) == "granted"
@@ -39,7 +39,7 @@ enum CrashReporter {
         let appKey = (Bundle.main.object(forInfoDictionaryKey: "BuglyAppKey") as? String) ?? ""
         let config = BuglyConfig(appId: appId, appKey: appKey)
         config.debugMode = false
-        config.userIdentifier = installID
+        config.userIdentifier = IdentityService.deviceId
 
         // 只保留崩溃所需的最小采集，其余按官方示例关闭
         config.setEnableCpuInfo(false)
@@ -57,16 +57,6 @@ enum CrashReporter {
         started = true
     }
 
-    /// 随机 UUID，存 UserDefaults；只用于崩溃归组，不关联任何账号
-    private static var installID: String {
-        let key = PreferenceKey.installID
-        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
-            return existing
-        }
-        let value = UUID().uuidString
-        UserDefaults.standard.set(value, forKey: key)
-        return value
-    }
 }
 #else
 /// 没放 Bugly.xcframework 时保持可编译，功能为空。

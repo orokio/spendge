@@ -1,8 +1,40 @@
 # 服务端设计
 
-> 状态：v0.2 草案（2026-11-22）· 模型方案待定 · **开发暂停，后续在云端环境继续**
+> 状态：v0.3（2026-11-24 复核）· 模型方案待定 · **服务端尚未开工；v1 上架不依赖服务端**，M4 解析上线前再启动，开发在云机器上进行
 > 部署：见 [deploy-plan.md](deploy-plan.md)
 > 原则：客户端本地优先，服务端只做客户端做不了的事；服务端可随时退场而不影响本地使用（见 §12）
+
+## 0. 与当前产品状态的对齐（2026-11-24）
+
+v1 上架线是「本地记账 + iCloud + Bugly + 最小埋点」，以下设计暂时用不上，开工时要先按现状调整：
+
+| 章节 | 现状 | 开工前要做的调整 |
+|---|---|---|
+| §1 定位 | 账号、会员、解析、运营四件事，v1 一件都不做 | 把服务端定位收敛为「M4 解析 + 诊断接收」，账号与权益降为可选 |
+| §2 身份与账号 | Sign in with Apple、deviceId/accountId 绑定 | **v1 只做 deviceId**：客户端生成并保存，accountId 字段预留但为空、不上传、不显示绑定入口；M4 有云端功能后，老用户升级 App 即可用现有 deviceId 回填关联 |
+| §3 会员与 StoreKit | 按**订阅**设计（Server Notifications、expires_at 校验） | v1 是 **¥18 一次性买断**，客户端用 StoreKit 2 的 currentEntitlements 判定，服务端不参与；将来做订阅时再启用本节，届时 accountId 与 originalTransactionId 都要记 |
+| §5 接口 | accounts / sessions / appstore 通知 | v1 只需要 `/health` 与 `/v1/devices/register`；解析上线时再加 `/v1/parse`、`/v1/diagnostics` |
+| §9 合规 | 域名 ICP、App 备案 | App 备案已在办；域名 ICP 与 HTTPS 证书要等域名确定 |
+| §11 未决 | 埋点选型、免费额度 | 已定：埋点用友盟、免费版 2 个目标 + 近 3 个月回看，这两条可关闭 |
+
+仍未变的约定：不存账单与账单内容、不存解析原文与图片、服务端可随时退场不影响本地（§12），这几条继续有效。
+
+### 身份与账号（沿用 2026-11-22 定稿）
+
+- **deviceId**：客户端首次启动生成 UUID，存 Keychain，重装不丢；**v1 就做这一项**，纯本地使用只需要它
+- **accountId**：我们自己的内部 ID，**服务端生成**；只有用户主动绑定账号（Sign in with Apple）时才创建。**iCloud 同步不需要登录**，同步用的是系统 iCloud 身份
+- **表**：`accounts(accountId, appleSubject)`、`devices(deviceId, accountId?, firstSeen)`；一个 accountId 下可以关联多台设备
+- **顺序（方案 B）**：先开 CloudKit 同步，账号关联稍后补；服务端不可用不阻塞同步，期间的日志只有 deviceId，恢复后按 deviceId 回填
+- **日志**：上传时带 deviceId，已绑定账号再带 accountId；只存动作、结果、错误码、版本号
+- **上架要求**：一旦存在账号，App 内必须能删除账号；v1 只做 CloudKit 同步、不提供绑定入口，所以没有账号，这条不适用；绑定入口随 M4 服务端上线，届时补删除入口
+
+CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，所以**不用它做账号标识**；它最多作为设备侧日志的临时归组依据。
+
+### v1 的实现范围与 M4 的接入方式
+
+- v1 只生成并保存 deviceId；任何接口里的 accountId 字段都预留为空，不绑定、不显示入口
+- M4 的云端功能上线后，老用户升级 App：服务端按 deviceId 回填，把历史数据与日志归到新建的 accountId 下，客户端不需要迁移
+- 因此**客户端协议从一开始就带 accountId 字段（可空）**，避免 M4 改协议
 
 ## 1. 定位与边界
 
@@ -31,14 +63,29 @@
 
 - 首次启动只生成 deviceId，不访问服务端
 - 纯本地用户永远只有 deviceId，没有账号
-- accountId 只在用户开启 iCloud 同步、走 Sign in with Apple 时创建
+- accountId 只在用户**主动绑定账号**（Sign in with Apple）时创建；iCloud 同步本身不需要登录，用系统 iCloud 身份即可
 
 ### 绑定流程（方案 B：同步优先，关联可补）
 
-1. 用户打开 iCloud 同步 → 发起 Sign in with Apple
-2. 服务端校验 identityToken，按 `apple_subject` 查找或创建 accountId，绑定当前 deviceId，返回账号 token
-3. 第二台设备用同一个 Apple ID 登录 → 服务端认出同一 accountId，追加绑定它的 deviceId
-4. **服务端不可用时**：不阻塞 CloudKit 同步；账号关联进入重试队列，期间日志只带 deviceId，恢复后由服务端按 deviceId 回填
+**开启 iCloud 同步时的交互**
+
+```
+用户点「开启 iCloud 同步」
+   ├─ 立即开启 CloudKit 同步（不等任何登录，不访问我们）
+   └─ 同一张卡片下方出现引导：
+      「绑定账号，换手机也能找回额度」 [绑定] [以后再说]
+```
+
+- 绑定是可选项，**不是同步的前置条件**；不绑也能同步
+- v1 没有服务端，不显示这个入口；服务端上线后再出现
+
+**绑定时发生什么**
+
+1. 用户点「绑定」→ Sign in with Apple → 服务端校验 identityToken，按 `apple_subject` 查找或创建 accountId，绑定当前 deviceId，返回账号 token
+2. 第二台设备同样绑定 → 服务端认出同一 accountId，追加绑定它的 deviceId
+3. 服务端不可用：不弹错误、不阻塞同步；记一个「待绑定」标记，服务端恢复后（下次启动或回前台）再发起一次 Sign in with Apple
+
+**为什么不能先存凭证、稍后上传**：identityToken 有效期约 10 分钟，authorizationCode 一次性且更短，离线缓存到服务恢复时已经失效。所以缓存的是“想绑定”的意图，恢复后需要用户再点一次系统弹窗。
 
 ### 登录方式
 
@@ -59,7 +106,9 @@
 - iCloud 账本由 Apple 保管，删除账号不影响 iCloud 数据，需在文案里写清
 - 纯本地用户没有账号，不需要删除入口
 
-## 3. 会员与 StoreKit
+## 3. 会员与 StoreKit（v1 不适用，保留设计）
+
+> **2026-11-24 更新**：v1 是 ¥18 **一次性买断**，客户端用 StoreKit 2 的 `currentEntitlements` 判定（本人购买、家人共享、换机恢复都覆盖），**不需要服务端参与**。下面是“将来做订阅”时的设计，开工前先确认是否还需要。
 
 - 权益唯一来源：**App Store**，服务端不处理支付
 - 购买时客户端设置 `appAccountToken = account_id`
@@ -75,14 +124,14 @@
 | 账单、目标、预算 | iCloud（CloudKit） | 跟 Apple ID 走，换设备自动同步 |
 | 账号、权益、额度、诊断日志 | 自有服务端 | 跟 accountId 走 |
 
-账号只在开启 iCloud 同步时通过 Sign in with Apple 建立；同步本身仍由 CloudKit 完成。设置页把「iCloud 同步」和「账号」分开写，避免用户误以为登录账号才会同步账单。
+同步本身由 CloudKit 完成，**不需要登录**；账号是在 iCloud 卡片下方通过可选引导绑定的（见 §2），不绑也能同步。设置页把「iCloud 同步」和「绑定账号」分开写，避免用户误以为登录才能同步账单。
 
 ## 5. 接口（v1）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/v1/accounts/apple` | Sign in with Apple：创建/找回 accountId，绑定 deviceId，返回 token |
-| POST | `/v1/devices/register` | 可选：仅登记 deviceId，用于限流与匿名日志 |
+| POST | `/v1/devices/register` | **v1 就要实现**：登记 deviceId，用于 M4 回填账号与限流 |
 | DELETE | `/v1/accounts/me` | 删除账号，解绑全部 deviceId |
 | POST | `/v1/sessions/refresh` | 轮换 token |
 | GET | `/v1/me` | 账号、已绑定设备、权益、额度 |
@@ -91,6 +140,25 @@
 | POST | `/v1/appstore/notifications` | App Store 服务端通知 |
 | POST | `/v1/events` | 业务事件批量上报（可选） |
 | GET | `/health` | 健康检查 |
+
+### /v1/devices/register 契约（v1）
+
+客户端在隐私同意后、启动时上报一次；成功打本地标记，失败下次启动重试，不打扰用户。
+
+```json
+POST /v1/devices/register
+{
+  "deviceId": "uuid",
+  "appVersion": "1.0",
+  "build": "2",
+  "platform": "ios"
+}
+```
+
+- 幂等：同一 deviceId 重复上报只更新 `last_seen`，不产生新行
+- 只存 deviceId、首次/最后时间、App 版本；不存任何账单或内容
+- 响应 200 即可，客户端不解析返回体
+- 客户端未配置 ServerBaseURL 时不会发起请求
 
 ### /v1/diagnostics 契约
 
@@ -258,6 +326,8 @@ PRAGMA cache_size = -8192;
 
 ## 10. 实施顺序
 
+> **2026-11-24**：暂不排期。恢复时的顺序改为：解析代理 → 诊断接收 →（仅当做订阅）账号与权益；下面列表按旧的订阅方案保留。
+
 1. 账号：匿名发放、token、改名、绑定 Apple、删除
 2. SQLite 表与 Alembic 迁移；Redis 计数与幂等
 3. StoreKit 通知与权益
@@ -268,9 +338,9 @@ PRAGMA cache_size = -8192;
 ## 11. 未决
 
 - 模型供应商（境内，具体待定）与金句集
-- 埋点最终选型（友盟+ / 腾讯云移动分析）
-- 免费额度具体数值与试用策略
-- 是否需要在注册后强制填写邮箱
+- ~~埋点最终选型~~ 已定：客户端友盟（2026-11-24）
+- ~~免费额度~~ 已定：2 个目标 + 近 3 个月回看（2026-11-24）
+- ~~注册后强制填写邮箱~~ v1 无账号，取消
 - 主动退场的公告窗口、退款与导出话术，待法务/客服确认（机制见 §12）
 
 ## 12. 服务可用性与退场设计（离线优先 / Graceful Sunset）

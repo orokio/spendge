@@ -112,6 +112,7 @@ struct RootView: View {
             LaunchTrace.mark("trophies.done")
             CrashReporter.startIfAuthorized()
             UmengReporter.startIfAuthorized()
+            Task.detached(priority: .utility) { await DeviceRegistrar.registerIfNeeded() }
             LaunchTrace.mark("bugly.done")
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - LaunchTrace.start) * 1000)
             Analytics.record(.appLaunch, ["ms": Analytics.durationBand(milliseconds: elapsed)])
@@ -179,6 +180,7 @@ struct RootView: View {
         privacyVersionSeen = PrivacyConsent.version
         CrashReporter.startIfAuthorized()
         UmengReporter.startIfAuthorized()
+        Task.detached(priority: .utility) { await DeviceRegistrar.registerIfNeeded() }
     }
 
     /// 首页三步按顺序；走完后切到目标页看预算
