@@ -413,3 +413,106 @@ struct ConfirmOverlayCard: View {
     }
 }
 
+
+// MARK: - 解锁提示
+
+/// 所有触到免费上限的地方都走这一个弹层：先说清楚解锁得到什么，用户确认后再进真正的购买流程。
+struct UnlockPrompt: View {
+    let onCancel: () -> Void
+    let onUnlock: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.28)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onCancel)
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("解锁全部功能")
+                    .font(Typography.bodyStrong)
+                    .foregroundStyle(Color.textPrimary)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(UnlockService.benefits, id: \.self) { item in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(Typography.caption)
+                                .foregroundStyle(Color.brand)
+                            Text(item)
+                                .font(Typography.label)
+                                .foregroundStyle(Color.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
+                // 价格块：一次买断，重点放大
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(UnlockService.priceText)
+                        .font(.system(size: 36, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color.brand)
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("一次买断")
+                            .font(Typography.bodyStrong)
+                            .foregroundStyle(Color.textPrimary)
+                        Text("永久使用 · 不订阅 · 支持家人共享")
+                            .font(Typography.caption)
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+
+                HStack(spacing: 10) {
+                    Button(action: onCancel) {
+                        Text("以后再说")
+                            .font(Typography.body)
+                            .foregroundStyle(Color.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color.surface, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onUnlock) {
+                        Text("解锁")
+                            .font(Typography.bodyStrong)
+                            .foregroundStyle(Color.onAccent)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color.brand, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 2)
+            }
+            .padding(20)
+            .frame(maxWidth: 320)
+            .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 20))
+            .padding(.horizontal, 32)
+        }
+    }
+}
+
+extension View {
+    /// 挂载统一的解锁提示
+    func unlockPrompt(_ isPresented: Binding<Bool>) -> some View {
+        overlay {
+            if isPresented.wrappedValue {
+                UnlockPrompt {
+                    isPresented.wrappedValue = false
+                } onUnlock: {
+                    isPresented.wrappedValue = false
+                    UnlockService.purchase()
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+}
+

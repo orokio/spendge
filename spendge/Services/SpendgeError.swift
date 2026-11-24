@@ -15,6 +15,7 @@ enum SpendgeError: LocalizedError {
     case injectedFailure(FaultPoint)
     case notRefundable
     case alreadyRefunded
+    case goalLimitReached
 
     var errorDescription: String? {
         switch self {
@@ -43,6 +44,8 @@ enum SpendgeError: LocalizedError {
             return "这笔账单不能退款"
         case .alreadyRefunded:
             return "这笔账单已经退过款"
+        case .goalLimitReached:
+            return "免费版最多 \(Entitlements.freeGoalLimit) 个目标，解锁后不限"
         }
     }
 }

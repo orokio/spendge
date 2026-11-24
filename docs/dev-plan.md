@@ -452,7 +452,8 @@ Budget 保留为「月度总额上限」这一种特殊 Goal，暂不与 Goal �
 
 - 阻塞项与验收：见 [release-checklist.md](release-checklist.md)
 - 外部前置：App 备案、域名 ICP（如果政策页用自己的域名），越早启动越好
-- 顺序：隐私清单 / 锁浅色 → 最小埋点与隐私页更新（版本 +1）→ iCloud 同步 → dSYM 上传 → 商店物料 → TestFlight → 提审
+- 顺序：隐私清单 / 锁浅色 → 最小埋点与隐私页更新（版本 +1）→ iCloud 同步 → **一次性解锁（Entitlement + StoreKit）** → dSYM 上传 → 商店物料 → TestFlight → 提审
+- 收费模型见 product-plan §11：免费下载 + ¥18 一次性解锁（首发 ¥12），不做订阅；M4 会员留待后续，代码里只保留能力层
 - iCloud 是本期最大工程项：设计稿见 [icloud-sync-design.md](icloud-sync-design.md)，确认后再改模型
 
 ## 6. M4：后续（只留位，不排期）

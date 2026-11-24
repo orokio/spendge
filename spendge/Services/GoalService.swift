@@ -67,6 +67,18 @@ final class GoalService {
     ) throws -> Goal {
         try FaultInjection.current.check(.goalWrite)
         try validate(title: title, kind: kind, targetValue: targetValue)
+
+        // 免费版限制：本月最多 2 个目标
+        if !Entitlements.can(.unlimitedGoals) {
+            let monthStart = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+            let count = try goals().filter {
+                calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month)
+            }.count
+            guard count < Entitlements.freeGoalLimit else {
+                throw SpendgeError.goalLimitReached
+            }
+        }
+
         let existing = try goals()
         let goal = Goal(
             title: title,

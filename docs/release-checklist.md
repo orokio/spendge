@@ -12,8 +12,8 @@
 
 ## 1. 客户端阻塞项
 
-- [ ] **锁定浅色模式**：Info.plist 加 `UIUserInterfaceStyle = Light`，避免深色下卡片与渐变异常
-- [ ] **隐私清单** `PrivacyInfo.xcprivacy`：声明 UserDefaults 等 required-reason API（`CA92.1`）；Bugly 自带清单已覆盖它自己
+- [x] **锁定浅色模式**：Info.plist 加 `UIUserInterfaceStyle = Light`（2026-11-24）
+- [x] **隐私清单** `PrivacyInfo.xcprivacy`：已声明 UserDefaults（`CA92.1`）、崩溃/交互/设备标识的数据类型与用途，不跟踪（2026-11-24）
 - [ ] **iCloud 同步**：CloudKit 容器、去唯一约束、默认值、冲突与墓碑、同步开关与状态、双设备测试
 - [x] **最小埋点**：友盟+ 已接入（2026-11-24），9 个事件只记行为不记金额与备注；本地滚动日志同时保留；隐私政策 v2 与首启同意已更新
 - [ ] **账号关联**：Sign in with Apple capability；开启 iCloud 时创建/绑定 accountId；服务端不可用不阻塞同步

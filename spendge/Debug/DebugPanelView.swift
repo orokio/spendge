@@ -22,6 +22,7 @@ struct DebugPanelView: View {
                 header
                 faultSection
                 scenarioSection
+                entitlementSection
                 crashSection
                 closeSection
             }
@@ -88,6 +89,19 @@ struct DebugPanelView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private var entitlementSection: some View {
+        section(title: "收费") {
+            Toggle("模拟免费版", isOn: Binding(
+                get: { !Entitlements.isUnlocked },
+                set: { Entitlements.isUnlocked = !$0 }
+            ))
+            .font(Typography.body)
+            .tint(Color.brand)
+            .padding(.horizontal, 16)
+            .frame(height: 50)
         }
     }
 
