@@ -2,9 +2,11 @@ import uuid
 
 import pytest
 
+from app import cache
 from app.db import SessionLocal
 from app.main import create_app
 from app.models import Device, Session
+from app.writer import process_batch
 
 
 @pytest.fixture
@@ -18,6 +20,10 @@ def client():
 def device_id():
     did = "test-" + uuid.uuid4().hex
     yield did
+    try:
+        cache.delete_device(did)
+    except Exception:
+        pass
     db = SessionLocal()
     try:
         db.query(Session).filter(Session.device_id == did).delete()
@@ -42,6 +48,7 @@ def test_register_first_then_renew(client, device_id):
     assert r1.status_code == 200
     j1 = r1.get_json()
     assert j1["deviceToken"] and j1["expiresAt"]
+    assert cache.get_device(device_id)["token_hash"]
 
     r2 = client.post("/v1/devices/register", json=_body(device_id))
     assert r2.status_code == 200
@@ -60,3 +67,16 @@ def test_register_missing_fields(client, device_id):
     r = client.post("/v1/devices/register", json={"deviceId": device_id})
     assert r.status_code == 400
     assert r.get_json()["code"] == "invalid_request"
+
+
+def test_writer_persists_asynchronously(client, device_id):
+    r = client.post("/v1/devices/register", json=_body(device_id))
+    assert r.status_code == 200
+    group = "test-" + uuid.uuid4().hex
+    process_batch(batch=2000, block_ms=200, group=group, consumer="t")
+    db = SessionLocal()
+    try:
+        assert db.get(Device, device_id) is not None
+        assert db.query(Session).filter(Session.device_id == device_id).count() >= 1
+    finally:
+        db.close()
