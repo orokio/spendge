@@ -1,7 +1,4 @@
-"""Spendge 服务端入口。
-
-现在只有健康检查；云端解析接口按需在 app/ 下加 Blueprint 再注册进来。
-"""
+"""Spendge 服务端入口。"""
 
 from flask import Flask, jsonify
 
@@ -13,6 +10,10 @@ settings = load_settings()
 def create_app() -> Flask:
     app = Flask(__name__)
     app.json.ensure_ascii = False
+
+    from app.devices import bp as devices_bp
+
+    app.register_blueprint(devices_bp)
 
     @app.get("/health")
     def health():
