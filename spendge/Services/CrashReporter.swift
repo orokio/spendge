@@ -2,7 +2,7 @@ import Foundation
 
 enum PrivacyConsent {
     /// 隐私政策版本：内容变更时加一，下次启动重新询问
-    static let version = 1
+    static let version = 2
 
     static var isGranted: Bool {
         UserDefaults.standard.string(forKey: PreferenceKey.privacyChoice) == "granted"

@@ -24,6 +24,7 @@ struct GoalView: View {
     private var pausedGoals: [Goal] { allGoals.filter { !$0.isActive } }
 
     var body: some View {
+        let _ = LaunchTrace.once("goal.body")
         ZStack {
             AppBackground()
                 .ignoresSafeArea()

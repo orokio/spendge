@@ -41,6 +41,7 @@ struct SettingsView: View {
     @State private var showDebugPanel = false
 
     var body: some View {
+        let _ = LaunchTrace.once("settings.body")
         ZStack {
             // NavigationStack 自带不透明底色，这里重新铺回渐变
             AppBackground()
@@ -76,6 +77,7 @@ struct SettingsView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { Analytics.record(.settingsOpened) }
         .toolbar(.hidden, for: .navigationBar)
         }
         .contentShape(Rectangle())
@@ -158,6 +160,10 @@ struct SettingsView: View {
                 showImporter = true
             }
             divider
+            actionRow(icon: "doc.text.magnifyingglass", title: "诊断日志", detail: "仅本地") {
+                exportDiagnostics()
+            }
+            divider
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
                 notice = Notice(
                     title: "清除全部记录？",
@@ -205,14 +211,26 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
+    /// 只导出本地诊断日志，供反馈问题时附上；不含金额与备注
+    private func exportDiagnostics() {
+        let url = Analytics.fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            toast = "还没有诊断日志"
+            return
+        }
+        sharedFile = SharedFile(url: url)
+    }
+
     private func exportCSV() {
         do {
             let text = try BackupService(context: context).csv(scope: .all)
+            Analytics.record(.backup, ["action": "export_csv", "result": "ok"])
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("海绵记账-\(Self.dateStamp()).csv")
             try text.data(using: .utf8)?.write(to: url)
             sharedFile = SharedFile(url: url)
         } catch {
+            Analytics.record(.backup, ["action": "export_csv", "result": "fail", "code": Analytics.errorCode(error)])
             errorMessage = ErrorText.message(for: error)
         }
     }
@@ -220,11 +238,13 @@ struct SettingsView: View {
     private func exportBackup() {
         do {
             let data = try BackupService(context: context).backupData()
+            Analytics.record(.backup, ["action": "export_json", "result": "ok"])
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("海绵记账-备份-\(Self.dateStamp()).json")
             try data.write(to: url)
             sharedFile = SharedFile(url: url)
         } catch {
+            Analytics.record(.backup, ["action": "export_json", "result": "fail", "code": Analytics.errorCode(error)])
             errorMessage = ErrorText.message(for: error)
         }
     }
@@ -265,9 +285,11 @@ struct SettingsView: View {
     private func performRestore(_ data: Data) {
         do {
             let count = try BackupService(context: context).restore(from: data)
+            Analytics.record(.backup, ["action": "restore", "result": "ok", "count": String(count)])
             pendingRestore = nil
             Toast.show("已恢复 \(count) 笔记录", into: $toast)
         } catch {
+            Analytics.record(.backup, ["action": "restore", "result": "fail", "code": Analytics.errorCode(error)])
             pendingRestore = nil
             errorMessage = ErrorText.message(for: error)
         }

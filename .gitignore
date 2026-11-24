@@ -19,5 +19,9 @@ xcuserdata/
 # 本地配置
 *.local
 
-# Bugly SDK（33MB 二进制，不入库）
+# 第三方二进制（体积大，不入库）
 Frameworks/Bugly.xcframework/
+Frameworks/UMCommon.xcframework/
+Frameworks/UMDevice.xcframework/
+Frameworks/UYuMao.xcframework/
+Frameworks/UTDID.framework/

@@ -36,6 +36,7 @@ final class DayConfirmationService {
         let item = DayConfirmation(day: calendar.startOfDay(for: date))
         context.insert(item)
         try context.save()
+        Analytics.record(.noSpend, ["action": "confirm"])
         return item
     }
 
@@ -44,6 +45,7 @@ final class DayConfirmationService {
         guard let existing = try confirmation(on: date) else { return }
         context.delete(existing)
         try context.save()
+        Analytics.record(.noSpend, ["action": "cancel"])
     }
 
     private func dayRange(_ date: Date) throws -> (start: Date, end: Date) {

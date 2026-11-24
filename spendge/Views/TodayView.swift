@@ -142,6 +142,7 @@ struct TodayView: View {
     // MARK: - 页面
 
     var body: some View {
+        let _ = LaunchTrace.once("today.body")
         ZStack(alignment: .bottomTrailing) {
             ScrollViewReader { proxy in
                 VStack(alignment: .leading, spacing: PageLayout.sectionGap) {
@@ -165,7 +166,12 @@ struct TodayView: View {
             fab
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { refresh() }
+        .onAppear { LaunchTrace.mark("today.appear") }
+        .task {
+            LaunchTrace.mark("today.task")
+            refresh()
+            LaunchTrace.mark("today.refresh.done")
+        }
         .onChange(of: transactions.count) { _, _ in
             refresh()
             if !dayTransactions.isEmpty, confirmedSelectedDay {

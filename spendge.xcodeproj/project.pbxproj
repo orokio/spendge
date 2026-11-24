@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		351D59D13023386B005AFCE3 /* Bugly.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 351D59D03023386B005AFCE3 /* Bugly.xcframework */; };
+		A1C000000000000000000002 /* UMCommon in Frameworks */ = {isa = PBXBuildFile; fileRef = A1C000000000000000000001 /* UMCommon */; };
+		A1C000000000000000000004 /* UMDevice in Frameworks */ = {isa = PBXBuildFile; fileRef = A1C000000000000000000003 /* UMDevice */; };
+		A1C000000000000000000006 /* UYuMao in Frameworks */ = {isa = PBXBuildFile; fileRef = A1C000000000000000000005 /* UYuMao */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,6 +27,9 @@
 		351D59A53023386B005AFCE3 /* spendge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = spendge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		351D59D03023386B005AFCE3 /* Bugly.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Bugly.xcframework; path = Frameworks/Bugly.xcframework; sourceTree = "<group>"; };
 		A1B2C3D40000000000000002 /* spendgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = spendgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1C000000000000000000001 /* UMCommon */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:486K7NX823:Umeng Corporation"; lastKnownFileType = wrapper.xcframework; name = UMCommon; path = Frameworks/UMCommon.xcframework; sourceTree = "<group>"; };
+		A1C000000000000000000003 /* UMDevice */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:486K7NX823:Umeng Corporation"; lastKnownFileType = wrapper.xcframework; name = UMDevice; path = Frameworks/UMDevice.xcframework; sourceTree = "<group>"; };
+		A1C000000000000000000005 /* UYuMao */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:486K7NX823:Umeng Corporation"; lastKnownFileType = wrapper.xcframework; name = UYuMao; path = Frameworks/UYuMao.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -58,6 +64,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				351D59D13023386B005AFCE3 /* Bugly.xcframework in Frameworks */,
+				A1C000000000000000000002 /* UMCommon in Frameworks */,
+				A1C000000000000000000004 /* UMDevice in Frameworks */,
+				A1C000000000000000000006 /* UYuMao in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +86,9 @@
 				351D59A73023386B005AFCE3 /* spendge */,
 				A1B2C3D40000000000000009 /* spendgeTests */,
 				351D59D03023386B005AFCE3 /* Bugly.xcframework */,
+				A1C000000000000000000001 /* UMCommon */,
+				A1C000000000000000000003 /* UMDevice */,
+				A1C000000000000000000005 /* UYuMao */,
 				351D59A63023386B005AFCE3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -348,6 +360,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/Frameworks";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = spendge/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -392,6 +405,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/Frameworks";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = spendge/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

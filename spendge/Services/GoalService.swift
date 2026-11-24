@@ -77,6 +77,7 @@ final class GoalService {
         )
         context.insert(goal)
         try context.save()
+        Analytics.record(.goalCreated, ["kind": kind.rawValue, "period": period.rawValue])
         return goal
     }
 

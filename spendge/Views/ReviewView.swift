@@ -112,6 +112,7 @@ struct ReviewView: View {
     }
 
     var body: some View {
+        let _ = LaunchTrace.once("review.body")
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 headerBlock
@@ -129,6 +130,10 @@ struct ReviewView: View {
             .padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)
+        .onAppear {
+            Analytics.record(.reviewOpened, ["mode": mode == .expense ? "expense" : "income",
+                                             "period": isYear ? "year" : "month"])
+        }
         .sheet(isPresented: $showPicker) {
             PeriodPickerSheet(options: periodOptions, selected: period) { picked in
                 period = picked
@@ -226,7 +231,13 @@ struct ReviewView: View {
 
     private var expenseContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            rhythmCard
+            if isYear {
+                yearlyCurveCard(title: "花钱节奏",
+                                points: monthlyPoints(kind: .expense),
+                                tint: Color.brand)
+            } else {
+                rhythmCard
+            }
             structureCard(title: "支出结构",
                           fixedLabel: "刚性",
                           variableLabel: "弹性",
@@ -241,6 +252,11 @@ struct ReviewView: View {
 
     private var incomeContent: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if isYear {
+                yearlyCurveCard(title: "收入节奏",
+                                points: monthlyPoints(kind: .income),
+                                tint: Color.info)
+            }
             structureCard(title: "收入结构",
                           fixedLabel: "稳定",
                           variableLabel: "浮动",
@@ -267,6 +283,236 @@ struct ReviewView: View {
         }
     }
 
+    // MARK: - 年度曲线（按月）
+
+    private var isYear: Bool {
+        if case .year = period { return true }
+        return false
+    }
+
+    private struct MonthPoint: Identifiable {
+        let month: Int
+        let cents: Int64
+        var id: Int { month }
+    }
+
+    /// 选中那一年的分月合计；今年只画到当月，没到的月份不画成 0
+    private func monthlyPoints(kind: TransactionKind) -> [MonthPoint] {
+        guard case .year(let year) = period else { return [] }
+        let isCurrentYear = calendar.component(.year, from: Date()) == year
+        let lastMonth = isCurrentYear ? calendar.component(.month, from: Date()) : 12
+        guard lastMonth > 0 else { return [] }
+
+        return (1...lastMonth).map { month in
+            let cents = transactions
+                .filter {
+                    $0.kind == kind
+                    && calendar.component(.year, from: $0.date) == year
+                    && calendar.component(.month, from: $0.date) == month
+                }
+                .reduce(into: Int64(0)) { $0 += $1.amountCents }
+            return MonthPoint(month: month, cents: cents)
+        }
+    }
+
+    private func yearlyCurveCard(title: String, points: [MonthPoint], tint: Color) -> some View {
+        CardContainer {
+            VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(Typography.bodyStrong)
+                        .foregroundStyle(Color.textPrimary)
+                    Spacer(minLength: 12)
+                    Text("按月")
+                        .font(Typography.caption)
+                        .foregroundStyle(Color.textSecondary)
+                }
+
+                if points.allSatisfy({ $0.cents == 0 }) {
+                    Text("这一年还没有记录")
+                        .font(Typography.label)
+                        .foregroundStyle(Color.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 104)
+                } else {
+                    monthlyCurve(points, tint: tint)
+                }
+            }
+        }
+    }
+
+    private func monthlyCurve(_ points: [MonthPoint], tint: Color) -> some View {
+        let axisMax = niceCeiling(points.map(\.cents).max() ?? 0)
+        let levels: [Int64] = [axisMax, axisMax / 2, 0]
+
+        return VStack(spacing: 6) {
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let gutter: CGFloat = 44
+                let plotWidth = width - gutter
+                let slot = plotWidth / CGFloat(max(1, points.count))
+                let inset: CGFloat = 10
+
+                let coordinates = points.enumerated().map { index, point in
+                    CGPoint(
+                        x: gutter + slot * (CGFloat(index) + 0.5),
+                        y: axisY(point.cents, max: axisMax, height: height, inset: inset)
+                    )
+                }
+
+                ZStack {
+                    // 纵轴：0 / 一半 / 顶，横向刻度线只铺在绘图区
+                    ForEach(levels, id: \.self) { level in
+                        let y = axisY(level, max: axisMax, height: height, inset: inset)
+
+                        Rectangle()
+                            .fill(Color.textSecondary.opacity(level == 0 ? 0.18 : 0.10))
+                            .frame(width: plotWidth, height: 1)
+                            .position(x: gutter + plotWidth / 2, y: y)
+
+                        Text(AmountFormat.string(cents: level))
+                            .font(Typography.caption)
+                            .foregroundStyle(Color.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(width: gutter - 8, alignment: .trailing)
+                            .position(x: (gutter - 8) / 2, y: y)
+                    }
+
+                    if let first = coordinates.first, let last = coordinates.last {
+                        // 线下方一层很淡的渐变，收住曲线，不让它悬空
+                        curvePath(coordinates, closingTo: height - inset)
+                            .fill(
+                                LinearGradient(
+                                    colors: [tint.opacity(0.16), tint.opacity(0.01)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                        curvePath(coordinates)
+                            .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+
+                        Circle()
+                            .fill(Color.surfaceElevated)
+                            .frame(width: 3, height: 3)
+                            .position(first)
+                        Circle()
+                            .fill(tint)
+                            .frame(width: 5, height: 5)
+                            .position(last)
+                    }
+                }
+            }
+            .frame(height: 120)
+
+            HStack(spacing: 0) {
+                ForEach(points) { point in
+                    Text("\(point.month)")
+                        .font(Typography.caption)
+                        .foregroundStyle(Color.textSecondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.leading, 44)
+        }
+    }
+
+    /// 纵轴刻度：向上取整到 1 / 2 / 5 × 10^n，标签才不会出现 ¥2,137 这种数
+    private func niceCeiling(_ cents: Int64) -> Int64 {
+        guard cents > 0 else { return 100 }
+        let yuan = Double(cents) / 100
+        let magnitude = pow(10, floor(log10(yuan)))
+        let normalized = yuan / magnitude
+        let step: Double
+        if normalized <= 1 {
+            step = 1
+        } else if normalized <= 2 {
+            step = 2
+        } else if normalized <= 5 {
+            step = 5
+        } else {
+            step = 10
+        }
+        return Int64((step * magnitude * 100).rounded())
+    }
+
+    private func axisY(_ cents: Int64, max axisMax: Int64, height: CGFloat, inset: CGFloat) -> CGFloat {
+        let usable = height - inset * 2
+        return height - inset - CGFloat(cents) / CGFloat(max(1, axisMax)) * usable
+    }
+
+    /// 单调三次插值（Fritsch–Carlson）：平滑，但不会冲出两个数据点的范围。
+    /// 用普通 Catmull-Rom 时，0 收入月份两侧的斜率会把曲线压到零线以下。
+    private func curvePath(_ points: [CGPoint], closingTo baseline: CGFloat? = nil) -> Path {
+        var path = Path()
+        guard let first = points.first, let last = points.last else { return path }
+
+        if let baseline {
+            path.move(to: CGPoint(x: first.x, y: baseline))
+            path.addLine(to: first)
+        } else {
+            path.move(to: first)
+        }
+
+        guard points.count > 1 else {
+            if let baseline {
+                path.addLine(to: CGPoint(x: first.x, y: baseline))
+                path.closeSubpath()
+            }
+            return path
+        }
+
+        let count = points.count
+        var secants = [CGFloat](repeating: 0, count: count - 1)
+        for index in 0..<(count - 1) {
+            let dx = points[index + 1].x - points[index].x
+            secants[index] = dx == 0 ? 0 : (points[index + 1].y - points[index].y) / dx
+        }
+
+        var tangents = [CGFloat](repeating: 0, count: count)
+        tangents[0] = secants[0]
+        tangents[count - 1] = secants[count - 2]
+        for index in 1..<(count - 1) {
+            tangents[index] = secants[index - 1] * secants[index] <= 0
+                ? 0
+                : (secants[index - 1] + secants[index]) / 2
+        }
+
+        // 限制切线长度，保证每一段都落在两个端点之间
+        for index in 0..<(count - 1) {
+            let secant = secants[index]
+            guard secant != 0 else {
+                tangents[index] = 0
+                tangents[index + 1] = 0
+                continue
+            }
+            let alpha = tangents[index] / secant
+            let beta = tangents[index + 1] / secant
+            let magnitude = alpha * alpha + beta * beta
+            if magnitude > 9 {
+                let scale = 3 / magnitude.squareRoot()
+                tangents[index] = scale * alpha * secant
+                tangents[index + 1] = scale * beta * secant
+            }
+        }
+
+        for index in 0..<(count - 1) {
+            let start = points[index]
+            let end = points[index + 1]
+            let dx = (end.x - start.x) / 3
+            let control1 = CGPoint(x: start.x + dx, y: start.y + tangents[index] * dx)
+            let control2 = CGPoint(x: end.x - dx, y: end.y - tangents[index + 1] * dx)
+            path.addCurve(to: end, control1: control1, control2: control2)
+        }
+
+        if let baseline {
+            path.addLine(to: CGPoint(x: last.x, y: baseline))
+            path.closeSubpath()
+        }
+        return path
+    }
+
     // MARK: - 结构（刚性 / 弹性、稳定 / 浮动）
 
     private func structureCard(title: String,
@@ -277,8 +523,9 @@ struct ReviewView: View {
                                fixedNames: [String],
                                variableNames: [String],
                                suffix: String) -> some View {
-        let total = max(1, fixed + variable)
-        let fixedRatio = Double(fixed) / Double(total)
+        let total = fixed + variable
+        let hasData = total > 0
+        let fixedRatio = hasData ? Double(fixed) / Double(total) : 0
         let fixedColor = Color.info
 
         return CardContainer {
@@ -292,30 +539,34 @@ struct ReviewView: View {
                         Capsule()
                             .fill(Color.secondary.opacity(0.12))
 
-                        HStack(spacing: 0) {
-                            Rectangle()
-                                .fill(fixedColor)
-                                .frame(width: geo.size.width * fixedRatio)
-                            Rectangle()
-                                .fill(Color.brand)
+                        if hasData {
+                            HStack(spacing: 0) {
+                                Rectangle()
+                                    .fill(fixedColor)
+                                    .frame(width: geo.size.width * fixedRatio)
+                                Rectangle()
+                                    .fill(Color.brand)
+                            }
+                            .clipShape(Capsule())
                         }
-                        .clipShape(Capsule())
 
                         // 两段的标识直接写在条里，左右各靠一边
-                        HStack(spacing: 0) {
-                            if fixedRatio >= 0.15 {
-                                Text("\(fixedLabel) \(Int((fixedRatio * 100).rounded()))%")
+                        if hasData {
+                            HStack(spacing: 0) {
+                                if fixedRatio >= 0.15 {
+                                    Text("\(fixedLabel) \(Int((fixedRatio * 100).rounded()))%")
+                                }
+                                Spacer(minLength: 6)
+                                if fixedRatio <= 0.85 {
+                                    Text("\(variableLabel) \((100 - Int((fixedRatio * 100).rounded())))%")
+                                }
                             }
-                            Spacer(minLength: 6)
-                            if fixedRatio <= 0.85 {
-                                Text("\(variableLabel) \((100 - Int((fixedRatio * 100).rounded())))%")
-                            }
+                            .font(Typography.captionStrong)
+                            .foregroundStyle(Color.onAccent)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.horizontal, 12)
                         }
-                        .font(Typography.captionStrong)
-                        .foregroundStyle(Color.onAccent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .padding(.horizontal, 12)
                     }
                 }
                 .frame(height: 30)

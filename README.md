@@ -47,7 +47,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 
 ## 崩溃上报（Bugly）
 
-- 把 `Bugly.xcframework` 放到仓库根目录的 `Frameworks/`（二进制不入库，clone 后需要手动放一次）
+- 二进制不入库，clone 后需要手动放一次：`Frameworks/` 下的 `Bugly.xcframework`、`UMCommon.xcframework`、`UMDevice.xcframework`、`UYuMao.xcframework`
+- 友盟移动统计 7.7.0：AppKey 在 `Info.plist` 的 `UMAppKey`，初始化在隐私同意之后；事件经 `Services/Analytics.swift` 统一出口，同时写本地滚动日志
 - 在 `spendge/Info.plist` 的 `BuglyAppId` 填入 Bugly 控制台的 App ID；App Key 按官方说明留空即可
 - 首次启动展示隐私页，同意后才初始化；App ID 为空时 SDK 不启动
 - 设置 → 隐私与数据 可查看隐私政策

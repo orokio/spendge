@@ -105,9 +105,16 @@ struct RootView: View {
                 .tag(Tab.settings)
         }
         .tint(Color.brand)
+        .onAppear { LaunchTrace.mark("root.appear") }
         .task {
+            LaunchTrace.mark("task.start")
             refreshTrophies(celebrate: false)
+            LaunchTrace.mark("trophies.done")
             CrashReporter.startIfAuthorized()
+            UmengReporter.startIfAuthorized()
+            LaunchTrace.mark("bugly.done")
+            let elapsed = Int((ProcessInfo.processInfo.systemUptime - LaunchTrace.start) * 1000)
+            Analytics.record(.appLaunch, ["ms": Analytics.durationBand(milliseconds: elapsed)])
         }
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicyView()
@@ -171,6 +178,7 @@ struct RootView: View {
         privacyChoice = "granted"
         privacyVersionSeen = PrivacyConsent.version
         CrashReporter.startIfAuthorized()
+        UmengReporter.startIfAuthorized()
     }
 
     /// 首页三步按顺序；走完后切到目标页看预算
@@ -196,17 +204,20 @@ struct RootView: View {
         guard let step = activeOnboardingStep else { return }
 
         if step.target == .budget {
+            Analytics.record(.onboarding, ["step": "budget", "action": "finish"])
             withAnimation(.easeOut(duration: 0.2)) {
                 onboardingBudgetSeen = true
             }
             return
         }
-
+        let stepIndex = String(homeOnboardingStep + 1)
         if homeOnboardingStep + 1 < HomeOnboardingStep.allCases.count {
+            Analytics.record(.onboarding, ["step": stepIndex, "action": "next"])
             withAnimation(.easeInOut(duration: 0.18)) {
                 homeOnboardingStep += 1
             }
         } else {
+            Analytics.record(.onboarding, ["step": stepIndex, "action": "finish"])
             withAnimation(.easeOut(duration: 0.2)) {
                 onboardingHomeSeen = true
             }
@@ -215,6 +226,7 @@ struct RootView: View {
     }
 
     private func skipOnboarding() {
+        Analytics.record(.onboarding, ["step": String(homeOnboardingStep + 1), "action": "skip"])
         withAnimation(.easeOut(duration: 0.2)) {
             onboardingHomeSeen = true
             onboardingBudgetSeen = true

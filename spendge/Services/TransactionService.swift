@@ -66,20 +66,32 @@ final class TransactionService {
         category: Category? = nil,
         account: Account
     ) throws -> Transaction {
-        try FaultInjection.current.check(.transactionWrite)
-        try validate(amountCents: amountCents, date: date, note: note)
-        let transaction = Transaction(
-            amountCents: amountCents,
-            kind: kind,
-            date: date,
-            note: note,
-            source: source,
-            category: category,
-            account: account
-        )
-        context.insert(transaction)
-        try context.save()
-        return transaction
+        do {
+            try FaultInjection.current.check(.transactionWrite)
+            try validate(amountCents: amountCents, date: date, note: note)
+            let transaction = Transaction(
+                amountCents: amountCents,
+                kind: kind,
+                date: date,
+                note: note,
+                source: source,
+                category: category,
+                account: account
+            )
+            context.insert(transaction)
+            try context.save()
+            Analytics.record(.recordSaved, [
+                "kind": kind.rawValue,
+                "source": source.rawValue,
+                "category": category?.categoryCode?.rawValue ?? "none",
+                "amount": Analytics.amountBand(cents: amountCents),
+                "note": (note?.isEmpty == false) ? "1" : "0",
+            ])
+            return transaction
+        } catch {
+            Analytics.record(.recordFailed, ["code": Analytics.errorCode(error)])
+            throw error
+        }
     }
 
     /// 改一笔：只更新传入的字段。

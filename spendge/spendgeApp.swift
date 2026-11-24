@@ -10,7 +10,13 @@ import SwiftData
 
 @main
 struct spendgeApp: App {
-    private let container = ModelContainerProvider.make()
+    private let container: ModelContainer
+
+    init() {
+        LaunchTrace.mark("app.init")
+        container = ModelContainerProvider.make()
+        LaunchTrace.mark("container.ready")
+    }
 
     var body: some Scene {
         WindowGroup {
