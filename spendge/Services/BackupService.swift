@@ -159,9 +159,21 @@ final class BackupService {
         let categoryIDs = Set(file.categories.map(\.id))
         let today = calendar.startOfDay(for: .now)
 
+        let transactionIDs = Set(file.transactions.map(\.id))
+
         for txn in file.transactions {
-            guard txn.amountCents > 0 else {
-                throw BackupValidationError.invalidValue("账单金额")
+            if let refundOfID = txn.refundOfID {
+                // 退款：必须为负、且指向同文件里的原单
+                guard txn.amountCents < 0 else {
+                    throw BackupValidationError.invalidValue("退款金额")
+                }
+                guard transactionIDs.contains(refundOfID) else {
+                    throw BackupValidationError.unknownReference("原账单")
+                }
+            } else {
+                guard txn.amountCents > 0 else {
+                    throw BackupValidationError.invalidValue("账单金额")
+                }
             }
             guard TransactionKind(rawValue: txn.kindRawValue) != nil else {
                 throw BackupValidationError.invalidValue("账单类型")
@@ -316,6 +328,7 @@ final class BackupService {
                 source: TransactionSource(rawValue: dto.sourceRawValue) ?? .manual,
                 category: dto.categoryID.flatMap { categoryMap[$0] },
                 account: accountMap[dto.accountID] ?? fallbackAccount,
+                refundOfID: dto.refundOfID,
                 createdAt: dto.createdAt,
                 updatedAt: dto.updatedAt
             )
@@ -473,6 +486,8 @@ struct TransactionDTO: Codable {
     var sourceRawValue: String
     var categoryID: UUID?
     var accountID: UUID
+    /// 退款记录指回原单；普通账单为空
+    var refundOfID: UUID?
     var createdAt: Date
     var updatedAt: Date
 
@@ -485,6 +500,7 @@ struct TransactionDTO: Codable {
         sourceRawValue = txn.sourceRawValue
         categoryID = txn.category?.id
         accountID = txn.account.id
+        refundOfID = txn.refundOfID
         createdAt = txn.createdAt
         updatedAt = txn.updatedAt
     }

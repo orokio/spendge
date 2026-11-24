@@ -268,8 +268,10 @@ struct RootView: View {
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(3)
+                    .id(transaction.id)
             }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: pages.wrappedValue.editing?.id)
     }
 
     /// 底栏图标：先把符号画成位图再交给系统，系统就无法再把它染成黑色
@@ -392,15 +394,13 @@ struct RootView: View {
 
     private func openEdit(_ transaction: Transaction) {
         let target = pages(for: tab)
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            target.wrappedValue.editing = transaction
-        }
+        // 不用 withAnimation：关闭动画还没走完时再次打开，显式 transaction 会和退出动画互相抵消，
+        // 结果 editing 设进去了但页面不出现。动画统一交给 secondaryPages 上的 .animation(value:)。
+        target.wrappedValue.editing = transaction
     }
 
     private func closeEdit(in pages: Binding<TabPages>) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            pages.wrappedValue.editing = nil
-        }
+        pages.wrappedValue.editing = nil
     }
 }
 

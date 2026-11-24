@@ -18,7 +18,7 @@ struct CategoryRecordsView: View {
     let onClose: () -> Void
 
     @Environment(\.modelContext) private var context
-    @Query(sort: \Transaction.date, order: .reverse) private var allTransactions: [Transaction]
+    @Query(sort: [SortDescriptor(\Transaction.date, order: .reverse), SortDescriptor(\Transaction.createdAt, order: .reverse)]) private var allTransactions: [Transaction]
 
     @State private var errorMessage: String?
 

@@ -128,6 +128,8 @@ extension SpendgeError {
         case .goalTitleTooLong: return "goal_title_too_long"
         case .invalidGoalTarget: return "invalid_goal_target"
         case .injectedFailure: return "injected"
+        case .notRefundable: return "not_refundable"
+        case .alreadyRefunded: return "already_refunded"
         }
     }
 }

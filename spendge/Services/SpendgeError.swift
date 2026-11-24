@@ -13,6 +13,8 @@ enum SpendgeError: LocalizedError {
     case invalidGoalTarget
     /// DEBUG 故障注入：带具体故障点，方便定位
     case injectedFailure(FaultPoint)
+    case notRefundable
+    case alreadyRefunded
 
     var errorDescription: String? {
         switch self {
@@ -37,6 +39,10 @@ enum SpendgeError: LocalizedError {
             return "目标数值超出允许范围"
         case .injectedFailure(let point):
             return "模拟失败：\(point.title)"
+        case .notRefundable:
+            return "这笔账单不能退款"
+        case .alreadyRefunded:
+            return "这笔账单已经退过款"
         }
     }
 }

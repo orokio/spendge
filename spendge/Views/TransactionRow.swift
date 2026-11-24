@@ -5,6 +5,8 @@ import SwiftUI
 struct TransactionRow: View {
     let transaction: Transaction
     var showsCategoryIcon: Bool = true
+    /// 这笔原单是否已经有退款记录
+    var hasRefund: Bool = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -18,8 +20,19 @@ struct TransactionRow: View {
 
             // 固定高度：没有备注时分类名垂直居中，行高与有备注时一致
             VStack(alignment: .leading, spacing: 2) {
-                Text(transaction.category?.name ?? "未分类")
-                    .font(Typography.bodyMedium)
+                HStack(spacing: 6) {
+                    Text(transaction.category?.name ?? "未分类")
+                        .font(Typography.bodyMedium)
+                    if hasRefund {
+                        Text("已退款")
+                            .font(Typography.caption)
+                            .foregroundStyle(Color.textSecondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color.textSecondary.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 5))
+                    }
+                }
                 if let note = transaction.note, !note.isEmpty {
                     Text(note)
                         .font(Typography.label)
@@ -32,12 +45,26 @@ struct TransactionRow: View {
             Spacer(minLength: 8)
 
             // 明细保留角分，不被汇总用的取整规则抹掉
-            Text(AmountFormat.string(cents: signedCents, showsSign: true, exact: true))
+            Text(amountText)
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                .foregroundStyle(transaction.kind == .income ? Color.income : Color.textPrimary)
+                .foregroundStyle(amountColor)
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
+    }
+
+    private var isRefund: Bool { transaction.refundOfID != nil }
+
+    private var amountText: String {
+        if isRefund {
+            return "退 " + AmountFormat.string(cents: abs(transaction.amountCents), exact: true)
+        }
+        return AmountFormat.string(cents: signedCents, showsSign: true, exact: true)
+    }
+
+    private var amountColor: Color {
+        if isRefund { return Color.textSecondary }
+        return transaction.kind == .income ? Color.income : Color.textPrimary
     }
 
     private var signedCents: Int64 {
@@ -67,6 +94,13 @@ struct TransactionList: View {
     let onDelete: (Transaction) -> Void
     var onTap: ((Transaction) -> Void)?
 
+    /// 只查退款记录，用来给原单打「已退款」
+    @Query(filter: #Predicate<Transaction> { $0.refundOfID != nil }) private var refunds: [Transaction]
+
+    private var refundedOriginalIDs: Set<UUID> {
+        Set(refunds.compactMap(\.refundOfID))
+    }
+
     private let rowRadius: CGFloat = 18
 
     var body: some View {
@@ -76,12 +110,16 @@ struct TransactionList: View {
                     onDelete: { onDelete(txn) },
                     cornerRadius: rowRadius
                 ) {
-                    TransactionRow(transaction: txn)
+                    TransactionRow(transaction: txn,
+                                   hasRefund: refundedOriginalIDs.contains(txn.id))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .background(Color.surfaceElevated,
                                     in: RoundedRectangle(cornerRadius: rowRadius, style: .continuous))
-                        .onTapGesture { onTap?(txn) }
+                        .onTapGesture {
+                            print("[tap] row \(txn.id)")
+                            onTap?(txn)
+                        }
                 }
             }
         }

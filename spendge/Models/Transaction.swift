@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// 账单（一笔收支记录）。金额恒为非负数，方向由 kind 决定。
+/// 账单（一笔收支记录）。普通账单金额为正，方向由 kind 决定；退款记录金额为负。
 @Model
 final class Transaction {
     @Attribute(.unique) var id: UUID
@@ -20,6 +20,9 @@ final class Transaction {
     var createdAt: Date
     var updatedAt: Date
 
+    /// 退款记录指回原单；普通账单为 nil
+    var refundOfID: UUID?
+
     var category: Category?
     var account: Account
 
@@ -32,6 +35,7 @@ final class Transaction {
         source: TransactionSource = .manual,
         category: Category? = nil,
         account: Account,
+        refundOfID: UUID? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -43,6 +47,7 @@ final class Transaction {
         self.sourceRawValue = source.rawValue
         self.category = category
         self.account = account
+        self.refundOfID = refundOfID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

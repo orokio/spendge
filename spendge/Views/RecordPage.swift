@@ -15,7 +15,7 @@ struct RecordPage: View {
     @Query(sort: [SortDescriptor(\Category.sortOrder), SortDescriptor(\Category.name)])
     private var allCategories: [Category]
     @Query(sort: \Account.sortOrder) private var allAccounts: [Account]
-    @Query(sort: \Transaction.date, order: .reverse) private var recentTransactions: [Transaction]
+    @Query(sort: [SortDescriptor(\Transaction.date, order: .reverse), SortDescriptor(\Transaction.createdAt, order: .reverse)]) private var recentTransactions: [Transaction]
 
     @State private var kind: TransactionKind = .expense
     @State private var selectedCategory: Category?
@@ -35,6 +35,9 @@ struct RecordPage: View {
     @State private var categoryPicked = false
     @State private var toast: String?
     @State private var saveError: String?
+    /// 当前编辑的账单已有的退款记录（每单最多一条）
+    @State private var existingRefund: Transaction?
+    @State private var refundConfirm: ConfirmRequest?
 
     private let calendar = Calendar.current
 
@@ -49,7 +52,8 @@ struct RecordPage: View {
         guard let transaction = editing else { return }
         _kind = State(initialValue: transaction.kind)
         _selectedCategory = State(initialValue: transaction.category)
-        _amountText = State(initialValue: Self.text(fromCents: transaction.amountCents))
+        // 退款记录存负数，编辑时按正数展示
+        _amountText = State(initialValue: Self.text(fromCents: abs(transaction.amountCents)))
         _amountEdited = State(initialValue: true)
         _date = State(initialValue: transaction.date)
         _note = State(initialValue: transaction.note ?? "")
@@ -198,6 +202,9 @@ struct RecordPage: View {
                                 .frame(height: 16)
                             noteField
                             HStack(alignment: .bottom, spacing: 10) {
+                                if editing != nil, editing?.kind == .expense {
+                                    refundButton
+                                }
                                 saveButton
                                 micButton
                             }
@@ -225,6 +232,12 @@ struct RecordPage: View {
         }
         .toast($toast)
         .errorToast($saveError)
+        .confirmDialog($refundConfirm)
+        .onAppear {
+            if let editing {
+                existingRefund = try? TransactionService(context: context).refundRecord(of: editing)
+            }
+        }
         .onDisappear { transcriber.stop() }
         .task {
             bootstrap()
@@ -449,6 +462,44 @@ struct RecordPage: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    /// 退款：只在编辑已有支出时出现；退过款（包括正在编辑退款记录）后变成不可点的「已退款」
+    private var refundButton: some View {
+        let refunded = existingRefund != nil || editing?.refundOfID != nil
+        return Button {
+            guard let editing, !refunded else { return }
+            refundConfirm = ConfirmRequest(
+                title: "记录一笔退款？",
+                message: "会为这笔账单生成一条全额退款记录，时间记在今天。删除原账单时，退款记录会一起删除。",
+                confirmTitle: "退款",
+                isDestructive: true,
+                onConfirm: { performRefund(editing) }
+            )
+        } label: {
+            Text(refunded ? "已退款" : "退款")
+                .font(Typography.body)
+                .frame(width: 74)
+                .frame(height: 48)
+                .background(Color.danger.opacity(refunded ? 0.10 : 0.20),
+                            in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
+                .foregroundStyle(refunded ? Color.textSecondary : Color.danger)
+        }
+        .buttonStyle(.plain)
+        .disabled(refunded)
+    }
+
+    private func performRefund(_ original: Transaction) {
+        do {
+            let service = TransactionService(context: context)
+            try service.addRefund(for: original)
+            existingRefund = try service.refundRecord(of: original)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onSaved?(Date.now)
+            onClose()
+        } catch {
+            saveError = ErrorText.message(for: error)
+        }
     }
 
     private var saveButton: some View {

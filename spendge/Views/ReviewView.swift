@@ -7,7 +7,7 @@ struct ReviewView: View {
     let onOpenCategory: (CategoryScope) -> Void
 
     @Environment(\.modelContext) private var context
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    @Query(sort: [SortDescriptor(\Transaction.date, order: .reverse), SortDescriptor(\Transaction.createdAt, order: .reverse)]) private var transactions: [Transaction]
 
     /// 当前查看的期间：某个月，或某一整年
     @State private var period: Period = .month(Date())
@@ -279,8 +279,21 @@ struct ReviewView: View {
                     .font(Typography.bodyStrong)
                     .foregroundStyle(Color.textPrimary)
                 statRow
+                if refundCents > 0 {
+                    Text("含退款 −\(AmountFormat.string(cents: refundCents))")
+                        .font(Typography.caption)
+                        .foregroundStyle(Color.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
         }
+    }
+
+    /// 当前期间内退款总额（退款记录存负数，这里取绝对值展示）
+    private var refundCents: Int64 {
+        scopedTransactions
+            .filter { $0.refundOfID != nil }
+            .reduce(into: Int64(0)) { $0 += abs($1.amountCents) }
     }
 
     // MARK: - 年度曲线（按月）

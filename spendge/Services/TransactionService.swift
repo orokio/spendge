@@ -107,15 +107,35 @@ final class TransactionService {
         try FaultInjection.current.check(.transactionWrite)
         try validate(amountCents: amountCents, date: date, note: note)
         if let amountCents {
-            transaction.amountCents = amountCents
+            // 退款记录存负数，编辑时按正数传进来
+            transaction.amountCents = transaction.refundOfID == nil ? amountCents : -abs(amountCents)
         }
         if let kind { transaction.kind = kind }
         if let date { transaction.date = date }
         if let note { transaction.note = note }
         if let category { transaction.category = category }
         if let account { transaction.account = account }
+        // 退款记录永远是支出，避免在编辑页切成收入
+        if transaction.refundOfID != nil { transaction.kind = .expense }
         transaction.updatedAt = .now
+        syncRefundLink(for: transaction)
         try context.save()
+    }
+
+    /// 退款与原单的金额、分类保持一致；日期、账户各管各的
+    private func syncRefundLink(for transaction: Transaction) {
+        if let originalID = transaction.refundOfID {
+            var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == originalID })
+            descriptor.fetchLimit = 1
+            guard let original = try? context.fetch(descriptor).first else { return }
+            original.amountCents = abs(transaction.amountCents)
+            original.category = transaction.category
+            original.updatedAt = .now
+        } else if let refund = try? refundRecord(of: transaction) {
+            refund.amountCents = -abs(transaction.amountCents)
+            refund.category = transaction.category
+            refund.updatedAt = .now
+        }
     }
 
     /// 只校验传入的字段；nil 表示这次不改
@@ -134,11 +154,57 @@ final class TransactionService {
         }
     }
 
-    /// 删一笔。
+    /// 删一笔。删原单时退款记录一起删。
     func delete(_ transaction: Transaction) throws {
         try FaultInjection.current.check(.transactionWrite)
+        if transaction.refundOfID == nil, let refund = try? refundRecord(of: transaction) {
+            context.delete(refund)
+        }
         context.delete(transaction)
         try context.save()
+    }
+
+    // MARK: - 退款
+
+    /// 原单对应的退款记录（每笔原单最多一条）
+    func refundRecord(of transaction: Transaction) throws -> Transaction? {
+        let id = transaction.id
+        var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.refundOfID == id })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    /// 生成一条全额退款记录：负数支出、关联原单、日期为当天
+    @discardableResult
+    func addRefund(for original: Transaction, date: Date = .now) throws -> Transaction {
+        guard original.refundOfID == nil, original.kind == .expense else {
+            throw SpendgeError.notRefundable
+        }
+        if try refundRecord(of: original) != nil {
+            throw SpendgeError.alreadyRefunded
+        }
+        try FaultInjection.current.check(.transactionWrite)
+
+        let refund = Transaction(
+            amountCents: -abs(original.amountCents),
+            kind: .expense,
+            date: date,
+            note: original.note,
+            source: .manual,
+            category: original.category,
+            account: original.account,
+            refundOfID: original.id
+        )
+        context.insert(refund)
+        try context.save()
+        Analytics.record(.recordSaved, [
+            "kind": "refund",
+            "category": original.category?.categoryCode?.rawValue ?? "none",
+            "amount": Analytics.amountBand(cents: original.amountCents),
+            "source": TransactionSource.manual.rawValue,
+            "note": (original.note?.isEmpty == false) ? "1" : "0",
+        ])
+        return refund
     }
 
     // MARK: - 查询
@@ -155,7 +221,7 @@ final class TransactionService {
         }
 
         var descriptor = FetchDescriptor<Transaction>(predicate: predicate)
-        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse)]
+        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
     }
 
@@ -165,7 +231,7 @@ final class TransactionService {
         var descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.account.id == accountID }
         )
-        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse)]
+        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
     }
 
@@ -175,7 +241,7 @@ final class TransactionService {
         var descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.category?.id == categoryID }
         )
-        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse)]
+        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
     }
 
@@ -184,7 +250,7 @@ final class TransactionService {
         var descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.note?.localizedStandardContains(keyword) == true }
         )
-        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse)]
+        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
     }
 
@@ -194,7 +260,7 @@ final class TransactionService {
     /// 不做统计推断：只记忆用户真的输过的数字，最多 limit 个，按时间倒序去重。
     func recentAmounts(limit: Int = 3, sampleLimit: Int = 40) throws -> [Int64] {
         var descriptor = FetchDescriptor<Transaction>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
+            sortBy: [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         )
         descriptor.fetchLimit = sampleLimit
         var result: [Int64] = []
