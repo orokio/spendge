@@ -80,6 +80,12 @@ final class Transaction {
     /// 金额（元）
     var amount: Decimal { Money.yuan(from: amountCents) }
 
+    /// 列表顺序：新的在上。时间相同的（同一天连续记多笔）按创建时间倒序
+    static func newestFirst(_ lhs: Transaction, _ rhs: Transaction) -> Bool {
+        if lhs.date != rhs.date { return lhs.date > rhs.date }
+        return lhs.createdAt > rhs.createdAt
+    }
+
     /// 对账户余额的贡献：收入为 +，支出为 -
     var balanceDeltaCents: Int64 {
         switch kind {

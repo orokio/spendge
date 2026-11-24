@@ -275,16 +275,18 @@ struct ReviewView: View {
     private var rhythmCard: some View {
         CardContainer {
             VStack(alignment: .leading, spacing: PageLayout.cardTitleGap) {
-                Text("花钱节奏")
-                    .font(Typography.bodyStrong)
-                    .foregroundStyle(Color.textPrimary)
-                statRow
-                if refundCents > 0 {
-                    Text("含退款 −\(AmountFormat.string(cents: refundCents))")
-                        .font(Typography.caption)
-                        .foregroundStyle(Color.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("花钱节奏")
+                        .font(Typography.bodyStrong)
+                        .foregroundStyle(Color.textPrimary)
+                    Spacer(minLength: 8)
+                    if refundCents > 0 {
+                        Text("含退款 −\(AmountFormat.string(cents: refundCents))")
+                            .font(Typography.caption)
+                            .foregroundStyle(Color.textSecondary)
+                    }
                 }
+                statRow
             }
         }
     }

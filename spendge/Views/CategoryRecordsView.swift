@@ -36,7 +36,7 @@ struct CategoryRecordsView: View {
         let grouped = Dictionary(grouping: records) { calendar.startOfDay(for: $0.date) }
         return grouped.keys
             .sorted(by: >)
-            .map { day in (day, (grouped[day] ?? []).sorted { $0.date < $1.date }) }
+            .map { day in (day, (grouped[day] ?? []).sorted(by: Transaction.newestFirst)) }
     }
 
     private var totalCents: Int64 {

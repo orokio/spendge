@@ -55,7 +55,7 @@ struct TodayView: View {
     private var dayTransactions: [Transaction] {
         transactions
             .filter { calendar.isDate($0.date, inSameDayAs: selectedDay) }
-            .sorted { $0.date < $1.date }
+            .sorted(by: Transaction.newestFirst)
     }
 
     private var dayStats: [DayStat] {
@@ -128,7 +128,7 @@ struct TodayView: View {
 
         return days.sorted(by: >).map { day in
             DayGroup(day: day,
-                     transactions: (grouped[day] ?? []).sorted { $0.date < $1.date },
+                     transactions: (grouped[day] ?? []).sorted(by: Transaction.newestFirst),
                      isConfirmed: confirmed.contains(day))
         }
     }

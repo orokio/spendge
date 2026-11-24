@@ -355,10 +355,6 @@ struct RecordPage: View {
 
     private var amountView: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text("≈")
-                .font(Typography.body)
-                .foregroundStyle(.secondary)
-
             Text(amountDisplay)
                 .font(.system(size: amountFontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(hasAmount ? Color.brand : Color.secondary.opacity(0.3))

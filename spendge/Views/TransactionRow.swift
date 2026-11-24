@@ -63,7 +63,7 @@ struct TransactionRow: View {
     }
 
     private var amountColor: Color {
-        if isRefund { return Color.textSecondary }
+        if isRefund { return Color.brand }
         return transaction.kind == .income ? Color.income : Color.textPrimary
     }
 
