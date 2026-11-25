@@ -1,7 +1,7 @@
 # 后端部署计划（spendge server）
 
-> 状态：**已部署**（2026-11-25）｜ nginx + HTTPS(8443) + gunicorn + SQLite + Redis 已上线，`/v1/devices/register` 可用 ｜ 备案后切 80/443 ｜ 开发与调试都在云机器上进行 ｜ 适用主机：腾讯云 Ubuntu 24.04
-> 本文是部署的唯一依据；架构与接口见 [server-design.md](server-design.md)。
+> 状态：**已部署**（2026-11-25）｜ nginx + HTTPS(8443) + gunicorn + SQLite + Redis 已上线，`/v1/devices/register` 可用 ｜ 备案后切 80/443 ｜ 服务端开发转本地，本机只做部署与运维 ｜ 适用主机：腾讯云 Ubuntu 24.04
+> 本文是部署的唯一依据；架构与接口见 [server-design.md](server-design.md)；**日常运维命令见 [ops-runbook.md](ops-runbook.md)**。
 
 ## 1. 概述
 
