@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "351D59A43023386B005AFCE3"
-               BuildableName = "spendge.app"
+               BuildableName = "Spendge.app"
                ReferencedContainer = "container:spendge.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -59,7 +59,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "351D59A43023386B005AFCE3"
-            BuildableName = "spendge.app"
+            BuildableName = "Spendge.app"
             ReferencedContainer = "container:spendge.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -75,7 +75,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "351D59A43023386B005AFCE3"
-            BuildableName = "spendge.app"
+            BuildableName = "Spendge.app"
             ReferencedContainer = "container:spendge.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

@@ -24,8 +24,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		351D59A53023386B005AFCE3 /* spendge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = spendge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		351D59A53023386B005AFCE3 /* Spendge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Spendge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		351D59D03023386B005AFCE3 /* Bugly.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Bugly.xcframework; path = Frameworks/Bugly.xcframework; sourceTree = "<group>"; };
+		35D6598130B6E60300E3E085 /* Spendge.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Spendge.storekit; sourceTree = "<group>"; };
 		A1B2C3D40000000000000002 /* spendgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = spendgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1C000000000000000000001 /* UMCommon */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:486K7NX823:Umeng Corporation"; lastKnownFileType = wrapper.xcframework; name = UMCommon; path = Frameworks/UMCommon.xcframework; sourceTree = "<group>"; };
 		A1C000000000000000000003 /* UMDevice */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:486K7NX823:Umeng Corporation"; lastKnownFileType = wrapper.xcframework; name = UMDevice; path = Frameworks/UMDevice.xcframework; sourceTree = "<group>"; };
@@ -83,6 +84,7 @@
 		351D599C3023386B005AFCE3 = {
 			isa = PBXGroup;
 			children = (
+				35D6598130B6E60300E3E085 /* Spendge.storekit */,
 				351D59A73023386B005AFCE3 /* spendge */,
 				A1B2C3D40000000000000009 /* spendgeTests */,
 				351D59D03023386B005AFCE3 /* Bugly.xcframework */,
@@ -96,7 +98,7 @@
 		351D59A63023386B005AFCE3 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				351D59A53023386B005AFCE3 /* spendge.app */,
+				351D59A53023386B005AFCE3 /* Spendge.app */,
 				A1B2C3D40000000000000002 /* spendgeTests.xctest */,
 			);
 			name = Products;
@@ -112,6 +114,7 @@
 				351D59A13023386B005AFCE3 /* Sources */,
 				351D59A23023386B005AFCE3 /* Frameworks */,
 				351D59A33023386B005AFCE3 /* Resources */,
+				B1D5A00000000000000000A1 /* Upload dSYM to Bugly */,
 			);
 			buildRules = (
 			);
@@ -124,7 +127,7 @@
 			packageProductDependencies = (
 			);
 			productName = spendge;
-			productReference = 351D59A53023386B005AFCE3 /* spendge.app */;
+			productReference = 351D59A53023386B005AFCE3 /* Spendge.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A1B2C3D40000000000000001 /* spendgeTests */ = {
@@ -163,10 +166,10 @@
 					351D59A43023386B005AFCE3 = {
 						CreatedOnToolsVersion = 26.6;
 						SystemCapabilities = {
-							com.apple.iCloud = {
+							com.apple.Push = {
 								enabled = 1;
 							};
-							com.apple.Push = {
+							com.apple.iCloud = {
 								enabled = 1;
 							};
 						};
@@ -213,6 +216,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B1D5A00000000000000000A1 /* Upload dSYM to Bugly */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Upload dSYM to Bugly";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/tools/bugly/upload-dsym.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		351D59A13023386B005AFCE3 /* Sources */ = {
@@ -274,7 +299,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = T8H6Y9A282;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -364,11 +389,12 @@
 				CODE_SIGN_ENTITLEMENTS = spendge/spendge.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = T8H6Y9A282;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -391,7 +417,8 @@
 					Security,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.orokio.spendge;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = spendge;
+				PRODUCT_NAME = Spendge;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -402,7 +429,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Debug;
@@ -415,11 +442,12 @@
 				CODE_SIGN_ENTITLEMENTS = spendge/spendge.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = T8H6Y9A282;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -442,7 +470,8 @@
 					Security,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.orokio.spendge;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = spendge;
+				PRODUCT_NAME = Spendge;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -453,7 +482,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Release;
@@ -474,7 +503,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/spendge.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/spendge";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spendge.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spendge";
 			};
 			name = Debug;
 		};
@@ -494,7 +523,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/spendge.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/spendge";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spendge.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spendge";
 			};
 			name = Release;
 		};

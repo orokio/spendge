@@ -49,6 +49,7 @@ struct spendgeApp: App {
 
                         // 同步事件在 App 存活期间就要收，设置页不可见也要更新「上次同步」
                         CloudSyncMonitor.shared.start()
+                        StoreService.shared.start()
                     }
             }
             .onReceive(NotificationCenter.default.publisher(for: .cloudDataImported)) { _ in

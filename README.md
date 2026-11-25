@@ -37,11 +37,11 @@ docs/             # 产品、计划、架构、界面规范、服务端设计
 
 ```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-  xcodebuild -project spendge.xcodeproj -scheme spendge \
+  xcodebuild -project spendge.xcodeproj -scheme Spendge \
   -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO
 ```
 
-- 单元测试：`xcodebuild test -project spendge.xcodeproj -scheme spendge -destination 'platform=iOS Simulator,id=<UDID>' CODE_SIGNING_ALLOWED=NO`
+- 单元测试：`xcodebuild test -project spendge.xcodeproj -scheme Spendge -destination 'platform=iOS Simulator,id=<UDID>' CODE_SIGNING_ALLOWED=NO`
 - 覆盖安装：先尝试迁移，迁移失败才清库；不再按种子版本无条件删库
 - 结构变更与踩坑记录见 [docs/architecture.md](docs/architecture.md)
 

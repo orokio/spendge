@@ -421,6 +421,8 @@ struct UnlockPrompt: View {
     let onCancel: () -> Void
     let onUnlock: () -> Void
 
+    @ObservedObject private var store = StoreService.shared
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.28)
@@ -448,7 +450,7 @@ struct UnlockPrompt: View {
 
                 // 价格块：一次买断，重点放大
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(UnlockService.priceText)
+                    Text(store.displayPrice)
                         .font(.system(size: 36, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color.brand)
 
@@ -480,7 +482,7 @@ struct UnlockPrompt: View {
                     .buttonStyle(.plain)
 
                     Button(action: onUnlock) {
-                        Text("解锁")
+                        Text(store.isPurchasing ? "处理中…" : "解锁")
                             .font(Typography.bodyStrong)
                             .foregroundStyle(Color.onAccent)
                             .frame(maxWidth: .infinity)
@@ -488,8 +490,16 @@ struct UnlockPrompt: View {
                             .background(Color.brand, in: RoundedRectangle(cornerRadius: 12))
                     }
                     .buttonStyle(.plain)
+                    .disabled(store.isPurchasing)
                 }
                 .padding(.top, 2)
+
+                if let error = store.errorMessage {
+                    Text(error)
+                        .font(Typography.caption)
+                        .foregroundStyle(Color.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(20)
             .frame(maxWidth: 320)

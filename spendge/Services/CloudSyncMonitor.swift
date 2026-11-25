@@ -122,7 +122,8 @@ final class CloudSyncMonitor: ObservableObject {
                 NotificationCenter.default.post(name: .cloudDataImported, object: nil)
             }
         } else {
-            errorText = event.error?.localizedDescription ?? "同步失败"
+            // 系统错误文案是英文，界面上只给中文
+            errorText = "同步失败，请稍后重试"
             status = .unavailable("同步失败")
         }
     }

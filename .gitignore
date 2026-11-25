@@ -25,3 +25,6 @@ Frameworks/UMCommon.xcframework/
 Frameworks/UMDevice.xcframework/
 Frameworks/UYuMao.xcframework/
 Frameworks/UTDID.framework/
+
+# Bugly 符号表工具（体积大，按 README 放在本机）
+tools/bugly/*.jar

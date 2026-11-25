@@ -394,7 +394,7 @@ Budget 保留为「月度总额上限」这一种特殊 Goal，暂不与 Goal �
 
 1. ~~**首启引导**~~ ✅ 2026-11-23：聚光灯模式。首页三步（顶部情绪句 → 今天没花钱 → 记一笔），首次切到目标页高亮预算卡；点屏幕任意处下一步，可跳过，跳过不再出现。首页三步只在「从未看过 + 账本为空」时显示。P0 随后完成：失败提示、输入边界、备份恢复校验（见 §5.7）。
 2. **观测接入**：Bugly 已接入；友盟移动统计 7.7.0 已接入（9 个事件 + 本地滚动日志，初始化在隐私同意之后，2026-11-24）。首启隐私页 v2 已包含使用统计说明。待 dSYM 上传配置；友盟后台数据需等免费版的延迟报表确认。
-3. ~~**测试 target**~~ ✅ 2026-11-24：`spendgeTests` 已建（38 项全绿）。SelfCheck 的 50 项断言逐条搬成单测，另补跨年、闰月、空库、金额/备注上限、未来日期、备份往返与损坏备份拒绝。运行：`xcodebuild test -project spendge.xcodeproj -scheme spendge -destination 'platform=iOS Simulator,id=<UDID>' CODE_SIGNING_ALLOWED=NO`。同步用例等 iCloud 接入后再补。
+3. ~~**测试 target**~~ ✅ 2026-11-24：`spendgeTests` 已建（38 项全绿）。SelfCheck 的 50 项断言逐条搬成单测，另补跨年、闰月、空库、金额/备注上限、未来日期、备份往返与损坏备份拒绝。运行：`xcodebuild test -project spendge.xcodeproj -scheme Spendge -destination 'platform=iOS Simulator,id=<UDID>' CODE_SIGNING_ALLOWED=NO`。同步用例等 iCloud 接入后再补。
 4. **iCloud 同步 + P1 鲁棒性**：CloudKit 接入、去唯一约束、冲突与墓碑、同步状态与降级；iCloud 不可用时自动纯本地。
 5. **数据形态收口**：只做退款，transfer 与 merchant 不做（2026-11-24 定，见下）。
 

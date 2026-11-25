@@ -32,6 +32,7 @@ struct SettingsView: View {
     @State private var notice: ConfirmRequest?
     @State private var showDebugPanel = false
     @ObservedObject private var syncMonitor = CloudSyncMonitor.shared
+    @ObservedObject private var store = StoreService.shared
     @AppStorage(CloudSyncPreference.enabledKey) private var syncEnabled = false
     @State private var showUnlock = false
 
@@ -49,6 +50,8 @@ struct SettingsView: View {
                     .padding(.top, 56)
 
                 syncCard
+
+                purchaseGroup
 
                 group([
                     Item(icon: "square.and.pencil", title: "记下后留在记录页", detail: "", isOn: $stayAfterSave),
@@ -118,6 +121,49 @@ struct SettingsView: View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
         return "\(version) (\(build))"
+    }
+
+    private var purchaseGroup: some View {
+        VStack(spacing: 0) {
+            if store.isUnlocked {
+                statusRow(icon: "lock.open", title: "已解锁全部功能", detail: "已买断")
+            } else {
+                actionRow(icon: "lock.open", title: "解锁全部功能", detail: store.displayPrice) {
+                    showUnlock = true
+                }
+            }
+            divider
+            actionRow(icon: "arrow.clockwise", title: "恢复购买", detail: "") {
+                restorePurchases()
+            }
+        }
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
+    }
+
+    /// 纯状态行：没有箭头、不可点
+    private func statusRow(icon: String, title: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(Typography.body)
+                .foregroundStyle(Color.brand)
+                .frame(width: 24)
+            Text(title)
+                .font(Typography.body)
+                .foregroundStyle(Color.textPrimary)
+            Spacer(minLength: 12)
+            Text(detail)
+                .font(Typography.label)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
+    }
+
+    private func restorePurchases() {
+        Task {
+            let restored = await store.restore()
+            Toast.show(restored ? "已恢复购买" : (store.errorMessage ?? "没有可恢复的购买"), into: $toast, duration: 2.2)
+        }
     }
 
     private var privacyGroup: some View {
@@ -366,7 +412,7 @@ struct SettingsView: View {
         do {
             file = try BackupService(context: context).validateBackupData(data)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorText.message(for: error)
             return
         }
 

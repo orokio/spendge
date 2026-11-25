@@ -21,10 +21,7 @@ enum Entitlements {
 
     static var isUnlocked: Bool {
         get {
-            #if DEBUG
-            // 开发期默认全功能；调试面板可以模拟免费版
-            if UserDefaults.standard.object(forKey: key) == nil { return true }
-            #endif
+            // 默认免费；开发者面板的「付费模拟」可以切到买断
             return UserDefaults.standard.bool(forKey: key)
         }
         set { UserDefaults.standard.set(newValue, forKey: key) }
