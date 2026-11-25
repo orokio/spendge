@@ -3,10 +3,12 @@ import SwiftUI
 /// 设置页里的开发者入口。Release 构建不渲染任何内容。
 struct DebugSettingsEntry: View {
     @Binding var isPresented: Bool
+    /// 首页连点 10 次会改这个值；用 AppStorage 观察，设置页才能当场出现入口
+    @AppStorage(DebugKeys.unlocked) private var unlocked = false
 
     var body: some View {
         #if DEBUG
-        if DebugMode.isUnlocked {
+        if unlocked {
             Button {
                 isPresented = true
             } label: {

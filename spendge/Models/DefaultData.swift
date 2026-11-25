@@ -18,6 +18,29 @@ enum DefaultData {
         let sortOrder: Int
     }
 
+    /// 内置默认的「可设哪几种目标」；服务端下发后以 catalog 里的 goalKinds 为准，这张表只管首次启动
+    static let categoryGoalKinds: [CategoryCode: [GoalKind]] = [
+        .takeout: [.countLimit, .budget, .shareCap],
+        .dineout: [.countLimit, .budget, .shareCap],
+        .grocery: [.budget, .shareCap],
+        .drink: [.countLimit, .budget, .shareCap],
+        .alcoholBeverage: [.countLimit, .budget, .shareCap],
+        .snack: [.countLimit, .budget, .shareCap],
+        .daily: [.budget, .shareCap],
+        .wear: [.budget, .shareCap],
+        .digitalGear: [.budget, .shareCap],
+        .sportsOutdoor: [.budget, .shareCap],
+        .appliance: [.budget, .shareCap],
+        .outing: [.budget, .shareCap],
+        .fuel: [.budget, .shareCap],
+        .travel: [.budget, .shareCap],
+        .carCare: [.budget, .shareCap],
+        .game: [.countLimit, .budget, .shareCap],
+        .social: [.budget, .shareCap],
+        .phone: [.budget, .shareCap],
+        .subscription: [.budget, .shareCap],
+    ]
+
     static let expenseCategorySeeds: [CategorySeed] = [
         // 一、吃
         .init(code: .takeout, name: "点外卖", iconName: "takeoutbag.and.cup.and.straw.fill",
@@ -125,18 +148,6 @@ enum DefaultData {
               colorHex: "#3B82F6", kind: .income, domain: .other,
               scope: "其他收入", sortOrder: 199),
     ]
-
-    /// 分类体系改版：把旧分类迁到新分类上，**保留已有账单**。
-    /// 老目标没有归属月份：按创建时间回填，保证每个月各自独立
-    static func backfillGoalMonths(context: ModelContext) {
-        guard let goals = try? context.fetch(FetchDescriptor<Goal>()) else { return }
-        var changed = false
-        for goal in goals where goal.periodStart == nil {
-            goal.periodStart = Calendar.current.dateInterval(of: .month, for: goal.createdAt)?.start
-            changed = true
-        }
-        if changed { try? context.save() }
-    }
 
     /// 幂等：已有数据时不重复写入。
     /// 软删除 30 天后物理清理；只清这些同步模型，分类仍是物理删除。
@@ -265,46 +276,4 @@ enum DefaultData {
         return fallback
     }
 
-    /// 旧数据没有账本归属，统一回填到默认账本。
-    static func backfillLedgerID(context: ModelContext) {
-        let ledgerID = defaultLedgerID(context: context)
-        var changed = false
-
-        if let items = try? context.fetch(FetchDescriptor<Transaction>()) {
-            for item in items where item.ledgerID == nil {
-                item.ledgerID = ledgerID
-                changed = true
-            }
-        }
-        if let items = try? context.fetch(FetchDescriptor<Goal>()) {
-            for item in items where item.ledgerID == nil {
-                item.ledgerID = ledgerID
-                changed = true
-            }
-        }
-        if let items = try? context.fetch(FetchDescriptor<DayConfirmation>()) {
-            for item in items where item.ledgerID == nil {
-                item.ledgerID = ledgerID
-                changed = true
-            }
-        }
-
-        if changed { try? context.save() }
-    }
-
-    /// 给旧数据补上跨设备身份：账单 / 预算的分类 code。
-    /// 必须在关系字段还存在的版本里跑，改造完成后就再也读不到旧关系了。
-    static func backfillCodes(context: ModelContext) {
-        let key = "spendge.entityCodeMigration"
-        guard UserDefaults.standard.integer(forKey: key) < 1 else { return }
-
-        if let transactions = try? context.fetch(FetchDescriptor<Transaction>()) {
-            for transaction in transactions {
-                if transaction.categoryCode == nil { transaction.categoryCode = transaction.category?.code }
-            }
-        }
-
-        try? context.save()
-        UserDefaults.standard.set(1, forKey: key)
-    }
 }

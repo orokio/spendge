@@ -101,7 +101,6 @@ final class BackupService {
             version: BackupFile.currentVersion,
             exportedAt: .now,
             ledgers: ledgers.map(LedgerDTO.init),
-            categories: [],
             transactions: transactions.map(TransactionDTO.init),
             dayConfirmations: confirmations.map(DayConfirmationDTO.init),
             goals: goals.map(GoalDTO.init),
@@ -130,13 +129,11 @@ final class BackupService {
     /// 旧版本导出过同 id 重复的记录；导入前先按身份键去重，不让整份备份失败。
     private func normalize(_ file: BackupFile) -> BackupFile {
         var copy = file
-        copy.ledgers = file.ledgers.map { dedupe($0, key: { $0.id.uuidString }) }
-        copy.categories = dedupe(file.categories, key: { $0.code ?? $0.id.uuidString })
+        copy.ledgers = dedupe(file.ledgers, key: { $0.id.uuidString })
         copy.transactions = dedupe(file.transactions, key: { $0.id.uuidString })
         copy.dayConfirmations = dedupe(file.dayConfirmations, key: {
             String(Int(calendar.startOfDay(for: $0.day).timeIntervalSince1970))
         })
-        copy.budgets = file.budgets.map { dedupe($0, key: { $0.id.uuidString }) }
         copy.goals = file.goals.map { dedupe($0, key: { $0.id.uuidString }) }
         copy.achievements = file.achievements.map { dedupe($0, key: { $0.id.uuidString }) }
         copy.trophies = file.trophies.map { dedupe($0, key: { $0.trophyID }) }
@@ -150,25 +147,15 @@ final class BackupService {
 
     /// 只校验，不落库：所有检查通过后才允许清空
     func validate(_ file: BackupFile) throws {
-        guard (1...BackupFile.currentVersion).contains(file.version) else {
+        guard file.version == BackupFile.currentVersion else {
             throw BackupValidationError.unsupportedVersion
         }
 
-        try ensureUnique(file.categories.map(\.id), "分类")
+        try ensureUnique(file.ledgers.map(\.id), "账本")
         try ensureUnique(file.transactions.map(\.id), "账单")
-        try ensureUnique((file.budgets ?? []).map(\.id), "预算")
         try ensureUnique((file.goals ?? []).map(\.id), "目标")
         try ensureUnique((file.achievements ?? []).map(\.id), "达成记录")
 
-        for category in file.categories {
-            guard TransactionKind(rawValue: category.kindRawValue) != nil,
-                  CategoryDomain(rawValue: category.domainRawValue) != nil,
-                  !category.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw BackupValidationError.invalidValue("分类")
-            }
-        }
-
-        let categoryIDs = Set(file.categories.map(\.id))
         let today = calendar.startOfDay(for: .now)
 
         let transactionIDs = Set(file.transactions.map(\.id))
@@ -190,21 +177,8 @@ final class BackupService {
             guard TransactionKind(rawValue: txn.kindRawValue) != nil else {
                 throw BackupValidationError.invalidValue("账单类型")
             }
-            if let categoryID = txn.categoryID, !categoryIDs.contains(categoryID) {
-                throw BackupValidationError.unknownReference("分类")
-            }
             guard calendar.startOfDay(for: txn.date) <= today else {
                 throw BackupValidationError.invalidValue("账单日期")
-            }
-        }
-
-        for budget in file.budgets ?? [] {
-            guard budget.amountCents >= 0,
-                  (2000...2100).contains(budget.year), (1...12).contains(budget.month) else {
-                throw BackupValidationError.invalidValue("预算")
-            }
-            if let categoryID = budget.categoryID, !categoryIDs.contains(categoryID) {
-                throw BackupValidationError.unknownReference("分类")
             }
         }
 
@@ -213,9 +187,8 @@ final class BackupService {
             guard !title.isEmpty else {
                 throw BackupValidationError.invalidValue("目标名称")
             }
-            let kindRaw = goal.kindRawValue == "categorySum" ? GoalKind.budget.rawValue : goal.kindRawValue
             guard GoalPeriod(rawValue: goal.periodRawValue) != nil,
-                  let kind = GoalKind(rawValue: kindRaw) else {
+                  let kind = GoalKind(rawValue: goal.kindRawValue) else {
                 throw BackupValidationError.invalidValue("目标类型")
             }
             switch kind {
@@ -278,39 +251,20 @@ final class BackupService {
         for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
         try context.save()
 
-        // 账本：v1 备份没有，落到默认账本；v2 按 id 覆盖
         let defaultLedgerID = DefaultData.defaultLedgerID(context: context)
-        if let ledgers = file.ledgers, !ledgers.isEmpty {
-            let existing = (try? context.fetch(FetchDescriptor<Ledger>())) ?? []
-            for dto in ledgers {
-                if let ledger = existing.first(where: { $0.id == dto.id }) {
-                    ledger.name = dto.name
-                    ledger.kindRawValue = dto.kindRawValue
-                    ledger.updatedAt = dto.updatedAt
-                } else {
-                    context.insert(Ledger(id: dto.id,
-                                          name: dto.name,
-                                          kind: LedgerKind(rawValue: dto.kindRawValue) ?? .personal,
-                                          createdAt: dto.createdAt,
-                                          updatedAt: dto.updatedAt))
-                }
+        let existingLedgers = (try? context.fetch(FetchDescriptor<Ledger>())) ?? []
+        for dto in file.ledgers {
+            if let ledger = existingLedgers.first(where: { $0.id == dto.id }) {
+                ledger.name = dto.name
+                ledger.kindRawValue = dto.kindRawValue
+                ledger.updatedAt = dto.updatedAt
+            } else {
+                context.insert(Ledger(id: dto.id,
+                                      name: dto.name,
+                                      kind: LedgerKind(rawValue: dto.kindRawValue) ?? .personal,
+                                      createdAt: dto.createdAt,
+                                      updatedAt: dto.updatedAt))
             }
-        }
-
-
-        var categoryMap: [UUID: CategoryInfo] = [:]
-        for dto in file.categories {
-            categoryMap[dto.id] = CategoryInfo(
-                code: dto.code ?? dto.id.uuidString,
-                name: dto.name,
-                iconName: dto.iconName,
-                colorHex: dto.colorHex,
-                kindRawValue: dto.kindRawValue,
-                domainRawValue: dto.domainRawValue,
-                scope: dto.scope ?? "",
-                sortOrder: dto.sortOrder,
-                isArchived: dto.isArchived
-            )
         }
 
         for dto in file.transactions {
@@ -320,35 +274,13 @@ final class BackupService {
                 kind: TransactionKind(rawValue: dto.kindRawValue) ?? .expense,
                 date: dto.date,
                 note: dto.note,
-                category: dto.categoryID.flatMap { categoryMap[$0] },
-                categoryCode: dto.categoryCode ?? dto.categoryID.flatMap { categoryMap[$0]?.code },
+                categoryCode: dto.categoryCode,
                 ledgerID: dto.ledgerID ?? defaultLedgerID,
                 refundOfID: dto.refundOfID,
                 createdAt: dto.createdAt,
                 updatedAt: dto.updatedAt
             )
             context.insert(txn)
-        }
-
-        // 旧备份里的预算：并入 Goal（kind = budget，分类为空表示全部）
-        for dto in file.budgets ?? [] {
-            var comps = DateComponents()
-            comps.year = dto.year
-            comps.month = dto.month
-            guard let start = calendar.date(from: comps) else { continue }
-            let codes = dto.categoryID.flatMap { categoryMap[$0]?.code }.map { [$0] } ?? []
-            context.insert(Goal(
-                id: dto.id,
-                title: codes.isEmpty ? "本月预算" : "分类预算",
-                kind: .budget,
-                categoryCodes: codes,
-                period: .month,
-                periodStart: start,
-                ledgerID: dto.ledgerID ?? defaultLedgerID,
-                targetValue: Int(dto.amountCents),
-                createdAt: dto.createdAt,
-                updatedAt: dto.updatedAt
-            ))
         }
 
         for dto in file.dayConfirmations {
@@ -361,7 +293,7 @@ final class BackupService {
             context.insert(Goal(
                 id: dto.id,
                 title: dto.title,
-                kind: GoalKind(rawValue: dto.kindRawValue == "categorySum" ? GoalKind.budget.rawValue : dto.kindRawValue) ?? .countLimit,
+                kind: GoalKind(rawValue: dto.kindRawValue) ?? .countLimit,
                 categoryCodes: dto.categoryCodes,
                 period: GoalPeriod(rawValue: dto.periodRawValue) ?? .month,
                 ledgerID: dto.ledgerID ?? defaultLedgerID,
@@ -413,12 +345,8 @@ struct BackupFile: Codable {
 
     var version: Int
     var exportedAt: Date
-    /// v2 起有账本；v1 备份没有
-    var ledgers: [LedgerDTO]?
-    var categories: [CategoryDTO]
+    var ledgers: [LedgerDTO]
     var transactions: [TransactionDTO]
-    /// 旧备份里的预算；v4 起并入 Goal，不再导出
-    var budgets: [BudgetDTO]? = nil
     var dayConfirmations: [DayConfirmationDTO]
     /// 旧备份里没有这两项，解码时允许为空
     var goals: [GoalDTO]?
@@ -444,24 +372,6 @@ struct LedgerDTO: Codable {
 }
 
 
-struct CategoryDTO: Codable {
-    var id: UUID
-    var name: String
-    var code: String?
-    var iconName: String
-    var colorHex: String
-    var kindRawValue: String
-    var domainRawValue: String
-    /// 旧备份里没有这个字段
-    var scope: String?
-    var sortOrder: Int
-    var isSystem: Bool
-    var isArchived: Bool
-    var createdAt: Date
-    var updatedAt: Date
-
-}
-
 struct TransactionDTO: Codable {
     var id: UUID
     var ledgerID: UUID?
@@ -471,7 +381,6 @@ struct TransactionDTO: Codable {
     var note: String?
     /// v4 起直接存 code，分类缺失时也能还原归属
     var categoryCode: String?
-    var categoryID: UUID?
     /// 退款记录指回原单；普通账单为空
     var refundOfID: UUID?
     var createdAt: Date
@@ -485,23 +394,10 @@ struct TransactionDTO: Codable {
         date = txn.date
         note = txn.note
         categoryCode = txn.categoryCode
-        categoryID = nil // 分类不再有行 ID，优先使用 categoryCode
         refundOfID = txn.refundOfID
         createdAt = txn.createdAt
         updatedAt = txn.updatedAt
     }
-}
-
-struct BudgetDTO: Codable {
-    var id: UUID
-    var ledgerID: UUID?
-    var categoryID: UUID?
-    var amountCents: Int64
-    var year: Int
-    var month: Int
-    var createdAt: Date
-    var updatedAt: Date
-
 }
 
 struct GoalDTO: Codable {

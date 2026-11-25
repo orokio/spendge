@@ -42,14 +42,10 @@ struct GoalFormView: View {
         kind == .budget ? String(value / 100) : String(value)
     }
 
-    /// 当前维度允许的分类（白名单顺序）
+    /// 当前维度允许的分类：由分类目录自己声明，服务端新增分类无需发版
     private var allowedCategories: [CategoryInfo] {
-        goalKindCodes.compactMap { code in
-            catalog.categories().first { $0.code == code.rawValue && !$0.isArchived }
-        }
+        catalog.categories().filter { $0.allowsGoal(kind) }
     }
-
-    private var goalKindCodes: [CategoryCode] { kind.allowedCategoryCodes }
 
     private var parsedValue: Int? {
         // 允许 0：比如「本月奶茶 0 次」是完全合理的上限；空的输入框仍然不可保存
@@ -261,7 +257,7 @@ struct GoalFormView: View {
             guard kind != value else { return }
             withAnimation(.snappy(duration: 0.2)) {
                 kind = value
-                if !goalKindCodes.contains(where: { $0.rawValue == categoryCode }) {
+                if !allowedCategories.contains(where: { $0.code == categoryCode }) {
                     categoryCode = allowedCategories.first?.categoryCode?.rawValue ?? ""
                 }
             }

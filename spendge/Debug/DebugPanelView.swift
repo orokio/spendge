@@ -109,7 +109,7 @@ struct DebugPanelView: View {
 
     private func entitlementRow(title: String, unlocked: Bool) -> some View {
         Button {
-            Entitlements.isUnlocked = unlocked
+            StoreService.shared.debugSetUnlocked(unlocked)
             entitlementVersion += 1
             // iCloud 是付费能力，切换后要让容器按新权限重建
             NotificationCenter.default.post(name: .cloudSyncPreferenceChanged, object: nil)

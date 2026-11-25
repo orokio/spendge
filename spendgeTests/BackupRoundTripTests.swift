@@ -88,24 +88,6 @@ final class BackupRoundTripTests: XCTestCase {
     }
 
 
-
-    func testRestoresLegacyCategorySumAsBudget() throws {
-        let seed = try seededBackup()
-        var file = try service().decodeBackup(seed.data)
-        let oldID = UUID()
-        let legacy = Goal(id: oldID,
-                          title: "奶茶咖啡 100 元",
-                          kind: .budget,
-                          categoryCodes: ["drink"],
-                          period: .month,
-                          targetValue: 10000)
-        legacy.kindRawValue = "categorySum"
-        file.goals = [GoalDTO(legacy)]
-        _ = try service().restore(from: try encode(file))
-        let goals = try TestStore.context.fetch(FetchDescriptor<Goal>())
-        XCTAssertEqual(goals.first(where: { $0.id == oldID })?.kind, .budget)
-    }
-
     func testRejectsFutureTransactionDate() throws {
         let seed = try seededBackup()
         var file = try service().decodeBackup(seed.data)

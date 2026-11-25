@@ -96,7 +96,8 @@
       "domainRawValue": "food",
       "scope": "外卖点餐、美团、饿了么",
       "sortOrder": 1,
-      "isArchived": false
+      "isArchived": false,
+      "goalKinds": ["countLimit", "budget", "shareCap"]
     }
   ]
 }
@@ -117,6 +118,36 @@
 - 分类：客户端带 `categoriesVersion`；服务端只在版本更高时返回全量 `categories`，版本相同则不返回
 - 分类 code 永久不变，只允许新增、修改展示字段、归档；永不删除或复用 code
 - 分类不参与 CloudKit 同步，客户端内置默认配置，注册响应覆盖
+
+#### 4.2.1 goalKinds（分类可用于哪种目标）
+
+客户端的目标表单按这个字段决定「这种目标能选哪些分类」，替代了原先写死在
+`GoalKind.allowedCategoryCodes` 里的枚举白名单。**新增分类只要带上这个字段，客户端不用发版。**
+
+值域是客户端 `GoalKind` 的 rawValue，封闭三个值：`countLimit` / `budget` / `shareCap`。
+
+- 类型：字符串数组，缺失按「不能设目标」处理
+- 空数组：该分类不能用于任何目标（房租、水电这类固定支出，以及全部收入分类）
+- 顺序不敏感，客户端按 `sortOrder` 排
+
+服务端实现要点：
+
+- `categories` 表加一列存这三个值（逗号分隔或 JSON 都行），可空
+- 导入 seed 时校验每个值都在上面三个之内，拼错直接报错，不要静默丢弃
+- register 响应每条分类都带上 `goalKinds`，空数组也要显式返回 `[]`
+- 改了这列属于实质变更，导入命令照常把 `categoriesVersion` +1
+
+29 个内置分类的取值：
+
+| goalKinds | 分类 |
+|---|---|
+| `countLimit` + `budget` + `shareCap` | takeout、dineout、drink、alcoholBeverage、snack、game |
+| `budget` + `shareCap` | grocery、daily、wear、digitalGear、sportsOutdoor、appliance、outing、fuel、travel、carCare、social、phone、subscription |
+| 空 | housing、utilities、broadband、renovation、health、otherExpense、salary、sideJob、invest、otherIncome |
+
+判定依据：次数上限只对高频小额消费有意义；金额和占比排除「怎么省都省不下来」的固定支出与兜底分类；收入分类不参与支出目标。
+
+客户端兜底：目录里没有 `goalKinds` 字段时（老版本缓存或服务端尚未下发），退回客户端内置的同一张表，行为与改造前一致。
 
 ## 5. 接口（M4 规划，未实现）
 

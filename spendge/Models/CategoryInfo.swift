@@ -12,8 +12,17 @@ struct CategoryInfo: Codable, Identifiable, Equatable {
     var scope: String
     var sortOrder: Int
     var isArchived: Bool
+    /// 可用于哪些目标类型（值域是 GoalKind.rawValue）；空表示不能设目标
+    var goalKinds: [String]? = nil
 
     var id: String { code }
+
+    /// 目标表单按这个判断可选分类；服务端还没下发 goalKinds 时退回内置默认表
+    func allowsGoal(_ kind: GoalKind) -> Bool {
+        if let goalKinds { return goalKinds.contains(kind.rawValue) }
+        guard let code = CategoryCode(rawValue: code) else { return false }
+        return DefaultData.categoryGoalKinds[code]?.contains(kind) == true
+    }
 
     var kind: TransactionKind { TransactionKind(rawValue: kindRawValue) ?? .expense }
     var domain: CategoryDomain { CategoryDomain(rawValue: domainRawValue) ?? .other }
@@ -66,7 +75,8 @@ final class CategoryCatalog: ObservableObject {
                          domainRawValue: seed.domain.rawValue,
                          scope: seed.scope,
                          sortOrder: seed.sortOrder,
-                         isArchived: false)
+                         isArchived: false,
+                         goalKinds: (DefaultData.categoryGoalKinds[seed.code] ?? []).map(\.rawValue))
         }
     }
 

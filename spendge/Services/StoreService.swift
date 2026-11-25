@@ -38,8 +38,16 @@ final class StoreService: ObservableObject {
     }
 
     func loadProduct() async {
+        #if DEBUG
+        if let storefront = await Storefront.current {
+            print("[Store] storefront:", storefront.countryCode)
+        }
+        #endif
         do {
             product = try await Product.products(for: [Self.productID]).first
+            #if DEBUG
+            print("[Store] product:", product?.id ?? "nil", product?.displayPrice ?? "nil")
+            #endif
             if product == nil { errorMessage = "商品还没上架" }
         } catch {
             errorMessage = "无法获取商品信息"
@@ -79,6 +87,14 @@ final class StoreService: ObservableObject {
             return false
         }
     }
+
+    #if DEBUG
+    /// 开发者面板切换付费状态：界面读的是 isUnlocked，必须和 Entitlements 同步改
+    func debugSetUnlocked(_ value: Bool) {
+        isUnlocked = value
+        Entitlements.isUnlocked = value
+    }
+    #endif
 
     /// 系统错误一律翻成中文，不把 StoreKit 的英文原文抛给用户
     private func friendlyMessage(for error: Error) -> String {

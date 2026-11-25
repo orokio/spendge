@@ -10,13 +10,13 @@ enum DeviceRegistrar {
     private static let logger = Logger(subsystem: "com.orokio.spendge", category: "register")
 
     /// 首次签发才返回明文 token；之后的滑动续期不带
-    private struct RegisterResponse: Decodable {
+    struct RegisterResponse: Decodable {
         let deviceToken: String?
         let categoriesVersion: Int?
         let categories: [RemoteCategory]?
     }
 
-    private struct RemoteCategory: Decodable {
+    struct RemoteCategory: Decodable {
         let code: String
         let name: String
         let iconName: String?
@@ -26,6 +26,20 @@ enum DeviceRegistrar {
         let scope: String?
         let sortOrder: Int?
         let isArchived: Bool?
+        let goalKinds: [String]?
+
+        var categoryInfo: CategoryInfo {
+            CategoryInfo(code: code,
+                         name: name,
+                         iconName: iconName ?? "tag.fill",
+                         colorHex: colorHex ?? "#9CA3AF",
+                         kindRawValue: kindRawValue ?? TransactionKind.expense.rawValue,
+                         domainRawValue: domainRawValue ?? CategoryDomain.other.rawValue,
+                         scope: scope ?? "",
+                         sortOrder: sortOrder ?? 99,
+                         isArchived: isArchived ?? false,
+                         goalKinds: goalKinds ?? [])
+        }
     }
 
     static func registerIfNeeded() async {
@@ -66,17 +80,7 @@ enum DeviceRegistrar {
                    version > knownVersion,
                    let remote = payload.categories,
                    !remote.isEmpty {
-                    let items = remote.map { item in
-                        CategoryInfo(code: item.code,
-                                     name: item.name,
-                                     iconName: item.iconName ?? "tag.fill",
-                                     colorHex: item.colorHex ?? "#9CA3AF",
-                                     kindRawValue: item.kindRawValue ?? TransactionKind.expense.rawValue,
-                                     domainRawValue: item.domainRawValue ?? CategoryDomain.other.rawValue,
-                                     scope: item.scope ?? "",
-                                     sortOrder: item.sortOrder ?? 99,
-                                     isArchived: item.isArchived ?? false)
-                    }
+                    let items = remote.map(\.categoryInfo)
                     await MainActor.run {
                         CategoryCatalog.shared.apply(version: version, categories: items)
                     }
