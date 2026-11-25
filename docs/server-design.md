@@ -269,6 +269,9 @@ categories          code TEXT PK,              -- 唯一、永久、不可复用
                     sort_order INTEGER, is_archived INTEGER  -- 归档代替删除
 app_config          key TEXT PK, value TEXT, updated_at TEXT
                     -- categories_version：单调递增
+category_versions   version INTEGER PK,           -- 与 categories_version 一一对应
+                    payload TEXT,                  -- 该版本全量分类 JSON，追加写
+                    created_at TEXT, note TEXT
 ```
 
 类型约定：
@@ -315,6 +318,7 @@ PRAGMA cache_size = -8192;
   - 任何展示字段（名称/图标/颜色/排序/归档）变更必须把 categories_version +1，且不回退
   - 导入：`python -m app.categories docs/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1 并失效缓存）
   - 读取：Redis 快照（TTL 1h，导入时主动失效）→ 未命中只读回源 DB；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
+  - 历史：每次变更在**同一事务**写一条 `category_versions`（全量 JSON 快照，只增不改）。用于审计与精确回放，也是“账单按记账当时名称展示”的数据基础；回放（`--restore N`）同样把版本 +1，版本号永不回退
 
 ## 7. 架构与防护分层
 

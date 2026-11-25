@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app import cache
 from app.db import SessionLocal
-from app.models import AppConfig, Category
+from app.models import AppConfig, Category, CategoryVersion
 
 logger = logging.getLogger(__name__)
 
@@ -99,19 +99,29 @@ def _normalize(item: dict) -> dict:
     }
 
 
-def apply_seed(path: str) -> tuple[bool, int]:
-    """把种子文件同步进库；有实质变更才把 categoriesVersion +1（单调递增）。"""
+def _snapshot_payload(db) -> str:
+    rows = db.execute(
+        select(Category).order_by(Category.sort_order, Category.code)
+    ).scalars().all()
+    return json.dumps([_row_to_item(r) for r in rows], ensure_ascii=False)
+
+
+def _load_seed_items(path: str) -> list[dict]:
     with open(path, encoding="utf-8") as fh:
         raw_items = json.load(fh)
     if not isinstance(raw_items, list):
         raise ValueError("种子文件必须是 JSON 数组")
-
     items = [_normalize(it) for it in raw_items]
     codes = [it["code"] for it in items]
     if len(codes) != len(set(codes)):
         raise ValueError("种子文件存在重复 code")
+    return items
 
+
+def _apply_items(items: list[dict], note: str) -> tuple[bool, int]:
+    """按给定全量列表同步库；有实质变更才 +1，并在同一事务写快照。"""
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    codes = [it["code"] for it in items]
     db = SessionLocal()
     try:
         cfg = db.get(AppConfig, VERSION_KEY)
@@ -143,6 +153,25 @@ def apply_seed(path: str) -> tuple[bool, int]:
             else:
                 cfg.value = str(version)
                 cfg.updated_at = now_iso
+            db.flush()
+            db.add(
+                CategoryVersion(
+                    version=version,
+                    payload=_snapshot_payload(db),
+                    created_at=now_iso,
+                    note=note,
+                )
+            )
+        elif version > 0 and db.get(CategoryVersion, version) is None:
+            # 老数据没有快照：补一条当前版本的，后续回放才完整
+            db.add(
+                CategoryVersion(
+                    version=version,
+                    payload=_snapshot_payload(db),
+                    created_at=now_iso,
+                    note="backfill",
+                )
+            )
         db.commit()
     except Exception:
         db.rollback()
@@ -155,13 +184,86 @@ def apply_seed(path: str) -> tuple[bool, int]:
     return changed, version
 
 
+def apply_seed(path: str) -> tuple[bool, int]:
+    """把种子文件同步进库；有实质变更才把 categoriesVersion +1（单调递增）。"""
+    return _apply_items(_load_seed_items(path), note=f"import {path.split('/')[-1]}")
+
+
+def get_version(version: int) -> dict | None:
+    """读取某个版本快照；不存在返回 None。"""
+    db = SessionLocal()
+    try:
+        row = db.get(CategoryVersion, version)
+        if row is None:
+            return None
+        return {
+            "version": row.version,
+            "created_at": row.created_at,
+            "note": row.note,
+            "payload": json.loads(row.payload),
+        }
+    finally:
+        db.close()
+
+
+def list_versions(limit: int = 50) -> list[dict]:
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            select(CategoryVersion)
+            .order_by(CategoryVersion.version.desc())
+            .limit(limit)
+        ).scalars().all()
+        return [
+            {"version": r.version, "created_at": r.created_at, "note": r.note}
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+def restore(version: int) -> tuple[bool, int]:
+    """以某个历史版本为准回放；版本号仍然只增不减（回放也会 +1）。"""
+    snapshot = get_version(version)
+    if snapshot is None:
+        raise ValueError(f"版本 {version} 不存在")
+    items = [_normalize(it) for it in snapshot["payload"]]
+    return _apply_items(items, note=f"restore from v{version}")
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("用法: python -m app.categories <seed.json>")
-        return 2
-    changed, version = apply_seed(argv[1])
-    print(f"changed={changed} categoriesVersion={version}")
-    return 0
+    args = argv[1:]
+    if len(args) == 1 and not args[0].startswith("--"):
+        changed, version = apply_seed(args[0])
+        print(f"changed={changed} categoriesVersion={version}")
+        return 0
+
+    if args[:1] == ["--versions"]:
+        for row in list_versions():
+            print(f"v{row['version']}\t{row['created_at']}\t{row['note'] or ''}")
+        return 0
+
+    if args[:1] == ["--show"] and len(args) == 2:
+        snapshot = get_version(int(args[1]))
+        if snapshot is None:
+            print(f"版本 {args[1]} 不存在")
+            return 1
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
+
+    if args[:1] == ["--restore"] and len(args) == 2:
+        changed, version = restore(int(args[1]))
+        print(f"changed={changed} categoriesVersion={version}")
+        return 0
+
+    print(
+        "用法:\n"
+        "  python -m app.categories <seed.json>   # 导入/更新\n"
+        "  python -m app.categories --versions    # 列出历史版本\n"
+        "  python -m app.categories --show N      # 查看第 N 版\n"
+        "  python -m app.categories --restore N   # 回放到第 N 版（版本仍 +1）"
+    )
+    return 2
 
 
 if __name__ == "__main__":

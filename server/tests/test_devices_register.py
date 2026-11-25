@@ -142,3 +142,13 @@ def test_register_survives_categories_failure(client, device_id, monkeypatch):
     assert r.status_code == 200
     j = r.get_json()
     assert j["deviceToken"] and "categories" not in j
+
+def test_category_snapshot_exists_for_current_version():
+    from app import categories
+
+    snapshot = categories.load_snapshot()
+    if snapshot["version"] == 0:
+        pytest.skip("分类未导入")
+    record = categories.get_version(snapshot["version"])
+    assert record is not None, "当前版本缺少快照"
+    assert len(record["payload"]) == len(snapshot["items"])

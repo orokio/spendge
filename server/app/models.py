@@ -104,6 +104,17 @@ class Category(Base):
     is_archived: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # 0/1，删除即归档
 
 
+class CategoryVersion(Base):
+    """分类的版本快照（追加写，不更新不删除），用于审计与回放。"""
+
+    __tablename__ = "category_versions"
+
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)  # 该版本全量分类 JSON
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class AppConfig(Base):
     """单行配置（key/value），用于 categories_version 等。"""
 

@@ -342,3 +342,14 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 - 种子文件里缺少的旧 code 会被保留（导入只增改不删），日志里会提示。
 
 **读取路径：** register 读 Redis 快照（TTL 1h，导入即失效）→ 未命中只读回源 DB；读取失败不影响登记，仍返回 200 与 token，只是不带 categories。
+
+**历史版本与回放（category_versions）：**
+
+    .venv/bin/python -m app.categories --versions   # 列出历史版本
+    .venv/bin/python -m app.categories --show 2     # 查看第 2 版全量内容
+    .venv/bin/python -m app.categories --restore 2  # 以第 2 版为准回放（版本再 +1）
+
+- 每次有实质变更，都在**同一事务**里写一条全量快照（约 6KB/版），只增不改；
+- 老库没有快照时，首次导入会自动补一条当前版本（note=backfill）；
+- 回放不减少版本号：`--restore` 把内容恢复成目标版本，但发布出去的是新版本号，客户端照常“版本更高就整包替换”；
+- 需要“账单保留记账当时分类名”时，客户端在账单里存 name 快照（服务端不做，M4 后再定）。
