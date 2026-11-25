@@ -80,3 +80,65 @@ def test_writer_persists_asynchronously(client, device_id):
         assert db.query(Session).filter(Session.device_id == device_id).count() >= 1
     finally:
         db.close()
+
+def _body_with_version(did, version):
+    body = _body(did)
+    body["categoriesVersion"] = version
+    return body
+
+
+def test_register_old_client_without_categories_version(client, device_id):
+    r = client.post("/v1/devices/register", json=_body(device_id))
+    assert r.status_code == 200
+    j = r.get_json()
+    assert "categories" not in j and "categoriesVersion" not in j
+
+
+def test_register_client_version_0_gets_full_categories(client, device_id):
+    from app import categories
+
+    snapshot = categories.load_snapshot()
+    assert snapshot["version"] >= 1, "分类未导入，先执行 python -m app.categories docs/categories-seed.json"
+
+    r = client.post("/v1/devices/register", json=_body_with_version(device_id, 0))
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["categoriesVersion"] == snapshot["version"]
+    assert len(j["categories"]) == len(snapshot["items"]) >= 1
+    item = j["categories"][0]
+    assert set(item) == {
+        "code", "name", "iconName", "colorHex", "kindRawValue",
+        "domainRawValue", "scope", "sortOrder", "isArchived",
+    }
+    assert isinstance(item["sortOrder"], int) and isinstance(item["isArchived"], bool)
+
+
+def test_register_same_version_returns_no_categories(client, device_id):
+    from app import categories
+
+    version = categories.load_snapshot()["version"]
+    r = client.post("/v1/devices/register", json=_body_with_version(device_id, version))
+    assert r.status_code == 200
+    assert "categories" not in r.get_json()
+
+
+def test_register_client_newer_version_returns_no_categories(client, device_id):
+    from app import categories
+
+    version = categories.load_snapshot()["version"] + 5
+    r = client.post("/v1/devices/register", json=_body_with_version(device_id, version))
+    assert r.status_code == 200
+    assert "categories" not in r.get_json()
+
+
+def test_register_survives_categories_failure(client, device_id, monkeypatch):
+    from app import categories
+
+    def boom():
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr(categories, "load_snapshot", boom)
+    r = client.post("/v1/devices/register", json=_body_with_version(device_id, 0))
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["deviceToken"] and "categories" not in j

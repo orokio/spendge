@@ -275,7 +275,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 ### 13.3 已完成步骤（按序）
 
 1. 依赖：sudo apt install build-essential libpcre2-dev zlib1g-dev libssl-dev python3.12-venv sqlite3 redis-server
-2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（7 表）；迁移 20f108f0a1fc；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
+2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（9 表）；迁移 20f108f0a1fc（7 表）+ 9f3c1a70b2d1（categories、app_config）；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
 3. 后端：pyproject 加 gunicorn/redis；rsync server/ 到 spendge-server/；副本建 venv 并 pip install .；.env 复制
 4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
 5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010。**api 域只保留 /spendge/ 前缀**：location /spendge/ { proxy_pass http://spendge_app/; }（末尾 / 剥前缀）；api 域根路径已删除（build 4 根请求 404，客户端静默、不影响记账）；www 域保留根路径供探活/旧包
@@ -284,6 +284,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M）、spendge-writer.service（write-behind worker，MemoryMax=200M）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
 9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com 与 api.orokio.com 均 → 124.223.27.87。
 10. 验证：api /spendge/health 返回 ok（证书 CN=api.orokio.com，不加 -k 校验通过）；api /spendge/v1/devices/register 剥前缀后命中（新客户端），api 根路径 /health 与 /v1/devices/register 均 404（build 4 静默）；www 根路径仍可用；同 deviceId 第 6 次请求返回 429（限流生效）。
+11. 分类下发：导入 docs/categories-seed.json（29 条）→ 启动时 `python -m app.categories docs/categories-seed.json`，categoriesVersion=1；register 按客户端上报的 categoriesVersion 决定是否下发全量分类（见 13.6）。
 
 ### 13.4 踩坑与解决（重点）
 
@@ -311,7 +312,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 1. 建目录：mkdir -p /home/ubuntu/{package,nginx/conf/ssl,nginx/logs,sqlite/backup,redis,spendge-server}；chmod o+x /home/ubuntu
 2. 装依赖（见 13.3 第 1 条）
 3. 拉代码：git clone --depth 1 <repo> spendge && cd spendge && git sparse-checkout init --no-cone && git sparse-checkout set /server/ /docs/
-4. 数据层 + 后端（13.3 第 2-4 条），运行副本单独 venv
+4. 数据层 + 后端（13.3 第 2-4 条），运行副本单独 venv；导入分类种子（13.3 第 11 条）
 5. nginx 编译 + 配置 + 两张证书（13.3 第 5-6 条；api 与 www 各一张，SNI 分流）
 6. Redis（13.3 第 7 条 + 13.4 第 2 条 override）
 7. systemd units（unit 文件放组件目录，软链到 /etc/systemd/system/）
@@ -319,3 +320,25 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 9. 全链路验证（13.3 第 10 条）
 
 > 证书有效期：接口 api 至 2027-02-23、www 至 2027-02-20；腾讯云免费证书 3 个月，到期前重新申请并替换（证书 SAN 要匹配对应域名）。
+
+### 13.6 分类数据维护（categories）
+
+分类由服务端下发，客户端只在版本更高时整包替换（契约见 api-contract §4.2）。
+
+**导入 / 更新（幂等）：**
+
+    cd /home/ubuntu/spendge-server
+    set -a; . ./.env; set +a
+    .venv/bin/python -m app.categories /home/ubuntu/spendge/docs/categories-seed.json
+
+- 内容与库中一致 → `changed=False`，版本不变；
+- 任意展示字段（name/iconName/colorHex/sortOrder/isArchived）变化或新增 code → **categoriesVersion +1**，并失效 Redis 快照；
+- 版本只增不减；改错了要再改一次（再 +1），**不要手工把版本改小**。
+
+**规则（写进数据时必须遵守）：**
+
+- code 唯一、永久、不可复用；下线只置 `isArchived: true`，行不删；
+- kindRawValue（expense/income）创建后不可变；
+- 种子文件里缺少的旧 code 会被保留（导入只增改不删），日志里会提示。
+
+**读取路径：** register 读 Redis 快照（TTL 1h，导入即失效）→ 未命中只读回源 DB；读取失败不影响登记，仍返回 200 与 token，只是不带 categories。

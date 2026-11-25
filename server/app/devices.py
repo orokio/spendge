@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import select
 
-from app import cache
+from app import cache, categories
 from app.config import load_settings
 from app.db import SessionLocal
 from app.models import Device, Session
@@ -16,6 +17,7 @@ from app.rate_limit import allow
 
 bp = Blueprint("devices", __name__)
 _settings = load_settings()
+logger = logging.getLogger(__name__)
 
 _STATE_TTL = (_settings.device_token_ttl_days + 1) * 86400
 
@@ -30,6 +32,33 @@ def _sha256(value: str) -> str:
 
 def _error(code: str, message: str, status: int):
     return jsonify({"code": code, "message": message}), status
+
+
+def _client_categories_version(raw) -> int | None:
+    """客户端上报的分类版本；缺省/非法一律视为未上报（老客户端）。"""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str) and raw.strip().lstrip("-").isdigit():
+        return int(raw.strip())
+    return None
+
+
+def _attach_categories(payload: dict, raw_version) -> dict:
+    """仅当服务端版本高于客户端版本时附带全量分类；任何异常都不影响设备登记。"""
+    client_version = _client_categories_version(raw_version)
+    if client_version is None:
+        return payload
+    try:
+        snapshot = categories.load_snapshot()
+    except Exception:  # noqa: BLE001
+        logger.exception("categories load failed; register continues without categories")
+        return payload
+    if snapshot.get("version", 0) > client_version:
+        payload["categoriesVersion"] = snapshot["version"]
+        payload["categories"] = snapshot.get("items", [])
+    return payload
 
 
 def _load_state_from_db(device_id: str) -> dict | None:
@@ -130,7 +159,7 @@ def register():
             }
             cache.set_device(device_id, state, _STATE_TTL)
             cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state))
-            return jsonify({"deviceToken": token, "expiresAt": expires_iso}), 200
+            return jsonify(_attach_categories({"deviceToken": token, "expiresAt": expires_iso}, data.get("categoriesVersion"))), 200
 
         if state["secret_hash"] != secret_hash:
             return _error("secret_mismatch", "deviceSecret 不匹配", 403)
@@ -148,13 +177,13 @@ def register():
             state["expires_at"] = expires_iso
             cache.set_device(device_id, state, _STATE_TTL)
             cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state))
-            return jsonify({"expiresAt": expires_iso}), 200
+            return jsonify(_attach_categories({"expiresAt": expires_iso}, data.get("categoriesVersion"))), 200
 
         token = secrets.token_urlsafe(32)
         state["token_hash"] = _sha256(token)
         state["expires_at"] = expires_iso
         cache.set_device(device_id, state, _STATE_TTL)
         cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state))
-        return jsonify({"deviceToken": token, "expiresAt": expires_iso}), 200
+        return jsonify(_attach_categories({"deviceToken": token, "expiresAt": expires_iso}, data.get("categoriesVersion"))), 200
     except Exception:  # noqa: BLE001
         return _error("service_unavailable", "服务暂不可用", 503)

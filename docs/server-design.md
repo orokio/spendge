@@ -177,6 +177,7 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 - token 为 opaque 随机串（非 JWT），**有效期 3 个月**，每次 register 滑动续期，只存哈希，可随时吊销
 - 只存 deviceId、secret 哈希、首次/最后时间、App 版本；不存任何账单或内容
 - 客户端未配置 ServerBaseURL 或未同意隐私时不发起请求
+- 分类下发：请求可带 `categoriesVersion`（客户端当前版本，首次 0）；服务端仅在自身版本更高时返回 `categoriesVersion` + 全量 `categories`，版本相同或客户端更高则不带；老客户端不传该字段也正常处理（不返回分类）
 
 ### 鉴权约定（M4 起使用）
 
@@ -261,6 +262,13 @@ diagnostics         id INTEGER PK AUTOINCREMENT, device_id TEXT,
                     name TEXT, result TEXT, code TEXT, at TEXT, created_at TEXT
 events              id INTEGER PK AUTOINCREMENT, account_id TEXT NULL,
                     device_id TEXT, name TEXT, props TEXT, created_at TEXT
+categories          code TEXT PK,              -- 唯一、永久、不可复用
+                    name TEXT, icon_name TEXT, color_hex TEXT,
+                    kind_raw_value TEXT,       -- expense / income，创建后不可变
+                    domain_raw_value TEXT, scope TEXT,
+                    sort_order INTEGER, is_archived INTEGER  -- 归档代替删除
+app_config          key TEXT PK, value TEXT, updated_at TEXT
+                    -- categories_version：单调递增
 ```
 
 类型约定：
@@ -302,6 +310,11 @@ PRAGMA cache_size = -8192;
 - `usage` 的唯一键是幂等的最终保障，Redis 只是前置
 - 保留周期：events 180 天、usage 24 个月；删除账号后身份绑定立即清除
 - 数据访问统一走 SQLAlchemy + Repository，业务层不写裸 SQL；迁移用 Alembic
+- 分类（categories）由服务端下发，契约见 [api-contract.md](api-contract.md) §4.2：
+  - code 唯一、永久、不可复用；删除只置 is_archived，历史账单仍可显示
+  - 任何展示字段（名称/图标/颜色/排序/归档）变更必须把 categories_version +1，且不回退
+  - 导入：`python -m app.categories docs/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1 并失效缓存）
+  - 读取：Redis 快照（TTL 1h，导入时主动失效）→ 未命中只读回源 DB；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
 
 ## 7. 架构与防护分层
 
