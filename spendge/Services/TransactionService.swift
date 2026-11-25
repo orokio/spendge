@@ -113,8 +113,8 @@ final class TransactionService {
         if let kind { transaction.kind = kind }
         if let date { transaction.date = date }
         if let note { transaction.note = note }
-        if let category { transaction.category = category }
-        if let account { transaction.account = account }
+        if let category { transaction.categoryCode = category.code }
+        if let account { transaction.accountCode = account.code }
         // 退款记录永远是支出，避免在编辑页切成收入
         if transaction.refundOfID != nil { transaction.kind = .expense }
         transaction.updatedAt = .now
@@ -125,15 +125,15 @@ final class TransactionService {
     /// 退款与原单的金额、分类保持一致；日期、账户各管各的
     private func syncRefundLink(for transaction: Transaction) {
         if let originalID = transaction.refundOfID {
-            var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == originalID })
+            var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == originalID && $0.deletedAt == nil })
             descriptor.fetchLimit = 1
             guard let original = try? context.fetch(descriptor).first else { return }
             original.amountCents = abs(transaction.amountCents)
-            original.category = transaction.category
+            original.categoryCode = transaction.categoryCode
             original.updatedAt = .now
         } else if let refund = try? refundRecord(of: transaction) {
             refund.amountCents = -abs(transaction.amountCents)
-            refund.category = transaction.category
+            refund.categoryCode = transaction.categoryCode
             refund.updatedAt = .now
         }
     }
@@ -157,10 +157,11 @@ final class TransactionService {
     /// 删一笔。删原单时退款记录一起删。
     func delete(_ transaction: Transaction) throws {
         try FaultInjection.current.check(.transactionWrite)
+        let now = Date.now
         if transaction.refundOfID == nil, let refund = try? refundRecord(of: transaction) {
-            context.delete(refund)
+            refund.deletedAt = now
         }
-        context.delete(transaction)
+        transaction.deletedAt = now
         try context.save()
     }
 
@@ -169,7 +170,7 @@ final class TransactionService {
     /// 原单对应的退款记录（每笔原单最多一条）
     func refundRecord(of transaction: Transaction) throws -> Transaction? {
         let id = transaction.id
-        var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.refundOfID == id })
+        var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.refundOfID == id && $0.deletedAt == nil })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
@@ -213,11 +214,13 @@ final class TransactionService {
     func transactions(from start: Date? = nil, to end: Date? = nil) throws -> [Transaction] {
         var predicate: Predicate<Transaction>?
         if let start, let end {
-            predicate = #Predicate { $0.date >= start && $0.date < end }
+            predicate = #Predicate { $0.date >= start && $0.date < end && $0.deletedAt == nil }
         } else if let start {
-            predicate = #Predicate { $0.date >= start }
+            predicate = #Predicate { $0.date >= start && $0.deletedAt == nil }
         } else if let end {
-            predicate = #Predicate { $0.date < end }
+            predicate = #Predicate { $0.date < end && $0.deletedAt == nil }
+        } else {
+            predicate = #Predicate { $0.deletedAt == nil }
         }
 
         var descriptor = FetchDescriptor<Transaction>(predicate: predicate)
@@ -227,9 +230,9 @@ final class TransactionService {
 
     /// 某账户的全部账单。
     func transactions(account: Account) throws -> [Transaction] {
-        let accountID = account.id
+        let code = account.code
         var descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.account.id == accountID }
+            predicate: #Predicate { $0.accountCode == code && $0.deletedAt == nil }
         )
         descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
@@ -237,9 +240,9 @@ final class TransactionService {
 
     /// 某分类的全部账单。
     func transactions(category: Category) throws -> [Transaction] {
-        let categoryID = category.id
+        let code = category.code
         var descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.category?.id == categoryID }
+            predicate: #Predicate { $0.categoryCode == code && $0.deletedAt == nil }
         )
         descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
@@ -248,7 +251,7 @@ final class TransactionService {
     /// 按备注关键词搜索。
     func search(noteContaining keyword: String) throws -> [Transaction] {
         var descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.note?.localizedStandardContains(keyword) == true }
+            predicate: #Predicate { $0.note?.localizedStandardContains(keyword) == true && $0.deletedAt == nil }
         )
         descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
@@ -260,6 +263,7 @@ final class TransactionService {
     /// 不做统计推断：只记忆用户真的输过的数字，最多 limit 个，按时间倒序去重。
     func recentAmounts(limit: Int = 3, sampleLimit: Int = 40) throws -> [Int64] {
         var descriptor = FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         )
         descriptor.fetchLimit = sampleLimit
@@ -281,7 +285,7 @@ final class TransactionService {
         let monthStart = range.start
         let monthEnd = range.end
         let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>(
-            predicate: #Predicate { $0.day >= monthStart && $0.day < monthEnd }
+            predicate: #Predicate { $0.day >= monthStart && $0.day < monthEnd && $0.deletedAt == nil }
         ))
 
         var recorded: Set<Int> = []

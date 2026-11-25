@@ -57,24 +57,26 @@ enum GoalBasis: String, CaseIterable {
 /// 目标：用户语言的一句意图，底层是「范围 + 聚合 + 阈值」。
 @Model
 final class Goal {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// 用户语言，如「少喝奶茶」
-    var title: String
-    var kindRawValue: String
+    var title: String = ""
+    var kindRawValue: String = GoalKind.countLimit.rawValue
     /// 参与聚合的分类 code；为空表示全部分类
     var categoryCodes: [String] = []
-    var periodRawValue: String
+    var periodRawValue: String = GoalPeriod.month.rawValue
     /// 目标归属的月份（该月 1 号）；每个月是一份独立的目标对象
     var periodStart: Date?
     /// 计数类目标存次数 / 天数，金额类目标存分
-    var targetValue: Int
+    var targetValue: Int = 0
     var basisRawValue: String = GoalBasis.fixed.rawValue
     var isActive: Bool = true
     /// 循环应用：下个月自动建一份一样的目标
     var isRecurring: Bool = false
     var sortOrder: Int = 0
-    var createdAt: Date
-    var updatedAt: Date
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    /// 软删除时间；nil 表示未删除
+    var deletedAt: Date?
 
     init(
         id: UUID = UUID(),

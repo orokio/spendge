@@ -19,7 +19,8 @@ final class InsightService {
 
     func headline() throws -> Insight {
         let today = try transactions(from: calendar.startOfDay(for: .now), to: .now)
-        let totalCount = try context.fetchCount(FetchDescriptor<Transaction>())
+        let totalCount = try context.fetchCount(FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.deletedAt == nil }))
 
         // 1. 今天有记录：按「今天发生了什么」说一句
         if !today.isEmpty {
@@ -152,7 +153,7 @@ final class InsightService {
 
     private func transactions(from start: Date, to end: Date) throws -> [Transaction] {
         let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= start && $0.date <= end },
+            predicate: #Predicate { $0.date >= start && $0.date <= end && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         )
         return try context.fetch(descriptor)
@@ -162,7 +163,7 @@ final class InsightService {
         let start = calendar.startOfDay(for: .now)
         guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return false }
         let descriptor = FetchDescriptor<DayConfirmation>(
-            predicate: #Predicate { $0.day >= start && $0.day < end }
+            predicate: #Predicate { $0.day >= start && $0.day < end && $0.deletedAt == nil }
         )
         return try context.fetchCount(descriptor) > 0
     }

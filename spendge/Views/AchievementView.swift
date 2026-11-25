@@ -10,7 +10,7 @@ struct AchievementView: View {
     let onClose: () -> Void
 
     @Environment(\.modelContext) private var context
-    @Query private var unlocks: [TrophyUnlock]
+    @Query(filter: #Predicate<TrophyUnlock> { $0.deletedAt == nil }) private var unlocks: [TrophyUnlock]
 
     @State private var snapshot: AchievementSnapshot?
     @State private var selected: TrophyState?

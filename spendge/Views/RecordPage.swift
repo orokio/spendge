@@ -15,7 +15,10 @@ struct RecordPage: View {
     @Query(sort: [SortDescriptor(\Category.sortOrder), SortDescriptor(\Category.name)])
     private var allCategories: [Category]
     @Query(sort: \Account.sortOrder) private var allAccounts: [Account]
-    @Query(sort: [SortDescriptor(\Transaction.date, order: .reverse), SortDescriptor(\Transaction.createdAt, order: .reverse)]) private var recentTransactions: [Transaction]
+    @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
+           sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
+                  SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])
+    private var recentTransactions: [Transaction]
 
     @State private var kind: TransactionKind = .expense
     @State private var selectedCategory: Category?

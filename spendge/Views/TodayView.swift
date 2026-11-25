@@ -12,8 +12,11 @@ struct TodayView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
-    @Query(sort: [SortDescriptor(\Transaction.date, order: .reverse), SortDescriptor(\Transaction.createdAt, order: .reverse)]) private var transactions: [Transaction]
-    @Query private var confirmations: [DayConfirmation]
+    @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
+           sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
+                  SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])
+    private var transactions: [Transaction]
+    @Query(filter: #Predicate<DayConfirmation> { $0.deletedAt == nil }) private var confirmations: [DayConfirmation]
 
     @State private var insight: Insight?
     @State private var debugToast: String?

@@ -27,7 +27,7 @@ final class BudgetService {
 
     func budgets(year: Int, month: Int) throws -> [Budget] {
         var descriptor = FetchDescriptor<Budget>(
-            predicate: #Predicate { $0.year == year && $0.month == month }
+            predicate: #Predicate { $0.year == year && $0.month == month && $0.deletedAt == nil }
         )
         descriptor.sortBy = [SortDescriptor(\.amountCents, order: .reverse)]
         return try context.fetch(descriptor)
@@ -36,13 +36,13 @@ final class BudgetService {
     /// 查询某月某分类（或全部）的预算。
     func budget(category: Category?, year: Int, month: Int) throws -> Budget? {
         if let category {
-            let categoryID = category.id
+            let code = category.code
             let descriptor = FetchDescriptor<Budget>(
-                predicate: #Predicate { $0.year == year && $0.month == month && $0.category?.id == categoryID }
+                predicate: #Predicate { $0.year == year && $0.month == month && $0.categoryCode == code && $0.deletedAt == nil }
             )
             return try context.fetch(descriptor).first
         } else {
-            return try budgets(year: year, month: month).first { $0.category == nil }
+            return try budgets(year: year, month: month).first { $0.categoryCode == nil }
         }
     }
 
@@ -83,12 +83,12 @@ final class BudgetService {
         guard try budget(category: nil, year: year, month: month) == nil else { return }
 
         let all = try context.fetch(
-            FetchDescriptor<Budget>(sortBy: [
+            FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil }, sortBy: [
                 SortDescriptor(\Budget.year, order: .reverse),
                 SortDescriptor(\Budget.month, order: .reverse),
             ])
         )
-        guard let source = all.first(where: { $0.category == nil && $0.isRecurring }) else { return }
+        guard let source = all.first(where: { $0.categoryCode == nil && $0.isRecurring }) else { return }
         let copy = Budget(category: nil, amountCents: source.amountCents,
                           year: year, month: month, isRecurring: true)
         context.insert(copy)
@@ -98,7 +98,7 @@ final class BudgetService {
 
     func deleteBudget(_ budget: Budget) throws {
         try FaultInjection.current.check(.budgetWrite)
-        context.delete(budget)
+        budget.deletedAt = .now
         try context.save()
     }
 
@@ -108,7 +108,7 @@ final class BudgetService {
         let txns = try transactionService.transactions(from: range.start, to: range.end)
         return txns.reduce(into: Int64(0)) { partial, txn in
             guard txn.kind == .expense else { return }
-            if let category, txn.category?.id != category.id { return }
+            if let category, txn.categoryCode != category.code { return }
             partial += txn.amountCents
         }
     }

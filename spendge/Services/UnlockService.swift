@@ -17,6 +17,8 @@ enum UnlockService {
         #if DEBUG
         // 开发期直接解锁，方便验证边界
         Entitlements.isUnlocked = true
+        // iCloud 是付费能力，解锁后按新权限重建容器
+        NotificationCenter.default.post(name: .cloudSyncPreferenceChanged, object: nil)
         #else
         // TODO: StoreKit 非消耗型内购；成功后写 Entitlements.isUnlocked = true
         #endif

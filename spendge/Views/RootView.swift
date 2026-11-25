@@ -5,10 +5,10 @@ import SwiftData
 /// 记录页与编辑页仍然挂在根上全屏呈现，右滑即可关闭。
 struct RootView: View {
     @Environment(\.modelContext) private var context
-    @Query private var allTransactions: [Transaction]
-    @Query private var allGoals: [Goal]
-    @Query private var allBudgets: [Budget]
-    @Query private var allConfirmations: [DayConfirmation]
+    @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil }) private var allTransactions: [Transaction]
+    @Query(filter: #Predicate<Goal> { $0.deletedAt == nil }) private var allGoals: [Goal]
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var allBudgets: [Budget]
+    @Query(filter: #Predicate<DayConfirmation> { $0.deletedAt == nil }) private var allConfirmations: [DayConfirmation]
     @AppStorage(PreferenceKey.onboardingHomeSeen) private var onboardingHomeSeen = false
     @AppStorage(PreferenceKey.onboardingBudgetSeen) private var onboardingBudgetSeen = false
     @AppStorage(PreferenceKey.privacyChoice) private var privacyChoice = ""

@@ -10,30 +10,25 @@ extension Category {
 /// 分类：支出 / 收入。删除分类不会删除账单，账单的分类会被置空。
 @Model
 final class Category {
-    @Attribute(.unique) var id: UUID
-    var name: String
+    var id: UUID = UUID()
+    var name: String = ""
     /// 稳定标识（CategoryCode 的 rawValue）。代码里一律按 code 匹配，不按 name。
     var code: String?
-    var iconName: String
-    var colorHex: String
-    var kindRawValue: String
+    var iconName: String = "tag.fill"
+    var colorHex: String = "#9CA3AF"
+    var kindRawValue: String = TransactionKind.expense.rawValue
     /// 内部聚合领域，用户不可见。
     var domainRawValue: String = CategoryDomain.other.rawValue
     /// 包含范围：写这一类别管哪些东西，用「、」分隔。
     /// 既给人看，也用于备注 / 语音的自动识别（见 CategoryMatcher）。
     var scope: String = ""
-    var sortOrder: Int
+    var sortOrder: Int = 99
     /// 系统预置分类不允许删除（可改名、可归档）
-    var isSystem: Bool
-    var isArchived: Bool
-    var createdAt: Date
-    var updatedAt: Date
+    var isSystem: Bool = false
+    var isArchived: Bool = false
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
 
-    @Relationship(deleteRule: .nullify, inverse: \Transaction.category)
-    var transactions: [Transaction] = []
-
-    @Relationship(deleteRule: .cascade, inverse: \Budget.category)
-    var budgets: [Budget] = []
 
     init(
         id: UUID = UUID(),

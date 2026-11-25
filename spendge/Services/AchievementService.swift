@@ -63,7 +63,7 @@ final class AchievementService {
     // MARK: - 查询
 
     func unlocks() -> [TrophyUnlock] {
-        (try? context.fetch(FetchDescriptor<TrophyUnlock>())) ?? []
+        (try? context.fetch(FetchDescriptor<TrophyUnlock>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
     }
 
     func snapshot() -> AchievementSnapshot {
@@ -132,11 +132,11 @@ final class AchievementService {
     private func loadStats() -> Stats {
         var stats = Stats()
 
-        let transactions = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
-        let goals = (try? context.fetch(FetchDescriptor<Goal>())) ?? []
-        let achievements = (try? context.fetch(FetchDescriptor<GoalAchievement>())) ?? []
-        let budgets = (try? context.fetch(FetchDescriptor<Budget>())) ?? []
-        let confirmations = (try? context.fetch(FetchDescriptor<DayConfirmation>())) ?? []
+        let transactions = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        let goals = (try? context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        let achievements = (try? context.fetch(FetchDescriptor<GoalAchievement>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        let budgets = (try? context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        let confirmations = (try? context.fetch(FetchDescriptor<DayConfirmation>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
 
         stats.transactionCount = transactions.count
         stats.incomeCount = transactions.filter { $0.kind == .income }.count

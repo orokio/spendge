@@ -7,7 +7,10 @@ struct ReviewView: View {
     let onOpenCategory: (CategoryScope) -> Void
 
     @Environment(\.modelContext) private var context
-    @Query(sort: [SortDescriptor(\Transaction.date, order: .reverse), SortDescriptor(\Transaction.createdAt, order: .reverse)]) private var transactions: [Transaction]
+    @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
+           sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
+                  SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])
+    private var transactions: [Transaction]
 
     /// 当前查看的期间：某个月，或某一整年
     @State private var period: Period = .month(Date())

@@ -8,7 +8,7 @@
 
 | 项 | 约定 |
 |---|---|
-| Base URL | 客户端读 `Info.plist` 的 `ServerBaseURL`；为空则不发任何请求。**当前联调环境：`https://www.orokio.com:8443`**（备案通过后切 443） |
+| Base URL | 客户端读 `Info.plist` 的 `ServerBaseURL`；为空则不发任何请求。**当前联调环境：`https://api.orokio.com:8443`**（接口子域独立证书；备案通过后切 443） |
 | 协议 | 仅 HTTPS，不做 ATS 例外 |
 | 编码 | `application/json; charset=utf-8` |
 | 时间 | ISO 8601，UTC，例如 `2027-02-24T00:00:00Z` |
@@ -151,4 +151,5 @@ Content-Type: multipart/form-data
 ## 7. 变更记录
 
 - **2026-11-24 v1**：register 每次启动上报；引入 deviceSecret；设备 token 改 opaque + 3 个月滑动
+- **2026-11-25**：接口域名由 `www.orokio.com` 改为 `api.orokio.com`（独立证书，SNI 分流）；协议与路径不变
 

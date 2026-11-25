@@ -47,7 +47,8 @@ final class BackupService {
     /// 账单 CSV：UTF-8 BOM，Excel 直接打开不乱码
     func csv(scope: BackupScope, monthOf date: Date = .now) throws -> String {
         let all = try context.fetch(
-            FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\.date, order: .forward)])
+            FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil },
+                                         sortBy: [SortDescriptor(\.date, order: .forward)])
         )
         let rows: [Transaction]
         if case .currentMonth = scope {
@@ -86,12 +87,12 @@ final class BackupService {
     func backupData() throws -> Data {
         let accounts = try context.fetch(FetchDescriptor<Account>())
         let categories = try context.fetch(FetchDescriptor<Category>())
-        let transactions = try context.fetch(FetchDescriptor<Transaction>())
-        let budgets = try context.fetch(FetchDescriptor<Budget>())
-        let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>())
-        let goals = try context.fetch(FetchDescriptor<Goal>())
-        let achievements = try context.fetch(FetchDescriptor<GoalAchievement>())
-        let trophies = try context.fetch(FetchDescriptor<TrophyUnlock>())
+        let transactions = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil }))
+        let budgets = try context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil }))
+        let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>(predicate: #Predicate { $0.deletedAt == nil }))
+        let goals = try context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt == nil }))
+        let achievements = try context.fetch(FetchDescriptor<GoalAchievement>(predicate: #Predicate { $0.deletedAt == nil }))
+        let trophies = try context.fetch(FetchDescriptor<TrophyUnlock>(predicate: #Predicate { $0.deletedAt == nil }))
 
         let file = BackupFile(
             version: BackupFile.currentVersion,
@@ -275,6 +276,7 @@ final class BackupService {
         for dto in file.accounts {
             let account = Account(
                 id: dto.id,
+                code: dto.code ?? dto.id.uuidString,
                 name: dto.name,
                 iconName: dto.iconName,
                 colorHex: dto.colorHex,
@@ -291,7 +293,7 @@ final class BackupService {
 
         // 没有账户的旧备份：补一个默认账户
         if accountMap.isEmpty {
-            let account = Account(name: "默认账户", sortOrder: 0)
+            let account = Account(code: "cash", name: "默认账户", sortOrder: 0)
             context.insert(account)
             accountMap[account.id] = account
         }
@@ -302,7 +304,7 @@ final class BackupService {
             let category = Category(
                 id: dto.id,
                 name: dto.name,
-                code: dto.code,
+                code: dto.code ?? dto.id.uuidString,
                 iconName: dto.iconName,
                 colorHex: dto.colorHex,
                 kind: TransactionKind(rawValue: dto.kindRawValue) ?? .expense,
@@ -395,6 +397,7 @@ final class BackupService {
         }
 
         try context.save()
+        EntityLookup.invalidate(context)
         return file.transactions.count
     }
 }
@@ -420,6 +423,7 @@ struct BackupFile: Codable {
 
 struct AccountDTO: Codable {
     var id: UUID
+    var code: String?
     var name: String
     var iconName: String
     var colorHex: String
@@ -432,6 +436,7 @@ struct AccountDTO: Codable {
 
     init(_ account: Account) {
         id = account.id
+        code = account.code
         name = account.name
         iconName = account.iconName
         colorHex = account.colorHex
@@ -499,7 +504,7 @@ struct TransactionDTO: Codable {
         note = txn.note
         sourceRawValue = txn.sourceRawValue
         categoryID = txn.category?.id
-        accountID = txn.account.id
+        accountID = txn.account?.id ?? UUID()
         refundOfID = txn.refundOfID
         createdAt = txn.createdAt
         updatedAt = txn.updatedAt

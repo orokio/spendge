@@ -95,7 +95,7 @@ struct TransactionList: View {
     var onTap: ((Transaction) -> Void)?
 
     /// 只查退款记录，用来给原单打「已退款」
-    @Query(filter: #Predicate<Transaction> { $0.refundOfID != nil }) private var refunds: [Transaction]
+    @Query(filter: #Predicate<Transaction> { $0.refundOfID != nil && $0.deletedAt == nil }) private var refunds: [Transaction]
 
     private var refundedOriginalIDs: Set<UUID> {
         Set(refunds.compactMap(\.refundOfID))

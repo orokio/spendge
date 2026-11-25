@@ -30,8 +30,8 @@ struct PrivacyConsentView: View {
 
                     VStack(alignment: .leading, spacing: 18) {
                         row(icon: "iphone",
-                            title: "账本留在本机",
-                            detail: "账单、目标、预算只存在这台设备，不上传。")
+                            title: "账本存在本机与 iCloud",
+                            detail: "默认只在这台设备；开启 iCloud 同步后，通过你自己的 iCloud 在设备间同步，不经过我们。")
                         row(icon: "mic",
                             title: "语音只在你说的时候开启",
                             detail: "麦克风与语音识别仅在你主动使用语音输入时启用。")
@@ -143,7 +143,7 @@ struct PrivacyPolicyView: View {
                     .padding(.top, 24)
 
                     section("数据存在哪里",
-                            "账单、目标、预算与「没花钱」确认保存在本机。iCloud 同步由 Apple 的 CloudKit 提供，不经过我们的服务器。")
+                            "账单、目标、预算与「没花钱」确认默认保存在本机。开启 iCloud 同步后，数据保存在你的 iCloud 私有数据库，由 Apple 的 CloudKit 提供，只有登录同一 Apple ID 的设备能读到，不经过我们的服务器。")
 
                     section("崩溃上报",
                             "随 App 使用一并开启。通过第三方崩溃分析服务收集崩溃堆栈、App 版本与一个随机安装标识，用于把同一设备的崩溃归在一起；设备型号、系统版本等其他信息的采集已在配置中关闭。信息只用于定位和修复问题，不用于广告，也不与你的身份关联。")

@@ -1,35 +1,34 @@
-# iCloud 同步设计（待确认）
+# iCloud 同步设计（实施中）
 
 > 目标：本地记账数据通过 CloudKit 在用户自己的设备间同步，不引入自有账号与服务端。
-> 状态：设计稿，2026-11-23；确认后再改模型与写代码。
+> 状态：2026-11-25 模型已按本稿改造，真机启用 CloudKit。
 
 ## 1. 范围
 
-- 同步：账单、预算、目标、达成记录、没花钱确认、奖杯解锁
-- 不同步：分类与账户（见第 2 节）、App 偏好设置、调试与诊断数据
+- 同步：账单、预算、目标、达成记录、没花钱确认、奖杯解锁、分类、账户
+- 不同步：App 偏好设置、调试与诊断数据
 - iCloud 未登录或不可用 → 纯本地，不阻塞任何记账动作
 - 不做自有账号；身份就是用户的 Apple ID
 
-## 2. 身份用 code，不用 UUID（修正版）
+## 2. 身份用 code，种子 ID 由 code 推导
 
 先厘清两个东西：
 
-- **UUID**：SwiftData 给每条记录生成的行 ID，纯数据库实现细节；两台设备各自建种子，所以同一个「点外卖」在两台机器上的 UUID 不一样。
-- **code**：分类的业务身份，代码里就是 `CategoryCode` 的字符串，例如 `takeout`、`dineout`。它跟显示名无关，改名不影响，所有匹配、目标、统计都靠它。
+- **UUID**：SwiftData 的行 ID。随机生成的 UUID 在两台设备上不一样，CloudKit 就会把同一个「点外卖」当成两条记录。
+- **code**：分类/账户的业务身份，例如 `takeout`、`dineout`、`cash`。跟显示名无关，改名不影响，所有匹配、目标、统计都靠它。
 
-分类不可定制，账户也只有一个，所以**跨设备身份就应该用 code，UUID 只留作本地行 ID**。方案调整为：
+SwiftData 不允许把 `code` 设成主键，CloudKit 也不支持唯一约束，所以做法是：**用 code 算出一个固定的 UUID 当行 ID**（SHA-256 前 16 字节，见 `StableID`）。每台设备独立算出来的「点外卖」是同一个 ID，CloudKit 合并成同一条记录，不需要运行时扫表去重。
 
 - Transaction 存 `categoryCode`、`accountCode`，Budget 存 `categoryCode`
-- 分类与账户只在本机按 code 查，不参与 CloudKit 同步
-- 账单/预算与 Category/Account 的关系从同步模型里移除；显示时按 code 查本地种子
-- 这样一台设备的「点外卖」账单到另一台，仍然解析成本机的「点外卖」，不会丢，也不会出现两份
+- 分类与账户**参与同步**；种子用 `StableID.category(code)` / `StableID.account(code)`
+- 账单/预算与 Category/Account 的关系字段已移除，显示时按 code 解析（`EntityLookup`，按 context 缓存）
+- 分类与账户目前不支持自定义，code 是封闭集合；启动时会把旧记录的 ID 归一化，并按 code 归并重复项
 
 ### 影响
 
-- 所有用 `transaction.category`、`transaction.account`、`budget.category` 的视图与统计，要改为按 code 查（CategoryService 可以提供带缓存的查找）
-- 迁移：用现有关系回填 `categoryCode` / `accountCode`，再移除关系字段
-- 分类/账户的 code 是封闭集合，不需要处理用户自定义
-- 这是模型层的一次大改，但方向比「同步分类再按 code 去重」干净
+- 所有用 `transaction.category`、`transaction.account`、`budget.category` 的视图与统计，改为按 code 查
+- 迁移：旧关系已通过备份恢复完成 code 回填，关系字段已删除
+- 这是模型层的一次大改
 
 ## 3. 冲突与删除
 
@@ -90,9 +89,10 @@
 
 - 删除用软删除 + 30 天清理
 - iCloud 默认关闭，由用户在设置开启
-- 分类/账户以 code 为身份；分类表与账户表不参与同步
-- 账单存 `categoryCode` / `accountCode`，预算存 `categoryCode`；移除对应的关系字段
-- 同步范围：账单、预算、目标、达成记录、没花钱确认、奖杯解锁
+- 分类/账户以 code 为身份，且参与同步；种子 ID 由 code 推导为固定 UUID
+- 账单存 `categoryCode` / `accountCode`，预算存 `categoryCode`；关系字段已移除
+- 同步范围：账单、预算、目标、达成记录、没花钱确认、奖杯解锁、分类、账户
+- 分类与账户不支持自定义（至少当前版本）
 
 待确认：
 

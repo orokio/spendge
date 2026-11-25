@@ -172,8 +172,10 @@ enum TrophyCatalog {
 /// 存在即表示拿过，解锁日期用于展示。
 @Model
 final class TrophyUnlock {
-    @Attribute(.unique) var trophyID: String
-    var unlockedAt: Date
+    var trophyID: String = ""
+    var unlockedAt: Date = Date.now
+    /// 软删除时间；nil 表示未删除
+    var deletedAt: Date?
 
     init(trophyID: TrophyID, unlockedAt: Date = .now) {
         self.trophyID = trophyID.rawValue

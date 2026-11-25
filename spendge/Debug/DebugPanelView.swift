@@ -11,7 +11,9 @@ struct DebugPanelView: View {
     @State private var confirm: ConfirmRequest?
     @State private var errorMessage: String?
     @State private var toast: String?
+    @State private var sharedFile: DebugSharedFile?
     @State private var faultRowsVersion = 0
+    @State private var entitlementVersion = 0
     private let implementedFaults: [FaultPoint] = [
         .transactionWrite, .goalWrite, .budgetWrite, .dayConfirmationWrite, .shareExport,
     ]
@@ -23,6 +25,7 @@ struct DebugPanelView: View {
                 faultSection
                 scenarioSection
                 entitlementSection
+                diagnosticsSection
                 crashSection
                 closeSection
             }
@@ -30,6 +33,9 @@ struct DebugPanelView: View {
         .toast($toast)
         .errorToast($errorMessage)
         .confirmDialog($confirm)
+        .sheet(item: $sharedFile) { file in
+            ShareSheet(url: file.url) { _ in sharedFile = nil }
+        }
     }
 
     // MARK: - 分区
@@ -93,15 +99,47 @@ struct DebugPanelView: View {
     }
 
     private var entitlementSection: some View {
-        section(title: "收费") {
-            Toggle("模拟免费版", isOn: Binding(
-                get: { !Entitlements.isUnlocked },
-                set: { Entitlements.isUnlocked = !$0 }
-            ))
-            .font(Typography.body)
-            .tint(Color.brand)
+        let _ = entitlementVersion
+        return section(title: "付费模拟") {
+            entitlementRow(title: "模拟已买断", unlocked: true)
+            divider
+            entitlementRow(title: "模拟免费版", unlocked: false)
+        }
+    }
+
+    private func entitlementRow(title: String, unlocked: Bool) -> some View {
+        Button {
+            Entitlements.isUnlocked = unlocked
+            entitlementVersion += 1
+            // iCloud 是付费能力，切换后要让容器按新权限重建
+            NotificationCenter.default.post(name: .cloudSyncPreferenceChanged, object: nil)
+        } label: {
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(Typography.body)
+                    .foregroundStyle(Color.textPrimary)
+                Spacer(minLength: 12)
+                if Entitlements.isUnlocked == unlocked {
+                    Image(systemName: "checkmark")
+                        .font(Typography.captionStrong)
+                        .foregroundStyle(Color.brand)
+                }
+            }
             .padding(.horizontal, 16)
             .frame(height: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var diagnosticsSection: some View {
+        section(title: "诊断") {
+            Button {
+                exportDiagnostics()
+            } label: {
+                actionLabel(icon: "doc.text.magnifyingglass", title: "导出诊断日志", detail: "仅本地")
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -217,6 +255,15 @@ struct DebugPanelView: View {
         }
     }
 
+    private func exportDiagnostics() {
+        let url = Analytics.fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            toast = "还没有诊断日志"
+            return
+        }
+        sharedFile = DebugSharedFile(url: url)
+    }
+
     private func run(_ scenario: DebugScenario) {
         do {
             try DebugDataSeeder(context: context).run(scenario)
@@ -225,6 +272,11 @@ struct DebugPanelView: View {
             errorMessage = ErrorText.message(for: error)
         }
     }
+}
+
+private struct DebugSharedFile: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 private struct FaultToggleRow: View {

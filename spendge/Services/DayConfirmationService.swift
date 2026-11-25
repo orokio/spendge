@@ -23,7 +23,7 @@ final class DayConfirmationService {
         let start = range.start
         let end = range.end
         let descriptor = FetchDescriptor<DayConfirmation>(
-            predicate: #Predicate { $0.day >= start && $0.day < end }
+            predicate: #Predicate { $0.day >= start && $0.day < end && $0.deletedAt == nil }
         )
         return try context.fetch(descriptor).first
     }
@@ -43,7 +43,7 @@ final class DayConfirmationService {
     func remove(on date: Date) throws {
         try FaultInjection.current.check(.dayConfirmationWrite)
         guard let existing = try confirmation(on: date) else { return }
-        context.delete(existing)
+        existing.deletedAt = .now
         try context.save()
         Analytics.record(.noSpend, ["action": "cancel"])
     }

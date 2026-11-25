@@ -7,11 +7,14 @@ struct GoalView: View {
     let onOpenTrophies: () -> Void
 
     @Environment(\.modelContext) private var context
-    @Query(sort: [SortDescriptor(\Goal.sortOrder), SortDescriptor(\Goal.createdAt)])
+    @Query(filter: #Predicate<Goal> { $0.deletedAt == nil },
+           sort: [SortDescriptor<Goal>(\Goal.sortOrder),
+                  SortDescriptor<Goal>(\Goal.createdAt)])
     private var allGoals: [Goal]
-    @Query private var budgets: [Budget]
-    @Query private var allTransactions: [Transaction]
-    @Query(sort: [SortDescriptor(\GoalAchievement.periodStart, order: .reverse)])
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var budgets: [Budget]
+    @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil }) private var allTransactions: [Transaction]
+    @Query(filter: #Predicate<GoalAchievement> { $0.deletedAt == nil },
+           sort: [SortDescriptor<GoalAchievement>(\GoalAchievement.periodStart, order: .reverse)])
     private var achievements: [GoalAchievement]
 
     /// 正在查看的月份：默认当月，可回看历史
@@ -191,7 +194,7 @@ struct GoalView: View {
     private var monthBudget: Budget? {
         let comps = calendar.dateComponents([.year, .month], from: monthStart)
         return budgets.first {
-            $0.category == nil && $0.year == comps.year && $0.month == comps.month
+            $0.categoryCode == nil && $0.year == comps.year && $0.month == comps.month
         }
     }
 

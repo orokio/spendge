@@ -1,9 +1,10 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import CloudKit
 
-/// 设置：云同步、开关、数据导出等。
-/// 同步与开关仍是占位；数据组已接实现（CSV 导出 / JSON 备份 / 恢复）。
+/// 设置：云同步状态、开关、数据导出等。
+/// 数据组已接实现（CSV 导出 / JSON 备份 / 恢复）。
 struct SettingsView: View {
     private struct Item: Identifiable {
         let id = UUID()
@@ -30,6 +31,9 @@ struct SettingsView: View {
     @State private var pendingRestore: Data?
     @State private var notice: ConfirmRequest?
     @State private var showDebugPanel = false
+    @ObservedObject private var syncMonitor = CloudSyncMonitor.shared
+    @AppStorage(CloudSyncPreference.enabledKey) private var syncEnabled = false
+    @State private var showUnlock = false
 
     var body: some View {
         let _ = LaunchTrace.once("settings.body")
@@ -44,9 +48,7 @@ struct SettingsView: View {
                     .font(Typography.pageTitle)
                     .padding(.top, 56)
 
-                group([
-                    Item(icon: "icloud", title: "iCloud 云同步", detail: "暂未接入", isOn: nil),
-                ])
+                syncCard
 
                 group([
                     Item(icon: "square.and.pencil", title: "记下后留在记录页", detail: "", isOn: $stayAfterSave),
@@ -100,6 +102,7 @@ struct SettingsView: View {
             handleImport(result)
         }
         .confirmDialog($notice)
+        .unlockPrompt($showUnlock)
     }
 
     private func closeDebugPanel() {
@@ -140,10 +143,6 @@ struct SettingsView: View {
             divider
             actionRow(icon: "arrow.down.doc", title: "从备份恢复", detail: "") {
                 showImporter = true
-            }
-            divider
-            actionRow(icon: "doc.text.magnifyingglass", title: "诊断日志", detail: "仅本地") {
-                exportDiagnostics()
             }
             divider
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
@@ -192,14 +191,134 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    /// 只导出本地诊断日志，供反馈问题时附上；不含金额与备注
-    private func exportDiagnostics() {
-        let url = Analytics.fileURL
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            toast = "还没有诊断日志"
-            return
+    // MARK: - 同步卡
+
+    private var syncCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "icloud")
+                    .font(Typography.body)
+                    .foregroundStyle(Color.brand)
+                    .frame(width: 24)
+                Text("iCloud 云同步")
+                    .font(Typography.body)
+                    .foregroundStyle(Color.textPrimary)
+                if !Entitlements.can(.iCloudSync) {
+                    Text("解锁后可用")
+                        .font(Typography.label)
+                        .foregroundStyle(Color.textSecondary)
+                } else if !syncEnabled {
+                    Text("仅本机")
+                        .font(Typography.label)
+                        .foregroundStyle(Color.textSecondary)
+                }
+                Spacer(minLength: 12)
+                if Entitlements.can(.iCloudSync) {
+                    Toggle("", isOn: syncBinding)
+                        .labelsHidden()
+                        .tint(Color.brand)
+                } else {
+                    Button("解锁") { showUnlock = true }
+                        .font(Typography.label)
+                        .foregroundStyle(Color.brand)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 50)
+
+            if syncEnabled && Entitlements.can(.iCloudSync) {
+                divider
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(syncStatusColor)
+                            .frame(width: 7, height: 7)
+                        Text(syncStatusText)
+                            .font(Typography.label)
+                            .foregroundStyle(Color.textSecondary)
+                        Spacer(minLength: 8)
+                        if syncMonitor.errorText != nil {
+                            Button("重新检查") {
+                                Task { await syncMonitor.refresh() }
+                            }
+                            .font(Typography.label)
+                            .foregroundStyle(Color.brand)
+                        } else if let last = lastSyncText {
+                            Text("上次同步 \(last)")
+                                .font(Typography.caption)
+                                .foregroundStyle(Color.textSecondary)
+                        }
+                    }
+                    if let error = syncMonitor.errorText {
+                        Text(error)
+                            .font(Typography.caption)
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
         }
-        sharedFile = SharedFile(url: url)
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
+    }
+
+    private var syncBinding: Binding<Bool> {
+        Binding(
+            get: { syncEnabled },
+            set: { enabled in
+                if enabled {
+                    notice = ConfirmRequest(
+                        title: "开启 iCloud 同步？",
+                        message: "账本会上传到你的 iCloud，不经过我们。登录同一 Apple ID 的其他设备会自动合并数据。",
+                        confirmTitle: "开启",
+                        onConfirm: { applySyncPreference(true) }
+                    )
+                } else {
+                    notice = ConfirmRequest(
+                        title: "关闭 iCloud 同步？",
+                        message: "这台设备只写本地，其他设备不再收到新的记录。已同步的数据仍保留在 iCloud。",
+                        confirmTitle: "关闭",
+                        onConfirm: { applySyncPreference(false) }
+                    )
+                }
+            }
+        )
+    }
+
+    private func applySyncPreference(_ enabled: Bool) {
+        syncEnabled = enabled
+        syncMonitor.applyPreferenceChange()
+        NotificationCenter.default.post(name: .cloudSyncPreferenceChanged, object: nil)
+        if enabled { PushSync.registerIfNeeded() }
+    }
+
+    private var syncStatusText: String {
+        switch syncMonitor.status {
+        case .off: return "仅本机"
+        case .checking: return "检查中…"
+        case .idle: return "已开启"
+        case .syncing: return "同步中…"
+        case .unavailable(let reason): return reason
+        }
+    }
+
+    private var syncStatusColor: Color {
+        switch syncMonitor.status {
+        case .idle, .syncing, .checking: return Color.brand
+        case .unavailable: return Color.danger
+        case .off: return Color.textSecondary
+        }
+    }
+
+    private var lastSyncText: String? {
+        guard let date = syncMonitor.lastSuccess else { return nil }
+        // 相对时间在一分钟内会算出「0 秒后」这种话，直接说刚刚
+        if Date.now.timeIntervalSince(date) < 60 { return "刚刚" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: .now)
     }
 
     private func exportCSV() {

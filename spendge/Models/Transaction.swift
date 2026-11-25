@@ -4,11 +4,11 @@ import SwiftData
 /// 账单（一笔收支记录）。普通账单金额为正，方向由 kind 决定；退款记录金额为负。
 @Model
 final class Transaction {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// 金额（分）
-    var amountCents: Int64
-    var kindRawValue: String
-    var date: Date
+    var amountCents: Int64 = 0
+    var kindRawValue: String = TransactionKind.expense.rawValue
+    var date: Date = Date.now
     var note: String?
     /// 来源：手动 / 补记。
     var sourceRawValue: String = TransactionSource.manual.rawValue
@@ -17,14 +17,18 @@ final class Transaction {
     var sceneRawValue: String?
     var natureRawValue: String?
 
-    var createdAt: Date
-    var updatedAt: Date
+    /// 分类 / 账户的跨设备身份：一律按 code 匹配，关系只在本机解析
+    var categoryCode: String?
+    var accountCode: String?
+
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
 
     /// 退款记录指回原单；普通账单为 nil
     var refundOfID: UUID?
+    /// 软删除时间；nil 表示未删除
+    var deletedAt: Date?
 
-    var category: Category?
-    var account: Account
 
     init(
         id: UUID = UUID(),
@@ -34,7 +38,7 @@ final class Transaction {
         note: String? = nil,
         source: TransactionSource = .manual,
         category: Category? = nil,
-        account: Account,
+        account: Account? = nil,
         refundOfID: UUID? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -45,12 +49,16 @@ final class Transaction {
         self.date = date
         self.note = note
         self.sourceRawValue = source.rawValue
-        self.category = category
-        self.account = account
+        self.categoryCode = category?.code
+        self.accountCode = account?.code
         self.refundOfID = refundOfID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
+
+    /// 分类 / 账户对象：按 code 在本机解析
+    @MainActor var category: Category? { EntityLookup.category(code: categoryCode, in: modelContext) }
+    @MainActor var account: Account? { EntityLookup.account(code: accountCode, in: modelContext) }
 
     var kind: TransactionKind {
         get { TransactionKind(rawValue: kindRawValue) ?? .expense }

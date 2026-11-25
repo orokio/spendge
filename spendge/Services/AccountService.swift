@@ -35,6 +35,7 @@ final class AccountService {
         sortOrder: Int = 0
     ) throws -> Account {
         let account = Account(
+            code: UUID().uuidString,
             name: name,
             iconName: iconName,
             colorHex: colorHex,
@@ -44,6 +45,7 @@ final class AccountService {
         )
         context.insert(account)
         try context.save()
+        EntityLookup.invalidate(context)
         return account
     }
 
@@ -79,6 +81,7 @@ final class AccountService {
         guard txns.isEmpty else { throw SpendgeError.accountHasTransactions }
         context.delete(account)
         try context.save()
+        EntityLookup.invalidate(context)
     }
 
     /// 账户当前余额（分）。
@@ -89,9 +92,9 @@ final class AccountService {
     /// 全部账户余额之和（分）。一次取全量账单再分组，避免每个账户各查一次。
     func totalAssetsCents(includeArchived: Bool = false) throws -> Int64 {
         let accountList = try accounts(includeArchived: includeArchived)
-        let accountIDs = Set(accountList.map(\.id))
+        let codes = Set(accountList.map(\.code))
         var total = accountList.reduce(into: Int64(0)) { $0 += $1.initialBalanceCents }
-        for txn in try context.fetch(FetchDescriptor<Transaction>()) where accountIDs.contains(txn.account.id) {
+        for txn in try context.fetch(FetchDescriptor<Transaction>()) where txn.accountCode.map(codes.contains) == true {
             total += txn.balanceDeltaCents
         }
         return total

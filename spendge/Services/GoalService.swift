@@ -50,7 +50,7 @@ final class GoalService {
     func goals() throws -> [Goal] {
         try context.fetch(
             FetchDescriptor<Goal>(
-                predicate: #Predicate { $0.isActive == true },
+                predicate: #Predicate { $0.isActive == true && $0.deletedAt == nil },
                 sortBy: [SortDescriptor(\Goal.sortOrder), SortDescriptor(\Goal.createdAt)]
             )
         )
@@ -117,7 +117,7 @@ final class GoalService {
     func delete(_ goal: Goal) throws {
         try FaultInjection.current.check(.goalWrite)
         try materializeAchievements(for: goal)
-        context.delete(goal)
+        goal.deletedAt = .now
         try context.save()
     }
 
@@ -148,6 +148,7 @@ final class GoalService {
     func achievements() throws -> [GoalAchievement] {
         try context.fetch(
             FetchDescriptor<GoalAchievement>(
+                predicate: #Predicate { $0.deletedAt == nil },
                 sortBy: [SortDescriptor(\GoalAchievement.periodStart, order: .reverse)]
             )
         )
@@ -298,7 +299,7 @@ final class GoalService {
         kind: TransactionKind
     ) throws -> [Transaction] {
         let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= start && $0.date < end }
+            predicate: #Predicate { $0.date >= start && $0.date < end && $0.deletedAt == nil }
         )
         let all = try context.fetch(descriptor)
         return all.filter { txn in

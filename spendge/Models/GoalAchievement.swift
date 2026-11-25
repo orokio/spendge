@@ -5,20 +5,22 @@ import SwiftData
 /// 目标被删除后记录仍然保留（goalID 只是普通字段，不是关系），这样「删除目标」不会抹掉成就。
 @Model
 final class GoalAchievement {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// 对应目标的 id；目标删除后这条记录依然指向它（只是查不到目标了）
-    var goalID: UUID
+    var goalID: UUID = UUID()
     /// 标题快照，目标删了也能正常展示
-    var title: String
-    var periodRawValue: String
+    var title: String = ""
+    var periodRawValue: String = GoalPeriod.month.rawValue
     /// 周期起点（周一是周起点，1 号是月起点）
-    var periodStart: Date
-    var achieved: Bool
-    var currentValue: Int
-    var targetValue: Int
+    var periodStart: Date = Date.now
+    var achieved: Bool = false
+    var currentValue: Int = 0
+    var targetValue: Int = 0
     /// count / days / cents
-    var unitRawValue: String
-    var createdAt: Date
+    var unitRawValue: String = "count"
+    var createdAt: Date = Date.now
+    /// 软删除时间；nil 表示未删除
+    var deletedAt: Date?
 
     init(
         id: UUID = UUID(),

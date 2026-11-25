@@ -42,6 +42,7 @@ final class CategoryService {
     ) throws -> Category {
         let category = Category(
             name: name,
+            code: UUID().uuidString,
             iconName: iconName,
             colorHex: colorHex,
             kind: kind,
@@ -50,6 +51,7 @@ final class CategoryService {
         )
         context.insert(category)
         try context.save()
+        EntityLookup.invalidate(context)
         return category
     }
 
@@ -66,6 +68,7 @@ final class CategoryService {
         if let sortOrder { category.sortOrder = sortOrder }
         category.updatedAt = .now
         try context.save()
+        EntityLookup.invalidate(context)
     }
 
     /// 归档：列表不再展示，历史账单保留。
@@ -78,7 +81,18 @@ final class CategoryService {
     /// 删除：系统预置分类不允许删除；删除后历史账单的分类置空。
     func delete(_ category: Category) throws {
         guard !category.isSystem else { throw SpendgeError.cannotDeleteSystemCategory }
+        let code = category.code
+        if let code {
+            for transaction in try context.fetch(FetchDescriptor<Transaction>())
+            where transaction.categoryCode == code {
+                transaction.categoryCode = nil
+            }
+            for budget in try context.fetch(FetchDescriptor<Budget>()) where budget.categoryCode == code {
+                context.delete(budget)
+            }
+        }
         context.delete(category)
         try context.save()
+        EntityLookup.invalidate(context)
     }
 }

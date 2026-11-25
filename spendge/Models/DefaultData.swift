@@ -151,8 +151,10 @@ enum DefaultData {
                 outing.name = "交通出行"
                 outing.domain = .transport
                 if let fun = category("fun") {
-                    for txn in fun.transactions {
-                        txn.category = outing
+                    let funCode = fun.code
+                    let transactions = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
+                    for txn in transactions where txn.categoryCode == funCode {
+                        txn.categoryCode = outing.code
                     }
                     context.delete(fun)
                 }
@@ -187,6 +189,7 @@ enum DefaultData {
         let existingCodes = Set(categories.compactMap(\.code))
         for seed in expenseCategorySeeds + incomeCategorySeeds where !existingCodes.contains(seed.code.rawValue) {
             context.insert(Category(
+                id: StableID.category(seed.code.rawValue),
                 name: seed.name,
                 code: seed.code.rawValue,
                 iconName: seed.iconName,
@@ -200,6 +203,7 @@ enum DefaultData {
         }
 
         try? context.save()
+        EntityLookup.invalidate(context)
         UserDefaults.standard.set(15, forKey: key)
     }
 
@@ -220,6 +224,7 @@ enum DefaultData {
         if categoryCount == 0 {
             for seed in expenseCategorySeeds + incomeCategorySeeds {
                 context.insert(Category(
+                    id: StableID.category(seed.code.rawValue),
                     name: seed.name,
                     code: seed.code.rawValue,
                     iconName: seed.iconName,
@@ -236,6 +241,8 @@ enum DefaultData {
         let accountCount = (try? context.fetchCount(FetchDescriptor<Account>())) ?? 0
         if accountCount == 0 {
             context.insert(Account(
+                id: StableID.account("cash"),
+                code: "cash",
                 name: "现金",
                 iconName: "banknote",
                 colorHex: "#10B981",
@@ -245,5 +252,111 @@ enum DefaultData {
         }
 
         try? context.save()
+        EntityLookup.invalidate(context)
+    }
+
+
+    /// 软删除 30 天后物理清理；只清这些同步模型，分类与账户仍是物理删除。
+    static func purgeExpiredDeletions(context: ModelContext, now: Date = .now) {
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: now) else { return }
+        func expired(_ date: Date?) -> Bool {
+            guard let date else { return false }
+            return date < cutoff
+        }
+        var changed = false
+
+        let transactions = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
+        for item in transactions where expired(item.deletedAt) { context.delete(item); changed = true }
+
+        let budgets = (try? context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
+        for item in budgets where expired(item.deletedAt) { context.delete(item); changed = true }
+
+        let goals = (try? context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
+        for item in goals where expired(item.deletedAt) { context.delete(item); changed = true }
+
+        let achievements = (try? context.fetch(FetchDescriptor<GoalAchievement>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
+        for item in achievements where expired(item.deletedAt) { context.delete(item); changed = true }
+
+        let confirmations = (try? context.fetch(FetchDescriptor<DayConfirmation>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
+        for item in confirmations where expired(item.deletedAt) { context.delete(item); changed = true }
+
+        let unlocks = (try? context.fetch(FetchDescriptor<TrophyUnlock>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
+        for item in unlocks where expired(item.deletedAt) { context.delete(item); changed = true }
+
+        if changed { try? context.save() }
+    }
+
+    /// 分类 / 账户的跨设备身份：ID 由 code 推导，并按 code 归并重复记录。
+    static func normalizeEntityIdentity(context: ModelContext) {
+        let key = "spendge.stableEntityIdentity"
+        guard UserDefaults.standard.integer(forKey: key) < 1 else { return }
+
+        if let categories = try? context.fetch(FetchDescriptor<Category>()) {
+            var seen = Set<String>()
+            for category in categories {
+                guard let code = category.code, !code.isEmpty else { continue }
+                guard seen.insert(code).inserted else {
+                    context.delete(category)
+                    continue
+                }
+                let stable = StableID.category(code)
+                if category.id != stable { category.id = stable }
+            }
+        }
+
+        if let accounts = try? context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortOrder)])) {
+            var seen = Set<String>()
+            for account in accounts {
+                let code = account.code.isEmpty ? "cash" : account.code
+                guard seen.insert(code).inserted else {
+                    context.delete(account)
+                    continue
+                }
+                if account.code != code { account.code = code }
+                let stable = StableID.account(code)
+                if account.id != stable { account.id = stable }
+            }
+        }
+
+        try? context.save()
+        UserDefaults.standard.set(1, forKey: key)
+        EntityLookup.invalidate(context)
+    }
+
+    /// 给旧数据补上跨设备身份：账户 code、账单 / 预算的 code。
+    /// 必须在关系字段还存在的版本里跑，改造完成后就再也读不到旧关系了。
+    static func backfillCodes(context: ModelContext) {
+        let key = "spendge.entityCodeMigration"
+        guard UserDefaults.standard.integer(forKey: key) < 1 else { return }
+
+        if let accounts = try? context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortOrder)])),
+           !accounts.isEmpty {
+            var assignedCash = false
+            for account in accounts where account.code.isEmpty {
+                if !assignedCash {
+                    account.code = "cash"
+                    assignedCash = true
+                } else {
+                    account.code = account.id.uuidString
+                }
+            }
+        }
+
+        if let transactions = try? context.fetch(FetchDescriptor<Transaction>()) {
+            for transaction in transactions {
+                if transaction.categoryCode == nil { transaction.categoryCode = transaction.category?.code }
+                if transaction.accountCode == nil { transaction.accountCode = transaction.account?.code }
+            }
+        }
+
+        if let budgets = try? context.fetch(FetchDescriptor<Budget>()) {
+            for budget in budgets where budget.categoryCode == nil {
+                budget.categoryCode = budget.category?.code
+            }
+        }
+
+        try? context.save()
+        EntityLookup.invalidate(context)
+        UserDefaults.standard.set(1, forKey: key)
     }
 }
