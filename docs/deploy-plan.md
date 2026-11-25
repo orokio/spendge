@@ -277,12 +277,12 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（7 表）；迁移 20f108f0a1fc；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
 3. 后端：pyproject 加 gunicorn/redis；rsync server/ 到 spendge-server/；副本建 venv 并 pip install .；.env 复制
 4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
-5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010
+5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010。**api 域只保留 /spendge/ 前缀**：location /spendge/ { proxy_pass http://spendge_app/; }（末尾 / 剥前缀）；api 域根路径已删除（build 4 根请求 404，客户端静默、不影响记账）；www 域保留根路径供探活/旧包
 6. 证书：两张腾讯云 zip 分别解压到 conf/ssl/orokio.com_nginx/ 与 conf/ssl/api.orokio.com_nginx/（bundle.pem + key）；nginx 用 SNI 按 server_name 选证书。
 7. Redis：apt 装；redis.conf 设 bind 127.0.0.1 / requirepass / maxmemory 128mb / volatile-lru / save "" / **appendonly yes（AOF，write-behind 写队列持久化）** / dir 与 logfile 指向 /home/ubuntu/redis
 8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M）、spendge-writer.service（write-behind worker，MemoryMax=200M）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
 9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com 与 api.orokio.com 均 → 124.223.27.87。
-10. 验证：https://api.orokio.com:8443/health 返回 ok（证书 CN=api.orokio.com，不加 -k 校验通过）；register 签发 token；同 deviceId 第 6 次请求返回 429（限流生效）。
+10. 验证：api /spendge/health 返回 ok（证书 CN=api.orokio.com，不加 -k 校验通过）；api /spendge/v1/devices/register 剥前缀后命中（新客户端），api 根路径 /health 与 /v1/devices/register 均 404（build 4 静默）；www 根路径仍可用；同 deviceId 第 6 次请求返回 429（限流生效）。
 
 ### 13.4 踩坑与解决（重点）
 
