@@ -67,6 +67,9 @@ struct spendgeApp: App {
                 importRefreshWork = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .cloudSyncResyncRequested)) { _ in
+                resyncCloudKit()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .cloudSyncPreferenceChanged)) { _ in
                 // 同一份 store 换成另一种 CloudKit 配置；异步重建，避免在视图更新中换容器
                 DispatchQueue.main.async {
@@ -76,5 +79,19 @@ struct spendgeApp: App {
             }
         }
         .modelContainer(container)
+    }
+
+    /// 重新同步：先用 .none 重建容器（本地数据不动、断开 CloudKit），
+    /// 隔几秒再按用户开关重建一次，让同步从头做一遍全量导入。
+    private func resyncCloudKit() {
+        // 只覆盖这一次的容器配置，不动用户开关；中途被杀也不会把同步留在关闭状态
+        container = ModelContainerProvider.make(cloudKitEnabled: false)
+        LaunchTrace.mark("container.rebuilt.offline")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            container = ModelContainerProvider.make()
+            LaunchTrace.mark("container.rebuilt.resync")
+            CloudSyncMonitor.shared.finishResync()
+        }
     }
 }

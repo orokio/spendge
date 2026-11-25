@@ -7,7 +7,10 @@ enum CloudSyncPreference {
     static let enabledKey = "sync.icloudEnabled"
     static let lastSuccessKey = "sync.lastSuccessAt"
 
-    static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+    static var isEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    }
 }
 
 extension Notification.Name {
@@ -15,6 +18,8 @@ extension Notification.Name {
     static let cloudSyncPreferenceChanged = Notification.Name("spendge.cloudSyncPreferenceChanged")
     /// 远端导入完成：@Query 需要一次手动 fetch 才会刷新
     static let cloudDataImported = Notification.Name("spendge.cloudDataImported")
+    /// 用户主动重新同步：App 根部关掉同步重建一次容器，再开回来触发全量导入
+    static let cloudSyncResyncRequested = Notification.Name("spendge.cloudSyncResyncRequested")
 }
 
 /// iCloud 同步状态：账号是否可用、当前是否在同步、上次成功时间与失败原因。
@@ -34,6 +39,8 @@ final class CloudSyncMonitor: ObservableObject {
     @Published private(set) var status: Status = .checking
     @Published private(set) var lastSuccess: Date?
     @Published private(set) var errorText: String?
+    /// 重建容器期间界面显示「重建中」，不重复触发
+    @Published private(set) var isResyncing = false
 
     private var observer: NSObjectProtocol?
 
@@ -51,6 +58,29 @@ final class CloudSyncMonitor: ObservableObject {
         observeEvents()
         Task { await refresh() }
     }
+
+    /// 同步卡上的「重新同步」：关掉同步重建容器，隔几秒再开回来
+    func resync() {
+        guard !isResyncing else { return }
+        isResyncing = true
+        NotificationCenter.default.post(name: .cloudSyncResyncRequested, object: nil)
+    }
+
+    /// App 根部两次重建都完成后调用
+    func finishResync() {
+        isResyncing = false
+        errorText = nil
+        status = .checking
+        Task { await refresh() }
+    }
+
+    #if DEBUG
+    /// 开发者面板：把同步卡置成失败态，用来验证「重新同步」入口
+    func debugSimulateFailure() {
+        errorText = "同步失败，请稍后重试"
+        status = .unavailable("同步失败")
+    }
+    #endif
 
     /// 开关切换后立即接管状态，不用等页面重新出现
     func applyPreferenceChange() {
@@ -122,9 +152,31 @@ final class CloudSyncMonitor: ObservableObject {
                 NotificationCenter.default.post(name: .cloudDataImported, object: nil)
             }
         } else {
-            // 系统错误文案是英文，界面上只给中文
-            errorText = "同步失败，请稍后重试"
+            errorText = failureText(for: event.error)
             status = .unavailable("同步失败")
+        }
+    }
+
+    /// 系统错误文案是英文，界面上按错误类型给中文短句；兜底带上错误码方便排查
+    private func failureText(for error: Error?) -> String {
+        guard let error = error as? CKError else { return "同步失败，请稍后重试" }
+        switch error.code {
+        case .networkUnavailable, .networkFailure:
+            return "网络连接不可用"
+        case .notAuthenticated:
+            return "未登录 iCloud"
+        case .quotaExceeded:
+            return "iCloud 空间不足"
+        case .changeTokenExpired, .zoneNotFound:
+            return "同步数据已过期，点「重新同步」"
+        case .serverRecordChanged:
+            return "记录冲突，正在重试"
+        case .requestRateLimited:
+            return "请求过于频繁，请稍后重试"
+        case .partialFailure:
+            return "部分数据同步失败"
+        default:
+            return "同步失败，请稍后重试（\(error.code.rawValue)）"
         }
     }
 }

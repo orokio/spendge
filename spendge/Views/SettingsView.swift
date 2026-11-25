@@ -278,7 +278,7 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .frame(height: 50)
 
-            if syncEnabled && Entitlements.can(.iCloudSync) {
+            if (syncEnabled || syncMonitor.isResyncing) && Entitlements.can(.iCloudSync) {
                 divider
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -290,9 +290,13 @@ struct SettingsView: View {
                             .font(Typography.label)
                             .foregroundStyle(Color.textSecondary)
                         Spacer(minLength: 8)
-                        if syncMonitor.errorText != nil {
-                            Button("重新检查") {
-                                Task { await syncMonitor.refresh() }
+                        if syncMonitor.isResyncing {
+                            Text("重建中…")
+                                .font(Typography.label)
+                                .foregroundStyle(Color.textSecondary)
+                        } else if syncMonitor.errorText != nil {
+                            Button("重新同步") {
+                                syncMonitor.resync()
                             }
                             .font(Typography.label)
                             .foregroundStyle(Color.brand)

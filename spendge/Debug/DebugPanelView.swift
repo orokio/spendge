@@ -25,6 +25,7 @@ struct DebugPanelView: View {
                 faultSection
                 scenarioSection
                 entitlementSection
+                syncSection
                 diagnosticsSection
                 crashSection
                 closeSection
@@ -130,6 +131,18 @@ struct DebugPanelView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var syncSection: some View {
+        section(title: "同步模拟") {
+            Button {
+                CloudSyncMonitor.shared.debugSimulateFailure()
+                toast = "同步卡已置为失败"
+            } label: {
+                actionLabel(icon: "exclamationmark.icloud", title: "模拟同步失败", detail: "出现「重新同步」")
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var diagnosticsSection: some View {
