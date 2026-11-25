@@ -343,6 +343,8 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 
 **读取路径：** register 读 Redis 快照（TTL 1h，导入即失效）→ 未命中只读回源 DB；读取失败不影响登记，仍返回 200 与 token，只是不带 categories。
 
+**goalKinds（api-contract §4.2.1）：** `categories.goal_kinds` 存逗号串（`countLimit,budget,shareCap`），空串/NULL = 不能设目标；导入时校验值域，非法即报错。改动此列属于实质变更，导入会 `categoriesVersion +1`；register 为每条分类显式返回 `goalKinds`（空返回 `[]`）。
+
 **历史版本与回放（category_versions）：**
 
     .venv/bin/python -m app.categories --versions   # 列出历史版本

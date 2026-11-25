@@ -266,7 +266,8 @@ categories          code TEXT PK,              -- 唯一、永久、不可复用
                     name TEXT, icon_name TEXT, color_hex TEXT,
                     kind_raw_value TEXT,       -- expense / income，创建后不可变
                     domain_raw_value TEXT, scope TEXT,
-                    sort_order INTEGER, is_archived INTEGER  -- 归档代替删除
+                    sort_order INTEGER, is_archived INTEGER, -- 归档代替删除
+                    goal_kinds TEXT            -- 逗号分隔：countLimit,budget,shareCap；空=不能设目标
 app_config          key TEXT PK, value TEXT, updated_at TEXT
                     -- categories_version：单调递增
 category_versions   version INTEGER PK,           -- 与 categories_version 一一对应
@@ -319,6 +320,7 @@ PRAGMA cache_size = -8192;
   - 导入：`python -m app.categories docs/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1 并失效缓存）
   - 读取：Redis 快照（TTL 1h，导入时主动失效）→ 未命中只读回源 DB；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
   - 历史：每次变更在**同一事务**写一条 `category_versions`（全量 JSON 快照，只增不改）。用于审计与精确回放，也是“账单按记账当时名称展示”的数据基础；回放（`--restore N`）同样把版本 +1，版本号永不回退
+  - goalKinds（api-contract §4.2.1）：每条分类按 `goalKinds` 决定可用于哪种目标，值域封闭 `countLimit` / `budget` / `shareCap`；库里存逗号串，空串或 NULL 都表示“不能设目标”；导入时逐个校验，非法值直接报错；register 必须为每条分类显式返回数组（空也返回 `[]`）
 
 ## 7. 架构与防护分层
 

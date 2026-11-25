@@ -108,9 +108,10 @@ def test_register_client_version_0_gets_full_categories(client, device_id):
     item = j["categories"][0]
     assert set(item) == {
         "code", "name", "iconName", "colorHex", "kindRawValue",
-        "domainRawValue", "scope", "sortOrder", "isArchived",
+        "domainRawValue", "scope", "sortOrder", "isArchived", "goalKinds",
     }
     assert isinstance(item["sortOrder"], int) and isinstance(item["isArchived"], bool)
+    assert all(isinstance(c["goalKinds"], list) for c in j["categories"])
 
 
 def test_register_same_version_returns_no_categories(client, device_id):
@@ -152,3 +153,14 @@ def test_category_snapshot_exists_for_current_version():
     record = categories.get_version(snapshot["version"])
     assert record is not None, "当前版本缺少快照"
     assert len(record["payload"]) == len(snapshot["items"])
+
+def test_goal_kinds_normalization():
+    from app.categories import _normalize_goal_kinds
+
+    assert _normalize_goal_kinds("x", ["shareCap", "budget"]) == "budget,shareCap"
+    assert _normalize_goal_kinds("x", "countLimit,budget") == "countLimit,budget"
+    assert _normalize_goal_kinds("x", ["budget", "budget"]) == "budget"
+    assert _normalize_goal_kinds("x", []) == ""
+    assert _normalize_goal_kinds("x", None) == ""
+    with pytest.raises(ValueError):
+        _normalize_goal_kinds("x", ["budget", "bogus"])

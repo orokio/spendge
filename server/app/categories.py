@@ -22,6 +22,7 @@ SNAPSHOT_KEY = "categories:snapshot"
 SNAPSHOT_TTL = 3600  # 秒；导入时会主动失效
 
 KINDS = ("expense", "income")
+GOAL_KINDS = ("countLimit", "budget", "shareCap")  # 契约 §4.2.1，封闭值域
 
 
 def _row_to_item(row: Category) -> dict:
@@ -35,6 +36,7 @@ def _row_to_item(row: Category) -> dict:
         "scope": row.scope,
         "sortOrder": row.sort_order,
         "isArchived": bool(row.is_archived),
+        "goalKinds": [v for v in (row.goal_kinds or "").split(",") if v],
     }
 
 
@@ -79,6 +81,26 @@ def invalidate() -> None:
         logger.warning("categories: cache invalidate failed (%s)", exc)
 
 
+def _normalize_goal_kinds(code: str, raw) -> str:
+    """解析并校验 goalKinds（数组或逗号串都接受），返回规范化逗号串。"""
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        values = [v.strip() for v in raw.split(",")]
+    elif isinstance(raw, (list, tuple, set)):
+        values = [str(v).strip() for v in raw]
+    else:
+        raise ValueError(f"分类 {code} 的 goalKinds 类型非法: {type(raw).__name__}")
+
+    values = [v for v in values if v]
+    invalid = [v for v in values if v not in GOAL_KINDS]
+    if invalid:
+        raise ValueError(f"分类 {code} 的 goalKinds 含非法值: {', '.join(invalid)}")
+    # 去重并按固定顺序输出，避免仅顺序变化被误判为实质变更
+    present = set(values)
+    return ",".join(v for v in GOAL_KINDS if v in present)
+
+
 def _normalize(item: dict) -> dict:
     code = str(item.get("code") or "").strip()
     kind = str(item.get("kindRawValue") or "").strip()
@@ -96,6 +118,7 @@ def _normalize(item: dict) -> dict:
         "scope": item.get("scope"),
         "sort_order": int(item.get("sortOrder") or 0),
         "is_archived": 1 if item.get("isArchived") else 0,
+        "goal_kinds": _normalize_goal_kinds(code, item.get("goalKinds")),
     }
 
 

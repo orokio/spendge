@@ -102,6 +102,7 @@ class Category(Base):
     scope: Mapped[str | None] = mapped_column(String, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_archived: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # 0/1，删除即归档
+    goal_kinds: Mapped[str | None] = mapped_column(String, nullable=True)  # 逗号分隔：countLimit,budget,shareCap
 
 
 class CategoryVersion(Base):
