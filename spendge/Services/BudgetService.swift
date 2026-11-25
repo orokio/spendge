@@ -65,8 +65,8 @@ final class BudgetService {
             try context.save()
             return existing
         }
-        let budget = Budget(category: category, amountCents: amountCents,
-                            year: year, month: month, isRecurring: isRecurring)
+        let budget = Budget(category: category, ledgerID: DefaultData.defaultLedgerID(context: context),
+                            amountCents: amountCents, year: year, month: month, isRecurring: isRecurring)
         context.insert(budget)
         try context.save()
         return budget
@@ -89,8 +89,8 @@ final class BudgetService {
             ])
         )
         guard let source = all.first(where: { $0.categoryCode == nil && $0.isRecurring }) else { return }
-        let copy = Budget(category: nil, amountCents: source.amountCents,
-                          year: year, month: month, isRecurring: true)
+        let copy = Budget(category: nil, ledgerID: source.ledgerID ?? DefaultData.defaultLedgerID(context: context),
+                          amountCents: source.amountCents, year: year, month: month, isRecurring: true)
         context.insert(copy)
         try context.save()
         UserDefaults.standard.set(true, forKey: carryKey)

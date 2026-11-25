@@ -62,9 +62,7 @@ final class TransactionService {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
-        source: TransactionSource = .manual,
-        category: Category? = nil,
-        account: Account
+        category: Category? = nil
     ) throws -> Transaction {
         do {
             try FaultInjection.current.check(.transactionWrite)
@@ -74,15 +72,14 @@ final class TransactionService {
                 kind: kind,
                 date: date,
                 note: note,
-                source: source,
                 category: category,
-                account: account
+                ledgerID: DefaultData.defaultLedgerID(context: context)
             )
             context.insert(transaction)
             try context.save()
             Analytics.record(.recordSaved, [
                 "kind": kind.rawValue,
-                "source": source.rawValue,
+                "source": "manual",
                 "category": category?.categoryCode?.rawValue ?? "none",
                 "amount": Analytics.amountBand(cents: amountCents),
                 "note": (note?.isEmpty == false) ? "1" : "0",
@@ -101,8 +98,7 @@ final class TransactionService {
         kind: TransactionKind? = nil,
         date: Date? = nil,
         note: String? = nil,
-        category: Category? = nil,
-        account: Account? = nil
+        category: Category? = nil
     ) throws {
         try FaultInjection.current.check(.transactionWrite)
         try validate(amountCents: amountCents, date: date, note: note)
@@ -114,7 +110,6 @@ final class TransactionService {
         if let date { transaction.date = date }
         if let note { transaction.note = note }
         if let category { transaction.categoryCode = category.code }
-        if let account { transaction.accountCode = account.code }
         // 退款记录永远是支出，避免在编辑页切成收入
         if transaction.refundOfID != nil { transaction.kind = .expense }
         transaction.updatedAt = .now
@@ -122,7 +117,7 @@ final class TransactionService {
         try context.save()
     }
 
-    /// 退款与原单的金额、分类保持一致；日期、账户各管各的
+    /// 退款与原单的金额、分类保持一致；日期各管各的
     private func syncRefundLink(for transaction: Transaction) {
         if let originalID = transaction.refundOfID {
             var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == originalID && $0.deletedAt == nil })
@@ -191,9 +186,8 @@ final class TransactionService {
             kind: .expense,
             date: date,
             note: original.note,
-            source: .manual,
             category: original.category,
-            account: original.account,
+            ledgerID: original.ledgerID,
             refundOfID: original.id
         )
         context.insert(refund)
@@ -202,7 +196,7 @@ final class TransactionService {
             "kind": "refund",
             "category": original.category?.categoryCode?.rawValue ?? "none",
             "amount": Analytics.amountBand(cents: original.amountCents),
-            "source": TransactionSource.manual.rawValue,
+            "source": "manual",
             "note": (original.note?.isEmpty == false) ? "1" : "0",
         ])
         return refund
@@ -224,16 +218,6 @@ final class TransactionService {
         }
 
         var descriptor = FetchDescriptor<Transaction>(predicate: predicate)
-        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
-        return try context.fetch(descriptor)
-    }
-
-    /// 某账户的全部账单。
-    func transactions(account: Account) throws -> [Transaction] {
-        let code = account.code
-        var descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.accountCode == code && $0.deletedAt == nil }
-        )
         descriptor.sortBy = [SortDescriptor(\.date, order: .reverse), SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
     }
@@ -308,12 +292,6 @@ final class TransactionService {
     }
 
     // MARK: - 统计
-
-    /// 账户当前余额（分）= 期初余额 + 收入 - 支出。
-    func balanceCents(for account: Account) throws -> Int64 {
-        let txns = try transactions(account: account)
-        return account.initialBalanceCents + txns.reduce(into: Int64(0)) { $0 += $1.balanceDeltaCents }
-    }
 
     /// 月度汇总：总额 + 分类分布。
     func summary(forMonth year: Int, month: Int) throws -> MonthlySummary {

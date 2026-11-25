@@ -86,6 +86,7 @@ final class GoalService {
             categoryCodes: categoryCodes,
             period: period,
             periodStart: calendar.dateInterval(of: .month, for: .now)?.start,
+            ledgerID: DefaultData.defaultLedgerID(context: context),
             targetValue: targetValue,
             isRecurring: isRecurring,
             sortOrder: (existing.map(\.sortOrder).max() ?? 0) + 1
@@ -220,6 +221,7 @@ final class GoalService {
                 categoryCodes: source.categoryCodes,
                 period: source.period,
                 periodStart: monthStart,
+                ledgerID: source.ledgerID ?? DefaultData.defaultLedgerID(context: context),
                 targetValue: source.targetValue,
                 isRecurring: true,
                 sortOrder: source.sortOrder

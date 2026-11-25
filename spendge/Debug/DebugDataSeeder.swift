@@ -38,11 +38,6 @@ enum DebugScenario: String, CaseIterable, Identifiable {
     }
 }
 
-enum DebugSeedError: LocalizedError {
-    case noAccount
-    var errorDescription: String? { "找不到账户，无法生成数据" }
-}
-
 /// 确定性数据模拟：同一场景每次生成相同的日期与金额。
 @MainActor
 struct DebugDataSeeder {
@@ -76,7 +71,7 @@ struct DebugDataSeeder {
     // MARK: - 场景
 
     private func seed(days: Int, perDay: ClosedRange<Int>, includeIncome: Bool) throws {
-        let (account, expenses, incomes) = try base()
+        let (expenses, incomes) = try base()
         var rng = SeededRandom(seed: 20261123)
         let today = calendar.startOfDay(for: .now)
 
@@ -92,8 +87,7 @@ struct DebugDataSeeder {
                     kind: .expense,
                     date: day.addingTimeInterval(TimeInterval(9 + index * 6) * 3600),
                     note: note,
-                    category: category,
-                    account: account
+                    category: category
                 )
                 context.insert(txn)
             }
@@ -104,15 +98,14 @@ struct DebugDataSeeder {
                     kind: .income,
                     date: day.addingTimeInterval(10 * 3600),
                     note: nil,
-                    category: salary,
-                    account: account
+                    category: salary
                 ))
             }
         }
     }
 
     private func seedFixedCount(_ count: Int) throws {
-        let (account, expenses, _) = try base()
+        let (expenses, _) = try base()
         var rng = SeededRandom(seed: 20261124)
         let today = calendar.startOfDay(for: .now)
 
@@ -125,14 +118,13 @@ struct DebugDataSeeder {
                 kind: .expense,
                 date: day.addingTimeInterval(TimeInterval(9 + (index % 3) * 5) * 3600),
                 note: index % 3 == 0 ? "记一笔" : nil,
-                category: category,
-                account: account
+                category: category
             ))
         }
     }
 
     private func seedOverBudget() throws {
-        let (account, expenses, _) = try base()
+        let (expenses, _) = try base()
         var rng = SeededRandom(seed: 20261125)
         let now = Date.now
         let comps = calendar.dateComponents([.year, .month], from: now)
@@ -148,14 +140,13 @@ struct DebugDataSeeder {
                 kind: .expense,
                 date: day.addingTimeInterval(12 * 3600),
                 note: nil,
-                category: category,
-                account: account
+                category: category
             ))
         }
     }
 
     private func seedIncomeHeavy() throws {
-        let (account, expenses, incomes) = try base()
+        let (expenses, incomes) = try base()
         let today = calendar.startOfDay(for: .now)
         var rng = SeededRandom(seed: 20261126)
 
@@ -165,8 +156,7 @@ struct DebugDataSeeder {
                 kind: .income,
                 date: today.addingTimeInterval(TimeInterval(-index) * 86400 + 10 * 3600),
                 note: nil,
-                category: category,
-                account: account
+                category: category
             ))
         }
         for index in 0..<5 {
@@ -176,8 +166,7 @@ struct DebugDataSeeder {
                 kind: .expense,
                 date: today.addingTimeInterval(TimeInterval(-index) * 86400 + 18 * 3600),
                 note: nil,
-                category: category,
-                account: account
+                category: category
             ))
         }
     }
@@ -186,7 +175,7 @@ struct DebugDataSeeder {
 
     /// 前三个月：账单 + 预算 + 两个目标的达成记录（其中一个月故意未达成）
     private func seedPastGoals() throws {
-        let (account, expenses, _) = try base()
+        let (expenses, _) = try base()
         var rng = SeededRandom(seed: 20261126)
         let currentMonth = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
 
@@ -200,8 +189,7 @@ struct DebugDataSeeder {
                     amountCents: Int64(2000 + rng.next(8000)),
                     kind: .expense,
                     date: day.addingTimeInterval(12 * 3600),
-                    category: category,
-                    account: account
+                    category: category
                 ))
             }
 
@@ -239,14 +227,13 @@ struct DebugDataSeeder {
         }
     }
 
-    private func base() throws -> (Account, [Category], [Category]) {
-        let accounts = try context.fetch(FetchDescriptor<Account>())
-        guard let account = accounts.first else { throw DebugSeedError.noAccount }
+    private func base() throws -> ([Category], [Category]) {
         let categories = try context.fetch(FetchDescriptor<Category>())
         let expenses = categories.filter { $0.kind == .expense && $0.categoryCode != .otherExpense }
         let incomes = categories.filter { $0.kind == .income }
-        return (account, expenses.isEmpty ? categories : expenses, incomes)
+        return (expenses.isEmpty ? categories : expenses, incomes)
     }
+
 
     private func wipe() throws {
         let goals = try context.fetch(FetchDescriptor<Goal>())

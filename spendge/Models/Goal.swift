@@ -47,17 +47,12 @@ enum GoalPeriod: String, CaseIterable {
     case month
 }
 
-/// 基准：现在只用固定值，环比与三月均值留给向导那轮。
-enum GoalBasis: String, CaseIterable {
-    case fixed
-    case previousMonth
-    case trailing3Avg
-}
-
 /// 目标：用户语言的一句意图，底层是「范围 + 聚合 + 阈值」。
 @Model
 final class Goal {
     var id: UUID = UUID()
+    /// 所属账本；v1 固定为默认账本
+    var ledgerID: UUID?
     /// 用户语言，如「少喝奶茶」
     var title: String = ""
     var kindRawValue: String = GoalKind.countLimit.rawValue
@@ -68,7 +63,6 @@ final class Goal {
     var periodStart: Date?
     /// 计数类目标存次数 / 天数，金额类目标存分
     var targetValue: Int = 0
-    var basisRawValue: String = GoalBasis.fixed.rawValue
     var isActive: Bool = true
     /// 循环应用：下个月自动建一份一样的目标
     var isRecurring: Bool = false
@@ -85,8 +79,8 @@ final class Goal {
         categoryCodes: [String] = [],
         period: GoalPeriod,
         periodStart: Date? = nil,
+        ledgerID: UUID? = nil,
         targetValue: Int,
-        basis: GoalBasis = .fixed,
         isActive: Bool = true,
         isRecurring: Bool = false,
         sortOrder: Int = 0,
@@ -99,8 +93,8 @@ final class Goal {
         self.categoryCodes = categoryCodes
         self.periodRawValue = period.rawValue
         self.periodStart = periodStart
+        self.ledgerID = ledgerID
         self.targetValue = targetValue
-        self.basisRawValue = basis.rawValue
         self.isActive = isActive
         self.isRecurring = isRecurring
         self.sortOrder = sortOrder
@@ -119,5 +113,4 @@ final class Goal {
     /// 上限型（用得越少越好）还是下限型（攒得越多越好）
     var isAtMost: Bool { kind.isAtMost }
     var period: GoalPeriod { GoalPeriod(rawValue: periodRawValue) ?? .month }
-    var basis: GoalBasis { GoalBasis(rawValue: basisRawValue) ?? .fixed }
 }

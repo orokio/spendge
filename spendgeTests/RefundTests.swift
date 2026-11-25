@@ -10,8 +10,7 @@ final class RefundTests: XCTestCase {
             amountCents: cents,
             kind: .expense,
             date: .now,
-            category: try TestStore.category(.takeout),
-            account: try TestStore.account()
+            category: try TestStore.category(.takeout)
         )
     }
 
@@ -46,8 +45,7 @@ final class RefundTests: XCTestCase {
             amountCents: 500000,
             kind: .income,
             date: .now,
-            category: try TestStore.category(.salary),
-            account: try TestStore.account()
+            category: try TestStore.category(.salary)
         )
 
         XCTAssertThrowsError(try TransactionService(context: TestStore.context).addRefund(for: income)) { error in

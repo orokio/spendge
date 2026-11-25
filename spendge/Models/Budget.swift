@@ -11,6 +11,8 @@ final class Budget {
     var amountCents: Int64 = 0
     /// 是否循环应用到之后的月份
     var isRecurring: Bool = false
+    /// 所属账本；v1 固定为默认账本
+    var ledgerID: UUID?
     /// 分类的跨设备身份；nil 表示全部预算
     var categoryCode: String?
     var createdAt: Date = Date.now
@@ -21,6 +23,7 @@ final class Budget {
     init(
         id: UUID = UUID(),
         category: Category? = nil,
+        ledgerID: UUID? = nil,
         amountCents: Int64,
         year: Int,
         month: Int,
@@ -29,6 +32,7 @@ final class Budget {
         updatedAt: Date = .now
     ) {
         self.id = id
+        self.ledgerID = ledgerID
         self.categoryCode = category?.code
         self.amountCents = amountCents
         self.year = year

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// 首次启动写入的预置分类：25 个支出 + 4 个收入 + 默认「现金」账户。
+/// 首次启动写入的预置分类：25 个支出 + 4 个收入，以及默认账本。
 ///
 /// 分类是用户可见的**动作**（我做了什么），内部领域（domain）用户不可见。
 /// 代码里一律按 code 匹配，不按 name —— 改名不应影响任何逻辑。
@@ -238,25 +238,12 @@ enum DefaultData {
             }
         }
 
-        let accountCount = (try? context.fetchCount(FetchDescriptor<Account>())) ?? 0
-        if accountCount == 0 {
-            context.insert(Account(
-                id: StableID.account("cash"),
-                code: "cash",
-                name: "现金",
-                iconName: "banknote",
-                colorHex: "#10B981",
-                kind: .cash,
-                sortOrder: 1
-            ))
-        }
-
         try? context.save()
         EntityLookup.invalidate(context)
     }
 
 
-    /// 软删除 30 天后物理清理；只清这些同步模型，分类与账户仍是物理删除。
+    /// 软删除 30 天后物理清理；只清这些同步模型，分类仍是物理删除。
     static func purgeExpiredDeletions(context: ModelContext, now: Date = .now) {
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: now) else { return }
         func expired(_ date: Date?) -> Bool {
@@ -286,7 +273,150 @@ enum DefaultData {
         if changed { try? context.save() }
     }
 
-    /// 分类 / 账户的跨设备身份：ID 由 code 推导，并按 code 归并重复记录。
+    /// 统一去重：按各自的身份键分组，只保留一条。
+    /// 分类用业务 code，其余用 id；优先未删除，其次更新时间较新。
+    static func dedupeRecords(context: ModelContext) {
+        var changed = false
+
+        changed = dedupe(Ledger.self, context: context,
+                         key: { $0.id.uuidString },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.updatedAt }) || changed
+
+        changed = dedupe(Category.self, context: context,
+                         key: { $0.code },
+                         deletedAt: { _ in nil },
+                         updatedAt: { $0.updatedAt }) || changed
+
+        changed = dedupe(Transaction.self, context: context,
+                         key: { $0.id.uuidString },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.updatedAt }) || changed
+
+        changed = dedupe(Budget.self, context: context,
+                         key: { $0.id.uuidString },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.updatedAt }) || changed
+
+        changed = dedupe(Goal.self, context: context,
+                         key: { $0.id.uuidString },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.updatedAt }) || changed
+
+        changed = dedupe(GoalAchievement.self, context: context,
+                         key: { $0.id.uuidString },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.createdAt }) || changed
+
+        changed = dedupe(DayConfirmation.self, context: context,
+                         key: { String(Int($0.day.timeIntervalSince1970)) },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.createdAt }) || changed
+
+        changed = dedupe(TrophyUnlock.self, context: context,
+                         key: { $0.trophyID },
+                         deletedAt: { $0.deletedAt },
+                         updatedAt: { $0.unlockedAt }) || changed
+
+        if changed {
+            try? context.save()
+            EntityLookup.invalidate(context)
+        }
+    }
+
+    /// 按 key 分组，同组只留一条；返回是否发生了删除。
+    private static func dedupe<T: PersistentModel>(
+        _ type: T.Type,
+        context: ModelContext,
+        key: (T) -> String?,
+        deletedAt: (T) -> Date?,
+        updatedAt: (T) -> Date
+    ) -> Bool {
+        guard let items = try? context.fetch(FetchDescriptor<T>()) else { return false }
+        var kept: [String: T] = [:]
+        var changed = false
+
+        for item in items {
+            guard let value = key(item), !value.isEmpty else { continue }
+            guard let existing = kept[value] else {
+                kept[value] = item
+                continue
+            }
+
+            let existingDeleted = deletedAt(existing)
+            let candidateDeleted = deletedAt(item)
+            let preferCandidate: Bool
+            if (existingDeleted == nil) != (candidateDeleted == nil) {
+                // 未删除的优先
+                preferCandidate = existingDeleted != nil
+            } else {
+                preferCandidate = updatedAt(item) > updatedAt(existing)
+            }
+
+            if preferCandidate {
+                context.delete(existing)
+                kept[value] = item
+            } else {
+                context.delete(item)
+            }
+            changed = true
+        }
+        return changed
+    }
+
+    /// v1 只有一本默认账本；ID 固定，两台设备算出同一个。
+    static func seedLedgerIfNeeded(context: ModelContext) {
+        let count = (try? context.fetchCount(FetchDescriptor<Ledger>())) ?? 0
+        guard count == 0 else { return }
+        context.insert(Ledger(id: StableID.ledger("default"), name: "我的账本", kind: .personal))
+        try? context.save()
+    }
+
+    /// 默认账本 ID；没有就建一本（幂等）。
+    static func defaultLedgerID(context: ModelContext) -> UUID {
+        let fallback = StableID.ledger("default")
+        if let existing = try? context.fetch(FetchDescriptor<Ledger>()).first(where: { $0.deletedAt == nil }) {
+            return existing.id
+        }
+        context.insert(Ledger(id: fallback, name: "我的账本", kind: .personal))
+        try? context.save()
+        return fallback
+    }
+
+    /// 旧数据没有账本归属，统一回填到默认账本。
+    static func backfillLedgerID(context: ModelContext) {
+        let ledgerID = defaultLedgerID(context: context)
+        var changed = false
+
+        if let items = try? context.fetch(FetchDescriptor<Transaction>()) {
+            for item in items where item.ledgerID == nil {
+                item.ledgerID = ledgerID
+                changed = true
+            }
+        }
+        if let items = try? context.fetch(FetchDescriptor<Budget>()) {
+            for item in items where item.ledgerID == nil {
+                item.ledgerID = ledgerID
+                changed = true
+            }
+        }
+        if let items = try? context.fetch(FetchDescriptor<Goal>()) {
+            for item in items where item.ledgerID == nil {
+                item.ledgerID = ledgerID
+                changed = true
+            }
+        }
+        if let items = try? context.fetch(FetchDescriptor<DayConfirmation>()) {
+            for item in items where item.ledgerID == nil {
+                item.ledgerID = ledgerID
+                changed = true
+            }
+        }
+
+        if changed { try? context.save() }
+    }
+
+    /// 分类的跨设备身份：ID 由 code 推导，并按 code 归并重复记录。
     static func normalizeEntityIdentity(context: ModelContext) {
         let key = "spendge.stableEntityIdentity"
         guard UserDefaults.standard.integer(forKey: key) < 1 else { return }
@@ -304,48 +434,20 @@ enum DefaultData {
             }
         }
 
-        if let accounts = try? context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortOrder)])) {
-            var seen = Set<String>()
-            for account in accounts {
-                let code = account.code.isEmpty ? "cash" : account.code
-                guard seen.insert(code).inserted else {
-                    context.delete(account)
-                    continue
-                }
-                if account.code != code { account.code = code }
-                let stable = StableID.account(code)
-                if account.id != stable { account.id = stable }
-            }
-        }
-
         try? context.save()
         UserDefaults.standard.set(1, forKey: key)
         EntityLookup.invalidate(context)
     }
 
-    /// 给旧数据补上跨设备身份：账户 code、账单 / 预算的 code。
+    /// 给旧数据补上跨设备身份：账单 / 预算的分类 code。
     /// 必须在关系字段还存在的版本里跑，改造完成后就再也读不到旧关系了。
     static func backfillCodes(context: ModelContext) {
         let key = "spendge.entityCodeMigration"
         guard UserDefaults.standard.integer(forKey: key) < 1 else { return }
 
-        if let accounts = try? context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortOrder)])),
-           !accounts.isEmpty {
-            var assignedCash = false
-            for account in accounts where account.code.isEmpty {
-                if !assignedCash {
-                    account.code = "cash"
-                    assignedCash = true
-                } else {
-                    account.code = account.id.uuidString
-                }
-            }
-        }
-
         if let transactions = try? context.fetch(FetchDescriptor<Transaction>()) {
             for transaction in transactions {
                 if transaction.categoryCode == nil { transaction.categoryCode = transaction.category?.code }
-                if transaction.accountCode == nil { transaction.accountCode = transaction.account?.code }
             }
         }
 

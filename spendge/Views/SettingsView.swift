@@ -194,7 +194,7 @@ struct SettingsView: View {
             actionRow(icon: "trash", title: "清除全部记录", detail: "", destructive: true) {
                 notice = ConfirmRequest(
                     title: "清除全部记录？",
-                    message: "会删除所有账单、预算、目标和「没花钱」确认，分类与账户保留。此操作无法撤销，建议先导出一份备份。",
+                    message: "会删除所有账单、预算、目标和「没花钱」确认，分类保留。此操作无法撤销，建议先导出一份备份。",
                     confirmTitle: "清除",
                     onConfirm: { clearAllData() }
                 )
@@ -441,7 +441,7 @@ struct SettingsView: View {
         }
     }
 
-    /// 清空用户数据，保留分类与账户（否则记录页没有可选项）
+    /// 清空用户数据，保留分类与账本
     private func clearAllData() {
         do {
             // 目标的集合属性在对象被删后再访问会触发未解析的 fault，

@@ -165,6 +165,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 
 ### 阶段 4 · nginx 反代 + HTTPS（测试端口）
 - server 块：server_name www.orokio.com orokio.com 与 api.orokio.com（api 用独立证书，SNI 按域名选证书）；proxy_pass http://127.0.0.1:8010；透传 Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto。
+- 多 App 前缀：客户端统一走 `https://api.orokio.com/spendge/...`，nginx 加 `location /spendge/ { proxy_pass http://127.0.0.1:8010/; }` 去掉前缀；根路径保留健康检查与旧客户端。
 - 请求体上限：`client_max_body_size 4m;`（/v1/parse 接收 2MB 图片，nginx 默认 1m 会 413）。
 - 上游超时：`proxy_read_timeout 120s;` 与 `proxy_send_timeout 120s;`（gunicorn --timeout 90，需大于它，避免解析慢时 504）。
 - 证书放 nginx/conf/ssl/，先绑定 8443。

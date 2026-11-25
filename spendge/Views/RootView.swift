@@ -70,6 +70,12 @@ struct RootView: View {
 
     /// 首页要聚焦的日期：启动/回前台为今天，记完一笔为那笔的日期
     @State private var focusedDay: Date?
+    /// 每次打开记录页换一个 identity，避免复用侧滑返回留下的隐藏状态
+    @State private var recordSession = UUID()
+    /// 分类详情 / 奖杯墙同理：每次打开换 identity，避免复用侧滑返回的隐藏状态
+    @State private var categorySession = UUID()
+    @State private var trophySession = UUID()
+    @State private var editSession = UUID()
     @State private var todayPages = TabPages()
     @State private var reviewPages = TabPages()
     @State private var goalPages = TabPages()
@@ -245,12 +251,14 @@ struct RootView: View {
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(1)
+                    .id(categorySession)
             }
 
             if pages.wrappedValue.showTrophies {
                 AchievementView(onClose: { closeTrophies(in: pages) })
                     .transition(.move(edge: .trailing))
                     .zIndex(4)
+                    .id(trophySession)
             }
 
             if pages.wrappedValue.showRecord {
@@ -263,6 +271,7 @@ struct RootView: View {
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(2)
+                    .id(recordSession)
             }
 
             if let transaction = pages.wrappedValue.editing {
@@ -270,7 +279,7 @@ struct RootView: View {
                     .geometryGroup()
                     .transition(.move(edge: .trailing))
                     .zIndex(3)
-                    .id(transaction.id)
+                    .id(editSession)
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: pages.wrappedValue.editing?.id)
@@ -333,6 +342,7 @@ struct RootView: View {
 
     private func openRecord(at date: Date) {
         todayPages.recordDate = date
+        recordSession = UUID()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             todayPages.showRecord = true
         }
@@ -371,6 +381,7 @@ struct RootView: View {
     }
 
     private func openTrophies() {
+        trophySession = UUID()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             goalPages.showTrophies = true
         }
@@ -383,6 +394,7 @@ struct RootView: View {
     }
 
     private func openCategoryDetail(_ scope: CategoryScope) {
+        categorySession = UUID()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             reviewPages.categoryScope = scope
         }
@@ -395,6 +407,7 @@ struct RootView: View {
     }
 
     private func openEdit(_ transaction: Transaction) {
+        editSession = UUID()
         let target = pages(for: tab)
         // 不用 withAnimation：关闭动画还没走完时再次打开，显式 transaction 会和退出动画互相抵消，
         // 结果 editing 设进去了但页面不出现。动画统一交给 secondaryPages 上的 .animation(value:)。

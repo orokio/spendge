@@ -15,29 +15,6 @@ enum TransactionKind: String, Codable, CaseIterable, Sendable {
 }
 
 /// 账单来源。manual 手动记录，backfill 事后补记（含截图 / 语音解析）。
-enum TransactionSource: String, Codable, CaseIterable, Sendable {
-    case manual
-    case backfill
-}
-
-/// 内部横切标签：饮食方式。
-enum DietMode: String, Codable, CaseIterable, Sendable {
-    case homemade
-    case eatingOut
-}
-
-/// 内部横切标签：消费场景。
-enum SpendScene: String, Codable, CaseIterable, Sendable {
-    case solo
-    case social
-}
-
-/// 内部横切标签：消费性质。
-enum SpendNature: String, Codable, CaseIterable, Sendable {
-    case essential
-    case enjoyment
-}
-
 /// 分类的内部聚合领域。用户不可见，只用于回看聚合。
 enum CategoryDomain: String, Codable, CaseIterable, Sendable {
     case food        // 吃
@@ -134,21 +111,3 @@ extension CategoryCode {
     }
 }
 
-/// 账户类型
-enum AccountKind: String, Codable, CaseIterable, Sendable {
-    case cash       // 现金
-    case debitCard  // 储蓄卡
-    case creditCard // 信用卡
-    case eWallet    // 电子钱包（支付宝 / 微信等）
-    case other
-
-    var displayName: String {
-        switch self {
-        case .cash: return "现金"
-        case .debitCard: return "储蓄卡"
-        case .creditCard: return "信用卡"
-        case .eWallet: return "电子钱包"
-        case .other: return "其他"
-        }
-    }
-}

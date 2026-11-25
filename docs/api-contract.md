@@ -8,7 +8,7 @@
 
 | 项 | 约定 |
 |---|---|
-| Base URL | 客户端读 `Info.plist` 的 `ServerBaseURL`；为空则不发任何请求。**当前联调环境：`https://api.orokio.com:8443`**（接口子域独立证书；备案通过后切 443） |
+| Base URL | 客户端读 `Info.plist` 的 `ServerBaseURL`；为空则不发任何请求。**当前联调环境：`https://api.orokio.com:8443/spendge`**（同一域名将来可能服务多个 App，路径统一带 `spendge` 前缀；备案通过后切 443）。下文接口路径均相对于 Base URL，完整地址为 `/spendge/v1/...` |
 | 协议 | 仅 HTTPS，不做 ATS 例外 |
 | 编码 | `application/json; charset=utf-8` |
 | 时间 | ISO 8601，UTC，例如 `2027-02-24T00:00:00Z` |

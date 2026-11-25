@@ -6,15 +6,18 @@ import SwiftData
 @Model
 final class DayConfirmation {
     var id: UUID = UUID()
+    /// 所属账本；v1 固定为默认账本
+    var ledgerID: UUID?
     /// 当天零点（本地时区）
     var day: Date = Date.now
     var createdAt: Date = Date.now
     /// 软删除时间；nil 表示未删除
     var deletedAt: Date?
 
-    init(id: UUID = UUID(), day: Date, createdAt: Date = .now) {
+    init(id: UUID = UUID(), day: Date, ledgerID: UUID? = nil, createdAt: Date = .now) {
         self.id = id
         self.day = day
+        self.ledgerID = ledgerID
         self.createdAt = createdAt
     }
 }

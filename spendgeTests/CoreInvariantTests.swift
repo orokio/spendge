@@ -48,11 +48,10 @@ final class RecentAmountTests: XCTestCase {
     func testRecentAmountsAreUniqueAndAtMostThree() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
         let now = Date.now
         for cents in [1000, 1000, 2000, 3000] {
-            try service.add(amountCents: Int64(cents), kind: .expense, date: now, category: category, account: account)
+            try service.add(amountCents: Int64(cents), kind: .expense, date: now, category: category)
         }
 
         let recent = try service.recentAmounts()
@@ -91,7 +90,7 @@ final class BackupExportTests: XCTestCase {
         TestStore.reset()
         let service = BackupService(context: TestStore.context)
         let transactions = TransactionService(context: TestStore.context)
-        try transactions.add(amountCents: 1200, kind: .expense, category: TestStore.category(.takeout), account: try TestStore.account())
+        try transactions.add(amountCents: 1200, kind: .expense, category: TestStore.category(.takeout))
 
         let data = try service.backupData()
         let decoded = try service.decodeBackup(data)
@@ -149,13 +148,12 @@ final class SummaryTests: XCTestCase {
     func testMonthlySummaryEqualsDetailTotal() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let takeout = try TestStore.category(.takeout)
         let salary = try TestStore.category(.salary)
 
-        try service.add(amountCents: 1200, kind: .expense, date: .now, category: takeout, account: account)
-        try service.add(amountCents: 800, kind: .expense, date: .now, category: takeout, account: account)
-        try service.add(amountCents: 500000, kind: .income, date: .now, category: salary, account: account)
+        try service.add(amountCents: 1200, kind: .expense, date: .now, category: takeout)
+        try service.add(amountCents: 800, kind: .expense, date: .now, category: takeout)
+        try service.add(amountCents: 500000, kind: .income, date: .now, category: salary)
 
         let calendar = Calendar.current
         let comps = calendar.dateComponents([.year, .month], from: .now)
@@ -169,28 +167,6 @@ final class SummaryTests: XCTestCase {
         XCTAssertEqual(summary.totalExpenseCents, 2000)
         XCTAssertEqual(summary.totalIncomeCents, 500000)
         XCTAssertEqual(summary.netCents, 498000)
-    }
-}
-
-// MARK: - 5. 总资产
-
-@MainActor
-final class AssetTests: XCTestCase {
-    func testTotalAssetsEqualsSumOfBalances() throws {
-        TestStore.reset()
-        let accountService = AccountService(context: TestStore.context)
-        let transactionService = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
-        try transactionService.add(amountCents: 3000, kind: .expense, date: .now,
-                                   category: TestStore.category(.takeout), account: account)
-        _ = try accountService.create(name: "银行卡", kind: .debitCard, initialBalanceCents: 100000)
-
-        let accounts = try accountService.accounts()
-        XCTAssertFalse(accounts.isEmpty)
-        let expected = accounts.reduce(into: Int64(0)) { total, item in
-            total += (try? transactionService.balanceCents(for: item)) ?? 0
-        }
-        XCTAssertEqual(try accountService.totalAssetsCents(), expected)
     }
 }
 

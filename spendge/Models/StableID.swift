@@ -3,11 +3,11 @@ import Foundation
 
 /// 跨设备稳定的 ID：同一个 code 在任何设备上算出同一个 UUID。
 ///
-/// CloudKit 不支持唯一约束，去重靠「同一条记录」；分类与账户种子没有自定义，
+/// CloudKit 不支持唯一约束，去重靠「同一条记录」；分类种子没有自定义，
 /// 所以由 code 推导 ID，两台设备各自建出来的种子会被 CloudKit 合并成一条。
 enum StableID {
     static func category(_ code: String) -> UUID { make("spendge.category.\(code)") }
-    static func account(_ code: String) -> UUID { make("spendge.account.\(code)") }
+    static func ledger(_ key: String) -> UUID { make("spendge.ledger.\(key)") }
 
     private static func make(_ key: String) -> UUID {
         var bytes = Array(SHA256.hash(data: Data(key.utf8)).prefix(16))

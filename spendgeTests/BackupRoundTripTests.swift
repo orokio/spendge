@@ -17,14 +17,13 @@ final class BackupRoundTripTests: XCTestCase {
     private func seededBackup() throws -> (data: Data, count: Int, expenseTotal: Int64) {
         TestStore.reset()
         let transactions = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let takeout = try TestStore.category(.takeout)
         let salary = try TestStore.category(.salary)
 
-        try transactions.add(amountCents: 1200, kind: .expense, date: TestStore.day(2026, 11, 3), category: takeout, account: account)
-        try transactions.add(amountCents: 800, kind: .expense, date: TestStore.day(2026, 11, 5), note: "早饭", category: takeout, account: account)
-        try transactions.add(amountCents: 300, kind: .expense, date: TestStore.day(2026, 10, 31), category: takeout, account: account)
-        try transactions.add(amountCents: 500000, kind: .income, date: TestStore.day(2026, 11, 1), category: salary, account: account)
+        try transactions.add(amountCents: 1200, kind: .expense, date: TestStore.day(2026, 11, 3), category: takeout)
+        try transactions.add(amountCents: 800, kind: .expense, date: TestStore.day(2026, 11, 5), note: "早饭", category: takeout)
+        try transactions.add(amountCents: 300, kind: .expense, date: TestStore.day(2026, 10, 31), category: takeout)
+        try transactions.add(amountCents: 500000, kind: .income, date: TestStore.day(2026, 11, 1), category: salary)
 
         let data = try service().backupData()
         return (data, 4, 2300)
@@ -78,12 +77,7 @@ final class BackupRoundTripTests: XCTestCase {
         assertRejected("备份文件版本不受支持") { try service().validate(file) }
     }
 
-    func testRejectsMissingAccounts() throws {
-        let seed = try seededBackup()
-        var file = try service().decodeBackup(seed.data)
-        file.accounts.removeAll()
-        assertRejected("备份文件缺少账户或分类") { try service().validate(file) }
-    }
+
 
     func testRejectsDuplicateTransactionIDs() throws {
         let seed = try seededBackup()
@@ -92,12 +86,7 @@ final class BackupRoundTripTests: XCTestCase {
         assertRejected("备份文件里有重复的账单") { try service().validate(file) }
     }
 
-    func testRejectsUnknownAccountReference() throws {
-        let seed = try seededBackup()
-        var file = try service().decodeBackup(seed.data)
-        file.transactions[0].accountID = UUID()
-        assertRejected("备份文件引用了不存在的账户") { try service().validate(file) }
-    }
+
 
     func testRejectsFutureTransactionDate() throws {
         let seed = try seededBackup()

@@ -65,7 +65,7 @@ struct spendgeApp: App {
                     _ = try? context.fetch(FetchDescriptor<DayConfirmation>())
                     _ = try? context.fetch(FetchDescriptor<TrophyUnlock>())
                     _ = try? context.fetch(FetchDescriptor<Category>())
-                    _ = try? context.fetch(FetchDescriptor<Account>())
+                    DefaultData.dedupeRecords(context: context)
                     LaunchTrace.mark("cloud.import.refreshed")
                 }
                 importRefreshWork = work

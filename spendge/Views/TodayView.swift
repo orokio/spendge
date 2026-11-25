@@ -480,7 +480,7 @@ struct TodayView: View {
                 .background(Color.brand, in: Circle())
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.noHighlight)
         .onboardingAnchor(.recordFab)
         .padding(.trailing, 22)
         .padding(.bottom, 20)

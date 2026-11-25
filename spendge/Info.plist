@@ -31,7 +31,7 @@
 	<key>UMAppKey</key>
 	<string>6b04263e863270068cd8de53</string>
 	<key>ServerBaseURL</key>
-	<string>https://api.orokio.com:8443</string>
+	<string>https://api.orokio.com:8443/spendge</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>用语音填写备注时需要麦克风</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

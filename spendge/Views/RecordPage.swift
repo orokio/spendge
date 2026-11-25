@@ -14,7 +14,6 @@ struct RecordPage: View {
 
     @Query(sort: [SortDescriptor(\Category.sortOrder), SortDescriptor(\Category.name)])
     private var allCategories: [Category]
-    @Query(sort: \Account.sortOrder) private var allAccounts: [Account]
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
            sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
                   SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])
@@ -83,15 +82,17 @@ struct RecordPage: View {
         return jiao == 0 ? String(yuan) : "\(yuan).\(jiao)"
     }
 
-    private var accounts: [Account] {
-        allAccounts.filter { !$0.isArchived }
-    }
-
     /// 固定顺序：sortOrder 决定位置，每 10 个为一组，组间画一条短横线。
     private var categories: [Category] {
-        allCategories
+        var seen = Set<String>()
+        return allCategories
             .filter { $0.kind == kind && !$0.isArchived }
             .sorted { $0.sortOrder < $1.sortOrder }
+            // 云端合并可能留下同 code 的旧记录，显示层只保留一条
+            .filter { category in
+                let key = category.code ?? category.id.uuidString
+                return seen.insert(key).inserted
+            }
     }
 
     private var railRows: [RailRow] {
@@ -520,7 +521,7 @@ struct RecordPage: View {
     }
 
     private var canSave: Bool {
-        amountCents > 0 && selectedCategory != nil && !accounts.isEmpty
+        amountCents > 0 && selectedCategory != nil
     }
 
     // MARK: - 动作
@@ -597,7 +598,7 @@ struct RecordPage: View {
     }
 
     private func save() {
-        guard canSave, let category = selectedCategory, let account = accounts.first else { return }
+        guard canSave, let category = selectedCategory else { return }
 
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -610,8 +611,7 @@ struct RecordPage: View {
                     kind: kind,
                     date: date,
                     note: trimmed,
-                    category: category,
-                    account: account
+                    category: category
                 )
             } catch {
                 saveError = ErrorText.message(for: error)
@@ -629,9 +629,7 @@ struct RecordPage: View {
                 kind: kind,
                 date: date,
                 note: trimmed.isEmpty ? nil : trimmed,
-                source: .manual,
-                category: category,
-                account: account
+                category: category
             )
         } catch {
             saveError = ErrorText.message(for: error)

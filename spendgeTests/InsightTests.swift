@@ -10,8 +10,7 @@ final class InsightTests: XCTestCase {
             amountCents: cents,
             kind: .expense,
             date: .now,
-            category: try TestStore.category(code),
-            account: try TestStore.account()
+            category: try TestStore.category(code)
         )
     }
 

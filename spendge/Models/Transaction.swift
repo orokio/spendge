@@ -10,16 +10,11 @@ final class Transaction {
     var kindRawValue: String = TransactionKind.expense.rawValue
     var date: Date = Date.now
     var note: String?
-    /// 来源：手动 / 补记。
-    var sourceRawValue: String = TransactionSource.manual.rawValue
-    /// 内部横切标签，用户不可见，由推断填充。
-    var dietModeRawValue: String?
-    var sceneRawValue: String?
-    var natureRawValue: String?
 
-    /// 分类 / 账户的跨设备身份：一律按 code 匹配，关系只在本机解析
+    /// 所属账本；v1 固定为默认账本
+    var ledgerID: UUID?
+    /// 分类的跨设备身份：一律按 code 匹配，关系只在本机解析
     var categoryCode: String?
-    var accountCode: String?
 
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
@@ -36,9 +31,8 @@ final class Transaction {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
-        source: TransactionSource = .manual,
         category: Category? = nil,
-        account: Account? = nil,
+        ledgerID: UUID? = nil,
         refundOfID: UUID? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -48,41 +42,19 @@ final class Transaction {
         self.kindRawValue = kind.rawValue
         self.date = date
         self.note = note
-        self.sourceRawValue = source.rawValue
+        self.ledgerID = ledgerID
         self.categoryCode = category?.code
-        self.accountCode = account?.code
         self.refundOfID = refundOfID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
-    /// 分类 / 账户对象：按 code 在本机解析
+    /// 分类对象：按 code 在本机解析
     @MainActor var category: Category? { EntityLookup.category(code: categoryCode, in: modelContext) }
-    @MainActor var account: Account? { EntityLookup.account(code: accountCode, in: modelContext) }
 
     var kind: TransactionKind {
         get { TransactionKind(rawValue: kindRawValue) ?? .expense }
         set { kindRawValue = newValue.rawValue }
-    }
-
-    var source: TransactionSource {
-        get { TransactionSource(rawValue: sourceRawValue) ?? .manual }
-        set { sourceRawValue = newValue.rawValue }
-    }
-
-    var dietMode: DietMode? {
-        get { dietModeRawValue.flatMap(DietMode.init(rawValue:)) }
-        set { dietModeRawValue = newValue?.rawValue }
-    }
-
-    var spendScene: SpendScene? {
-        get { sceneRawValue.flatMap(SpendScene.init(rawValue:)) }
-        set { sceneRawValue = newValue?.rawValue }
-    }
-
-    var spendNature: SpendNature? {
-        get { natureRawValue.flatMap(SpendNature.init(rawValue:)) }
-        set { natureRawValue = newValue?.rawValue }
     }
 
     /// 金额（元）
@@ -94,7 +66,7 @@ final class Transaction {
         return lhs.createdAt > rhs.createdAt
     }
 
-    /// 对账户余额的贡献：收入为 +，支出为 -
+    /// 对总额的贡献：收入为 +，支出为 -
     var balanceDeltaCents: Int64 {
         switch kind {
         case .expense: return -amountCents

@@ -33,7 +33,8 @@ final class DayConfirmationService {
     func confirmNoSpend(on date: Date = .now) throws -> DayConfirmation {
         try FaultInjection.current.check(.dayConfirmationWrite)
         if let existing = try confirmation(on: date) { return existing }
-        let item = DayConfirmation(day: calendar.startOfDay(for: date))
+        let item = DayConfirmation(day: calendar.startOfDay(for: date),
+                                    ledgerID: DefaultData.defaultLedgerID(context: context))
         context.insert(item)
         try context.save()
         Analytics.record(.noSpend, ["action": "confirm"])

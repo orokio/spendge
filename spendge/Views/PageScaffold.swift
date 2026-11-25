@@ -83,5 +83,13 @@ struct SecondaryPage<Content: View>: View {
                     }
                 }
         )
+        .onAppear { resetSwipeState() }
+        .onDisappear { resetSwipeState() }
+    }
+
+    /// 侧滑状态不跨次保留：页面被复用时也能回到初始位置
+    private func resetSwipeState() {
+        dragOffset = 0
+        isDismissing = false
     }
 }

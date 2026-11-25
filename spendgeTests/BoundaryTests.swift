@@ -10,11 +10,10 @@ final class BoundaryTests: XCTestCase {
     func testDecemberAndJanuaryDoNotLeakIntoEachOther() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
 
-        try service.add(amountCents: 1111, kind: .expense, date: TestStore.day(2025, 12, 31, hour: 23), category: category, account: account)
-        try service.add(amountCents: 2222, kind: .expense, date: TestStore.day(2026, 1, 1, hour: 0), category: category, account: account)
+        try service.add(amountCents: 1111, kind: .expense, date: TestStore.day(2025, 12, 31, hour: 23), category: category)
+        try service.add(amountCents: 2222, kind: .expense, date: TestStore.day(2026, 1, 1, hour: 0), category: category)
 
         let december = try service.summary(forMonth: 2025, month: 12)
         let january = try service.summary(forMonth: 2026, month: 1)
@@ -27,9 +26,8 @@ final class BoundaryTests: XCTestCase {
     func testNewYearsEveMidnightBoundary() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
-        try service.add(amountCents: 999, kind: .expense, date: TestStore.day(2026, 1, 1, hour: 0), category: category, account: account)
+        try service.add(amountCents: 999, kind: .expense, date: TestStore.day(2026, 1, 1, hour: 0), category: category)
 
         XCTAssertEqual(try service.summary(forMonth: 2025, month: 12).totalExpenseCents, 0)
         XCTAssertEqual(try service.summary(forMonth: 2026, month: 1).totalExpenseCents, 999)
@@ -40,9 +38,8 @@ final class BoundaryTests: XCTestCase {
     func testLeapFebruaryCoverage() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
-        try service.add(amountCents: 500, kind: .expense, date: TestStore.day(2024, 2, 29), category: category, account: account)
+        try service.add(amountCents: 500, kind: .expense, date: TestStore.day(2024, 2, 29), category: category)
 
         let coverage = try service.coverage(forMonth: 2024, month: 2)
         XCTAssertEqual(coverage.daysInMonth, 29)
@@ -54,9 +51,8 @@ final class BoundaryTests: XCTestCase {
         TestStore.reset()
         // 2025-02-29 不存在，Calendar 会把它归一化到 3 月 1 日：不该算进 2 月
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
-        try service.add(amountCents: 700, kind: .expense, date: TestStore.day(2025, 2, 28), category: category, account: account)
+        try service.add(amountCents: 700, kind: .expense, date: TestStore.day(2025, 2, 28), category: category)
 
         let coverage = try service.coverage(forMonth: 2025, month: 2)
         XCTAssertEqual(coverage.daysInMonth, 28)
@@ -84,35 +80,33 @@ final class BoundaryTests: XCTestCase {
     func testAmountUpperBound() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
 
         XCTAssertNoThrow(try service.add(amountCents: InputLimits.amountCentsMax, kind: .expense,
-                                         date: .now, category: category, account: account))
+                                         date: .now, category: category))
         assertSpendgeError("单笔金额不能超过 ¥9999999") {
             try service.add(amountCents: InputLimits.amountCentsMax + 1, kind: .expense,
-                            date: .now, category: category, account: account)
+                            date: .now, category: category)
         }
         assertSpendgeError("金额必须大于 0") {
-            try service.add(amountCents: 0, kind: .expense, date: .now, category: category, account: account)
+            try service.add(amountCents: 0, kind: .expense, date: .now, category: category)
         }
         assertSpendgeError("金额必须大于 0") {
-            try service.add(amountCents: -1, kind: .expense, date: .now, category: category, account: account)
+            try service.add(amountCents: -1, kind: .expense, date: .now, category: category)
         }
     }
 
     func testNoteLengthBoundary() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
         let exact = String(repeating: "字", count: InputLimits.noteLength)
 
         XCTAssertNoThrow(try service.add(amountCents: 100, kind: .expense, date: .now,
-                                         note: exact, category: category, account: account))
+                                         note: exact, category: category))
         assertSpendgeError("备注最多 100 个字") {
             try service.add(amountCents: 100, kind: .expense, date: .now,
-                            note: exact + "多", category: category, account: account)
+                            note: exact + "多", category: category)
         }
     }
 
@@ -121,16 +115,15 @@ final class BoundaryTests: XCTestCase {
     func testFutureDateIsRejectedButTodayIsNot() throws {
         TestStore.reset()
         let service = TransactionService(context: TestStore.context)
-        let account = try TestStore.account()
         let category = try TestStore.category(.takeout)
         let calendar = Calendar.current
         let todayLate = calendar.date(bySettingHour: 23, minute: 59, second: 0, of: .now) ?? .now
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: .now) ?? .now
 
         XCTAssertNoThrow(try service.add(amountCents: 100, kind: .expense, date: todayLate,
-                                         category: category, account: account))
+                                         category: category))
         assertSpendgeError("不能记录未来的日期") {
-            try service.add(amountCents: 100, kind: .expense, date: tomorrow, category: category, account: account)
+            try service.add(amountCents: 100, kind: .expense, date: tomorrow, category: category)
         }
     }
 

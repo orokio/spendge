@@ -417,6 +417,17 @@ struct ConfirmOverlayCard: View {
 // MARK: - 解锁提示
 
 /// 所有触到免费上限的地方都走这一个弹层：先说清楚解锁得到什么，用户确认后再进真正的购买流程。
+/// 按下时不改变颜色和透明度：给悬浮按钮这类需要「稳」的控件用
+struct NoHighlightButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
+extension ButtonStyle where Self == NoHighlightButtonStyle {
+    static var noHighlight: NoHighlightButtonStyle { NoHighlightButtonStyle() }
+}
+
 struct UnlockPrompt: View {
     let onCancel: () -> Void
     let onUnlock: () -> Void

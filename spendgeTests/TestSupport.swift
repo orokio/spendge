@@ -13,7 +13,7 @@ enum TestStore {
 
     static var context: ModelContext { container.mainContext }
 
-    /// 清空所有表并重新写入种子数据（分类 + 现金账户）。
+    /// 清空所有表并重新写入种子数据（分类 + 默认账本）。
     static func reset() {
         let context = self.context
         deleteAll(GoalAchievement.self, in: context)
@@ -23,9 +23,10 @@ enum TestStore {
         deleteAll(Budget.self, in: context)
         deleteAll(DayConfirmation.self, in: context)
         deleteAll(Category.self, in: context)
-        deleteAll(Account.self, in: context)
+        deleteAll(Ledger.self, in: context)
         try? context.save()
         DefaultData.seedIfNeeded(context: context)
+        DefaultData.seedLedgerIfNeeded(context: context)
     }
 
     private static func deleteAll<T: PersistentModel>(_ type: T.Type, in context: ModelContext) {
@@ -35,13 +36,6 @@ enum TestStore {
     }
 
     // MARK: - 取种子数据
-
-    static func account(named name: String = "现金") throws -> Account {
-        guard let match = try AccountService(context: context).accounts().first(where: { $0.name == name }) else {
-            throw TestSetupError.missingAccount(name)
-        }
-        return match
-    }
 
     static func category(_ code: CategoryCode) throws -> spendge.Category {
         let all = try CategoryService(context: context).categories()
@@ -65,6 +59,5 @@ enum TestStore {
 }
 
 enum TestSetupError: Error {
-    case missingAccount(String)
     case missingCategory(String)
 }
