@@ -29,7 +29,7 @@
 | 内存 | 1.9G + swap 1.9G |
 | 磁盘 | 50G（可用约 35G） |
 | 公网 IP | 124.223.27.87 |
-| 域名 | www.orokio.com（ICP 备案进行中） |
+| 域名 | 接口 **api.orokio.com**（主用）/ www.orokio.com（保留）；ICP 备案进行中 |
 | 已装服务 | 无 nginx / 无 mysql / 无 redis |
 
 已占用端口（需规避）：22、53、3080（node）、59087（node/CodeBuddy）。9000/9001/9003 的旧 python 服务已停止；8000/8010/8080/8443/6379 均空闲。
@@ -164,14 +164,14 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 验收：curl 127.0.0.1:8010/health 正常；`/v1/devices/register` 可写入 devices 表；`sqlite3 /home/ubuntu/sqlite/spendge.db "PRAGMA journal_mode;"` 返回 `wal`。
 
 ### 阶段 4 · nginx 反代 + HTTPS（测试端口）
-- server 块：server_name www.orokio.com；proxy_pass http://127.0.0.1:8010；透传 Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto。
+- server 块：server_name www.orokio.com orokio.com 与 api.orokio.com（api 用独立证书，SNI 按域名选证书）；proxy_pass http://127.0.0.1:8010；透传 Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto。
 - 请求体上限：`client_max_body_size 4m;`（/v1/parse 接收 2MB 图片，nginx 默认 1m 会 413）。
 - 上游超时：`proxy_read_timeout 120s;` 与 `proxy_send_timeout 120s;`（gunicorn --timeout 90，需大于它，避免解析慢时 504）。
 - 证书放 nginx/conf/ssl/，先绑定 8443。
 - 监听 8080（HTTP）、8443（HTTPS）。
 - 预置限流：按 server-design §7 的起步参数配置 limit_req / limit_conn。
 
-验收：https://www.orokio.com:8443 命中应用，证书有效，真实 IP 透传。
+验收：https://api.orokio.com:8443 命中应用，证书有效（CN=api.orokio.com），真实 IP 透传；www 保留可用。
 
 ### 阶段 5 · 全链路验证
 - 8080/8443 访问、健康检查、核心接口冒烟、SQLite 读写、Redis PING、日志落盘。
@@ -257,18 +257,19 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 | Flask / SQLAlchemy / Alembic / redis-py | 3.1.3 / 2.1.9 / 1.20.1 / 8.2.0 |
 | Redis | 7.0.15（apt） |
 | SQLite | 3.45.1（系统） |
-| 证书 | TrustAsia DV，CN=orokio.com，SAN 含 www.orokio.com，有效至 2027-02-20 |
+| 证书（接口） | TrustAsia DV，CN=api.orokio.com，SAN 仅 api.orokio.com，有效至 2027-02-23 |
+| 证书（保留） | TrustAsia DV，CN=orokio.com，SAN 含 www.orokio.com，有效至 2027-02-20 |
 
 ### 13.2 实际目录
 
     /home/ubuntu/
     ├── spendge/            git 源码（稀疏检出 server/、docs/）
     ├── spendge-server/     运行副本：app/、.venv/、.env、logs/、run/、spendge.service
-    ├── nginx/              sbin/ conf/ logs/ html/、nginx.service、conf/ssl/orokio.com_nginx/
+    ├── nginx/              sbin/ conf/ logs/ html/、nginx.service、conf/ssl/{orokio.com_nginx,api.orokio.com_nginx}/
     ├── sqlite/             spendge.db（含 -wal/-shm）、backup/
     ├── redis/              数据与日志目录（属 redis:redis）
     ├── package/            nginx-1.28.0.tar.gz
-    └── backup/             orokio.com_nginx.zip（原始证书）
+    └── backup/             orokio.com_nginx.zip、api.orokio.com_nginx.zip（原始证书）
 
 ### 13.3 已完成步骤（按序）
 
@@ -277,11 +278,11 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 3. 后端：pyproject 加 gunicorn/redis；rsync server/ 到 spendge-server/；副本建 venv 并 pip install .；.env 复制
 4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
 5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010
-6. 证书：腾讯云 zip 解压到 nginx/conf/ssl/orokio.com_nginx/（bundle.pem + key）
+6. 证书：两张腾讯云 zip 分别解压到 conf/ssl/orokio.com_nginx/ 与 conf/ssl/api.orokio.com_nginx/（bundle.pem + key）；nginx 用 SNI 按 server_name 选证书。
 7. Redis：apt 装；redis.conf 设 bind 127.0.0.1 / requirepass / maxmemory 128mb / volatile-lru / save "" / **appendonly yes（AOF，write-behind 写队列持久化）** / dir 与 logfile 指向 /home/ubuntu/redis
 8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M）、spendge-writer.service（write-behind worker，MemoryMax=200M）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
-9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com → 124.223.27.87
-10. 验证：https://www.orokio.com:8443/health 返回 ok；register 签发 token；同 deviceId 第 6 次请求返回 429（限流生效）
+9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com 与 api.orokio.com 均 → 124.223.27.87。
+10. 验证：https://api.orokio.com:8443/health 返回 ok（证书 CN=api.orokio.com，不加 -k 校验通过）；register 签发 token；同 deviceId 第 6 次请求返回 429（限流生效）。
 
 ### 13.4 踩坑与解决（重点）
 
@@ -301,7 +302,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 6. **gunicorn 不在原依赖**：pyproject 原只有 flask → 加 gunicorn；运行副本 spendge-server 需单独建 venv 并 pip install .。
 7. **Alembic env.py 需改**：sys.path 指向 server、from app.db import Base, DATABASE_URL、import app.models、target_metadata=Base.metadata、render_as_batch=True（SQLite 改表）。
 8. **git 浅克隆 + 远程频繁 force push**：push 被拒时用 git fetch --depth 1 后 git checkout -B main origin/main；本地提交用 format-patch + apply 重放到最新（浅克隆下直接 rebase 会重放旧提交而冲突）。
-9. **证书 CN=orokio.com**：部署前用 openssl x509 -text 的 subjectAltName 确认 SAN 含 www.orokio.com，否则 www 访问会证书不匹配。
+9. **证书 SAN 必须匹配访问域名**：接口证书 CN=api.orokio.com（SAN 仅 api），www 证书 SAN 含 www；同端口多域名靠 nginx SNI 按 server_name 选证书，证书与域名不匹配会告警。
 10. **writer 阻塞读超时**：Redis Stream 的 XREADGROUP 用 block≈2000ms，若 redis 连接 socket_timeout 设成 0.5s（接口连接那样）会频繁 TimeoutError；writer 必须用独立连接，不设短 socket_timeout。
 
 ### 13.5 重装速查（机器丢失时）
@@ -310,8 +311,10 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 2. 装依赖（见 13.3 第 1 条）
 3. 拉代码：git clone --depth 1 <repo> spendge && cd spendge && git sparse-checkout init --no-cone && git sparse-checkout set /server/ /docs/
 4. 数据层 + 后端（13.3 第 2-4 条），运行副本单独 venv
-5. nginx 编译 + 配置 + 证书（13.3 第 5-6 条）
+5. nginx 编译 + 配置 + 两张证书（13.3 第 5-6 条；api 与 www 各一张，SNI 分流）
 6. Redis（13.3 第 7 条 + 13.4 第 2 条 override）
 7. systemd units（unit 文件放组件目录，软链到 /etc/systemd/system/）
 8. 安全组 + DNS
 9. 全链路验证（13.3 第 10 条）
+
+> 证书有效期：接口 api 至 2027-02-23、www 至 2027-02-20；腾讯云免费证书 3 个月，到期前重新申请并替换（证书 SAN 要匹配对应域名）。
