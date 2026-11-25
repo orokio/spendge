@@ -88,7 +88,6 @@ final class BackupService {
         let ledgers = try context.fetch(FetchDescriptor<Ledger>(predicate: #Predicate { $0.deletedAt == nil }))
         let categories = try context.fetch(FetchDescriptor<Category>())
         let transactions = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil }))
-        let budgets = try context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil }))
         let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>(predicate: #Predicate { $0.deletedAt == nil }))
         let goals = try context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt == nil }))
         let achievements = try context.fetch(FetchDescriptor<GoalAchievement>(predicate: #Predicate { $0.deletedAt == nil }))
@@ -100,7 +99,6 @@ final class BackupService {
             ledgers: ledgers.map(LedgerDTO.init),
             categories: categories.map(CategoryDTO.init),
             transactions: transactions.map(TransactionDTO.init),
-            budgets: budgets.map(BudgetDTO.init),
             dayConfirmations: confirmations.map(DayConfirmationDTO.init),
             goals: goals.map(GoalDTO.init),
             achievements: achievements.map(GoalAchievementDTO.init),
@@ -136,7 +134,7 @@ final class BackupService {
 
         try ensureUnique(file.categories.map(\.id), "分类")
         try ensureUnique(file.transactions.map(\.id), "账单")
-        try ensureUnique(file.budgets.map(\.id), "预算")
+        try ensureUnique((file.budgets ?? []).map(\.id), "预算")
         try ensureUnique((file.goals ?? []).map(\.id), "目标")
         try ensureUnique((file.achievements ?? []).map(\.id), "达成记录")
 
@@ -178,7 +176,7 @@ final class BackupService {
             }
         }
 
-        for budget in file.budgets {
+        for budget in file.budgets ?? [] {
             guard budget.amountCents >= 0,
                   (2000...2100).contains(budget.year), (1...12).contains(budget.month) else {
                 throw BackupValidationError.invalidValue("预算")
@@ -193,8 +191,9 @@ final class BackupService {
             guard !title.isEmpty else {
                 throw BackupValidationError.invalidValue("目标名称")
             }
+            let kindRaw = goal.kindRawValue == "categorySum" ? GoalKind.budget.rawValue : goal.kindRawValue
             guard GoalPeriod(rawValue: goal.periodRawValue) != nil,
-                  let kind = GoalKind(rawValue: goal.kindRawValue) else {
+                  let kind = GoalKind(rawValue: kindRaw) else {
                 throw BackupValidationError.invalidValue("目标类型")
             }
             switch kind {
@@ -202,7 +201,7 @@ final class BackupService {
                 guard (0...InputLimits.countTargetMax).contains(goal.targetValue) else {
                     throw BackupValidationError.invalidValue("目标数值")
                 }
-            case .categorySum:
+            case .budget:
                 guard goal.targetValue >= 0 else {
                     throw BackupValidationError.invalidValue("目标数值")
                 }
@@ -254,7 +253,6 @@ final class BackupService {
         for item in try context.fetch(FetchDescriptor<TrophyUnlock>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Goal>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
-        for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Category>()) { context.delete(item) }
         try context.save()
@@ -316,18 +314,25 @@ final class BackupService {
             context.insert(txn)
         }
 
-        for dto in file.budgets {
-            let budget = Budget(
+        // 旧备份里的预算：并入 Goal（kind = budget，分类为空表示全部）
+        for dto in file.budgets ?? [] {
+            var comps = DateComponents()
+            comps.year = dto.year
+            comps.month = dto.month
+            guard let start = calendar.date(from: comps) else { continue }
+            let codes = dto.categoryID.flatMap { categoryMap[$0]?.code }.map { [$0] } ?? []
+            context.insert(Goal(
                 id: dto.id,
-                category: dto.categoryID.flatMap { categoryMap[$0] },
+                title: codes.isEmpty ? "本月预算" : "分类预算",
+                kind: .budget,
+                categoryCodes: codes,
+                period: .month,
+                periodStart: start,
                 ledgerID: dto.ledgerID ?? defaultLedgerID,
-                amountCents: dto.amountCents,
-                year: dto.year,
-                month: dto.month,
+                targetValue: Int(dto.amountCents),
                 createdAt: dto.createdAt,
                 updatedAt: dto.updatedAt
-            )
-            context.insert(budget)
+            ))
         }
 
         for dto in file.dayConfirmations {
@@ -369,6 +374,7 @@ final class BackupService {
                 currentValue: dto.currentValue,
                 targetValue: dto.targetValue,
                 unit: unit,
+                kindRawValue: dto.kindRawValue ?? "",
                 createdAt: dto.createdAt
             ))
         }
@@ -388,7 +394,7 @@ final class BackupService {
 // MARK: - 备份格式
 
 struct BackupFile: Codable {
-    static let currentVersion = 3
+    static let currentVersion = 4
 
     var version: Int
     var exportedAt: Date
@@ -396,7 +402,8 @@ struct BackupFile: Codable {
     var ledgers: [LedgerDTO]?
     var categories: [CategoryDTO]
     var transactions: [TransactionDTO]
-    var budgets: [BudgetDTO]
+    /// 旧备份里的预算；v4 起并入 Goal，不再导出
+    var budgets: [BudgetDTO]? = nil
     var dayConfirmations: [DayConfirmationDTO]
     /// 旧备份里没有这两项，解码时允许为空
     var goals: [GoalDTO]?
@@ -492,16 +499,6 @@ struct BudgetDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
 
-    init(_ budget: Budget) {
-        id = budget.id
-        ledgerID = budget.ledgerID
-        categoryID = budget.category?.id
-        amountCents = budget.amountCents
-        year = budget.year
-        month = budget.month
-        createdAt = budget.createdAt
-        updatedAt = budget.updatedAt
-    }
 }
 
 struct GoalDTO: Codable {
@@ -542,6 +539,8 @@ struct GoalAchievementDTO: Codable {
     var currentValue: Int
     var targetValue: Int
     var unitRawValue: String
+    /// v3 及更早没有这个字段
+    var kindRawValue: String?
     var createdAt: Date
 
     init(_ item: GoalAchievement) {
@@ -554,6 +553,7 @@ struct GoalAchievementDTO: Codable {
         currentValue = item.currentValue
         targetValue = item.targetValue
         unitRawValue = item.unitRawValue
+        kindRawValue = item.kindRawValue
         createdAt = item.createdAt
     }
 }

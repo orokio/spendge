@@ -6,8 +6,8 @@ import SwiftData
 enum GoalKind: String, CaseIterable {
     /// 某个高频分类的次数上限
     case countLimit
-    /// 某个分类的金额上限
-    case categorySum
+    /// 金额上限：categoryCodes 为空 = 全部支出，非空 = 对应分类
+    case budget
     /// 某个分类占当月总支出的比例上限
     case shareCap
 }
@@ -22,7 +22,7 @@ extension GoalKind {
         switch self {
         case .countLimit:
             return [.takeout, .dineout, .drink, .alcoholBeverage, .snack, .game]
-        case .categorySum, .shareCap:
+        case .budget, .shareCap:
             return [.takeout, .dineout, .grocery, .drink, .alcoholBeverage, .snack,
                     .daily, .wear, .digitalGear, .sportsOutdoor,
                     .appliance,
@@ -37,7 +37,7 @@ extension GoalKind {
     var unitSuffix: String {
         switch self {
         case .countLimit: return "次"
-        case .categorySum: return "元"
+        case .budget: return "元"
         case .shareCap: return "%"
         }
     }
@@ -108,7 +108,16 @@ final class Goal {
         return Calendar.current.dateInterval(of: .month, for: createdAt)?.start ?? createdAt
     }
 
-    var kind: GoalKind { GoalKind(rawValue: kindRawValue) ?? .countLimit }
+    var kind: GoalKind {
+        get {
+            // 旧数据里的 categorySum 已合并进 budget
+            if kindRawValue == "categorySum" { return .budget }
+            return GoalKind(rawValue: kindRawValue) ?? .countLimit
+        }
+    }
+
+    /// 整体支出上限（原预算卡）
+    var isBudget: Bool { kind == .budget && categoryCodes.isEmpty }
 
     /// 上限型（用得越少越好）还是下限型（攒得越多越好）
     var isAtMost: Bool { kind.isAtMost }

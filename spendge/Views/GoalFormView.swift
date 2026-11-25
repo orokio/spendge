@@ -37,7 +37,7 @@ struct GoalFormView: View {
     }
 
     private static func text(kind: GoalKind, value: Int) -> String {
-        kind == .categorySum ? String(value / 100) : String(value)
+        kind == .budget ? String(value / 100) : String(value)
     }
 
     /// 当前维度允许的分类（白名单顺序）
@@ -54,7 +54,7 @@ struct GoalFormView: View {
         guard let value = Int(valueText), value >= 0 else { return nil }
         switch kind {
         case .countLimit: return value
-        case .categorySum: return value * 100
+        case .budget: return value * 100
         case .shareCap: return min(value, 100)
         }
     }
@@ -101,7 +101,7 @@ struct GoalFormView: View {
             row("维度") {
                 HStack(spacing: 0) {
                     kindOption("次数", value: .countLimit)
-                    kindOption("金额", value: .categorySum)
+                    kindOption("金额", value: .budget)
                     kindOption("占比", value: .shareCap)
                 }
                 .padding(3)
@@ -291,7 +291,7 @@ struct GoalFormView: View {
     private var hintLabel: String {
         switch kind {
         case .countLimit: return "上限次数"
-        case .categorySum: return "上限金额"
+        case .budget: return "上限金额"
         case .shareCap: return "上限占比"
         }
     }

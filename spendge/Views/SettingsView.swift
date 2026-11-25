@@ -419,7 +419,7 @@ struct SettingsView: View {
         pendingRestore = data
         notice = ConfirmRequest(
             title: "从备份恢复？",
-            message: "将恢复 \(file.transactions.count) 笔记录、\(file.budgets.count) 条预算、\(file.goals?.count ?? 0) 个目标，并替换当前全部数据。建议先导出一份当前备份。",
+            message: "将恢复 \(file.transactions.count) 笔记录、\((file.budgets?.count ?? 0)) 条预算、\(file.goals?.count ?? 0) 个目标，并替换当前全部数据。建议先导出一份当前备份。",
             confirmTitle: "覆盖恢复",
             onConfirm: {
                 if let data = pendingRestore { performRestore(data) }
@@ -459,7 +459,6 @@ struct SettingsView: View {
             try context.save()
 
             for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
-            for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
             for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
             try context.save()
             Toast.show("已清空全部记录", into: $toast)

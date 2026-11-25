@@ -11,7 +11,6 @@ struct GoalView: View {
            sort: [SortDescriptor<Goal>(\Goal.sortOrder),
                   SortDescriptor<Goal>(\Goal.createdAt)])
     private var allGoals: [Goal]
-    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var budgets: [Budget]
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil }) private var allTransactions: [Transaction]
     @Query(filter: #Predicate<GoalAchievement> { $0.deletedAt == nil },
            sort: [SortDescriptor<GoalAchievement>(\GoalAchievement.periodStart, order: .reverse)])
@@ -29,10 +28,10 @@ struct GoalView: View {
     private var calendar: Calendar { .current }
     /// 每个月一份目标：只看该月自己的那些
     private var goals: [Goal] {
-        allGoals.filter { $0.isActive && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) }
+        allGoals.filter { !$0.isBudget && $0.isActive && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) }
     }
     private var pausedGoals: [Goal] {
-        allGoals.filter { !$0.isActive && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) }
+        allGoals.filter { !$0.isBudget && !$0.isActive && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month) }
     }
 
     var body: some View {
@@ -75,7 +74,7 @@ struct GoalView: View {
 
                     BudgetEditorSheet(
                         monthTitle: monthTitle,
-                        initialCents: monthBudget?.amountCents,
+                        initialCents: monthBudget.map { Int64($0.targetValue) },
                         initialRecurring: monthBudget?.isRecurring ?? false,
                         onSave: { cents, recurring in
                             if saveBudget(cents, recurring) { closeBudget() }
@@ -112,7 +111,7 @@ struct GoalView: View {
                 TopDrawer(isPresented: $showBudgetEditor) {
                     BudgetEditorSheet(
                         monthTitle: monthTitle,
-                        initialCents: monthBudget?.amountCents,
+                        initialCents: monthBudget.map { Int64($0.targetValue) },
                         initialRecurring: monthBudget?.isRecurring ?? false,
                         onSave: { cents, recurring in
                             if saveBudget(cents, recurring) { closeBudget() }
@@ -191,10 +190,9 @@ struct GoalView: View {
         calendar.isDate(selectedMonth, equalTo: .now, toGranularity: .month)
     }
 
-    private var monthBudget: Budget? {
-        let comps = calendar.dateComponents([.year, .month], from: monthStart)
-        return budgets.first {
-            $0.categoryCode == nil && $0.year == comps.year && $0.month == comps.month
+    private var monthBudget: Goal? {
+        allGoals.first {
+            $0.isBudget && calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month)
         }
     }
 
@@ -244,10 +242,11 @@ struct GoalView: View {
                     .foregroundStyle(.secondary)
                 }
 
-                if let budget = monthBudget, budget.amountCents > 0 {
-                    let remaining = budget.amountCents - monthExpenseCents
+                if let budget = monthBudget, budget.targetValue > 0 {
+                    let limit = Int64(budget.targetValue)
                     let spent = monthExpenseCents
-                    let overBudget = spent > budget.amountCents
+                    let remaining = limit - spent
+                    let overBudget = spent > limit
 
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("已花")
@@ -256,13 +255,13 @@ struct GoalView: View {
                         Text(AmountFormat.string(cents: spent))
                             .font(Typography.numberLarge)
                             .foregroundStyle(overBudget ? Color.danger : Color.brand)
-                        Text("/ \(AmountFormat.string(cents: budget.amountCents))")
+                        Text("/ \(AmountFormat.string(cents: Int64(budget.targetValue)))")
                             .font(Typography.label)
                             .foregroundStyle(.secondary)
                     }
 
                     GeometryReader { geo in
-                        let progress = Double(spent) / Double(max(1, budget.amountCents))
+                        let progress = Double(spent) / Double(max(1, budget.targetValue))
                         let ratio = max(0, min(1, progress))
                         // 绿 → 黄（用到八成）→ 红（超了）
                         let barColor: Color = progress > 1
@@ -278,7 +277,7 @@ struct GoalView: View {
                     }
                     .frame(height: 8)
 
-                    budgetTags(budgetCents: budget.amountCents, remaining: remaining)
+                    budgetTags(budgetCents: limit, remaining: remaining)
                 } else {
                     Text("设置一个数，用来对照这个月花到哪儿了")
                         .font(Typography.body)
@@ -542,10 +541,7 @@ struct GoalView: View {
         let transactionDates = allTransactions.map(\.date)
         let goalDates = allGoals.map(\.createdAt)
         let achievementDates = achievements.map(\.periodStart)
-        let budgetDates = budgets.compactMap {
-            calendar.date(from: DateComponents(year: $0.year, month: $0.month))
-        }
-        let earliest = (transactionDates + goalDates + achievementDates + budgetDates)
+        let earliest = (transactionDates + goalDates + achievementDates)
             .min()
             .flatMap { calendar.dateInterval(of: .month, for: $0)?.start } ?? current
 
@@ -630,7 +626,7 @@ struct GoalView: View {
         do {
             _ = try GoalService(context: context).create(
                 title: "本月外卖 ≤ 800 元",
-                kind: .categorySum,
+                kind: .budget,
                 categoryCodes: [CategoryCode.takeout.rawValue],
                 period: .month, targetValue: 80_000
             )
@@ -656,8 +652,7 @@ struct GoalView: View {
     private func saveBudget(_ cents: Int64, _ recurring: Bool) -> Bool {
         let comps = calendar.dateComponents([.year, .month], from: monthStart)
         do {
-            try BudgetService(context: context).setBudget(
-                category: nil,
+            try GoalService(context: context).setBudget(
                 amountCents: cents,
                 year: comps.year ?? 2026,
                 month: comps.month ?? 1,
@@ -674,7 +669,7 @@ struct GoalView: View {
     private func clearBudget() -> Bool {
         guard let budget = monthBudget else { return true }
         do {
-            try BudgetService(context: context).deleteBudget(budget)
+            try GoalService(context: context).deleteBudget(budget)
             return true
         } catch {
             errorMessage = ErrorText.message(for: error)

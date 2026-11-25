@@ -255,9 +255,6 @@ enum DefaultData {
         let transactions = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
         for item in transactions where expired(item.deletedAt) { context.delete(item); changed = true }
 
-        let budgets = (try? context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
-        for item in budgets where expired(item.deletedAt) { context.delete(item); changed = true }
-
         let goals = (try? context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt != nil }))) ?? []
         for item in goals where expired(item.deletedAt) { context.delete(item); changed = true }
 
@@ -289,11 +286,6 @@ enum DefaultData {
                          updatedAt: { $0.updatedAt }) || changed
 
         changed = dedupe(Transaction.self, context: context,
-                         key: { $0.id.uuidString },
-                         deletedAt: { $0.deletedAt },
-                         updatedAt: { $0.updatedAt }) || changed
-
-        changed = dedupe(Budget.self, context: context,
                          key: { $0.id.uuidString },
                          deletedAt: { $0.deletedAt },
                          updatedAt: { $0.updatedAt }) || changed
@@ -394,12 +386,6 @@ enum DefaultData {
                 changed = true
             }
         }
-        if let items = try? context.fetch(FetchDescriptor<Budget>()) {
-            for item in items where item.ledgerID == nil {
-                item.ledgerID = ledgerID
-                changed = true
-            }
-        }
         if let items = try? context.fetch(FetchDescriptor<Goal>()) {
             for item in items where item.ledgerID == nil {
                 item.ledgerID = ledgerID
@@ -448,12 +434,6 @@ enum DefaultData {
         if let transactions = try? context.fetch(FetchDescriptor<Transaction>()) {
             for transaction in transactions {
                 if transaction.categoryCode == nil { transaction.categoryCode = transaction.category?.code }
-            }
-        }
-
-        if let budgets = try? context.fetch(FetchDescriptor<Budget>()) {
-            for budget in budgets where budget.categoryCode == nil {
-                budget.categoryCode = budget.category?.code
             }
         }
 

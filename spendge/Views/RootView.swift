@@ -7,7 +7,6 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil }) private var allTransactions: [Transaction]
     @Query(filter: #Predicate<Goal> { $0.deletedAt == nil }) private var allGoals: [Goal]
-    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var allBudgets: [Budget]
     @Query(filter: #Predicate<DayConfirmation> { $0.deletedAt == nil }) private var allConfirmations: [DayConfirmation]
     @AppStorage(PreferenceKey.onboardingHomeSeen) private var onboardingHomeSeen = false
     @AppStorage(PreferenceKey.onboardingBudgetSeen) private var onboardingBudgetSeen = false
@@ -171,7 +170,7 @@ struct RootView: View {
     }
 
     private var isLedgerEmpty: Bool {
-        allTransactions.isEmpty && allGoals.isEmpty && allBudgets.isEmpty && allConfirmations.isEmpty
+        allTransactions.isEmpty && allGoals.isEmpty && allConfirmations.isEmpty
     }
 
     /// 配了 Bugly 时，先让用户做隐私选择，再出引导

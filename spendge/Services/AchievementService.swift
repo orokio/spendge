@@ -135,13 +135,14 @@ final class AchievementService {
         let transactions = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
         let goals = (try? context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
         let achievements = (try? context.fetch(FetchDescriptor<GoalAchievement>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
-        let budgets = (try? context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
         let confirmations = (try? context.fetch(FetchDescriptor<DayConfirmation>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
 
         stats.transactionCount = transactions.count
         stats.incomeCount = transactions.filter { $0.kind == .income }.count
-        stats.goalCount = goals.count
-        stats.achievedCount = achievements.filter(\.achieved).count
+        stats.goalCount = goals.filter { $0.kind != .budget }.count
+        stats.achievedCount = achievements.filter {
+            $0.achieved && $0.kindRawValue != GoalKind.budget.rawValue
+        }.count
 
         var days: Set<Date> = []
         var monthsWithRecord: Set<Date> = []
@@ -237,7 +238,7 @@ final class AchievementService {
 
         // 同一目标连续达成的月份数
         var achievedMonthsByGoal: [UUID: Set<Date>] = [:]
-        for item in achievements where item.achieved && item.period == .month {
+        for item in achievements where item.achieved && item.period == .month && item.kindRawValue != GoalKind.budget.rawValue {
             guard let month = calendar.dateInterval(of: .month, for: item.periodStart)?.start else { continue }
             achievedMonthsByGoal[item.goalID, default: []].insert(month)
         }
@@ -259,10 +260,10 @@ final class AchievementService {
 
         // 预算：只看「全部预算」，没超的月份数与最长连续段
         var keptMonths: Set<Date> = []
-        for budget in budgets where budget.category == nil {
-            guard let month = calendar.date(from: DateComponents(year: budget.year, month: budget.month)) else { continue }
-            let spent = expenseByMonth[calendar.dateInterval(of: .month, for: month)?.start ?? month] ?? 0
-            if spent <= budget.amountCents { keptMonths.insert(month) }
+        for goal in goals where goal.kind == .budget && goal.categoryCodes.isEmpty {
+            let month = calendar.dateInterval(of: .month, for: goal.monthStart)?.start ?? goal.monthStart
+            let spent = expenseByMonth[month] ?? 0
+            if spent <= goal.targetValue { keptMonths.insert(month) }
         }
         stats.budgetKeptCount = keptMonths.count
         var budgetRun = 0

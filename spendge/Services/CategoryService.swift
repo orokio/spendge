@@ -87,8 +87,8 @@ final class CategoryService {
             where transaction.categoryCode == code {
                 transaction.categoryCode = nil
             }
-            for budget in try context.fetch(FetchDescriptor<Budget>()) where budget.categoryCode == code {
-                context.delete(budget)
+            for goal in try context.fetch(FetchDescriptor<Goal>()) where goal.categoryCodes.contains(code) {
+                goal.categoryCodes.removeAll { $0 == code }
             }
         }
         context.delete(category)

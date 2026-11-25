@@ -130,7 +130,9 @@ struct DebugDataSeeder {
         let comps = calendar.dateComponents([.year, .month], from: now)
         guard let year = comps.year, let month = comps.month else { return }
 
-        context.insert(Budget(category: nil, amountCents: 100_000, year: year, month: month))
+        if let start = calendar.date(from: DateComponents(year: year, month: month)) {
+            context.insert(Goal(title: "本月预算", kind: .budget, period: .month, periodStart: start, targetValue: 100_000))
+        }
         let today = calendar.startOfDay(for: now)
         for offset in 0..<20 {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
@@ -195,7 +197,9 @@ struct DebugDataSeeder {
 
             let comps = calendar.dateComponents([.year, .month], from: monthStart)
             if let year = comps.year, let month = comps.month {
-                context.insert(Budget(category: nil, amountCents: 300_000, year: year, month: month))
+                if let start = calendar.date(from: DateComponents(year: year, month: month)) {
+                    context.insert(Goal(title: "本月预算", kind: .budget, period: .month, periodStart: start, targetValue: 300_000))
+                }
             }
         }
 
@@ -209,7 +213,7 @@ struct DebugDataSeeder {
                                  categoryCodes: [CategoryCode.takeout.rawValue],
                                  period: .month, periodStart: monthStart,
                                  targetValue: 4, sortOrder: offset, createdAt: monthStart)
-            let sumGoal = Goal(title: "\(month)月奶茶咖啡 200 元以内", kind: .categorySum,
+            let sumGoal = Goal(title: "\(month)月奶茶咖啡 200 元以内", kind: .budget,
                                categoryCodes: [CategoryCode.drink.rawValue],
                                period: .month, periodStart: monthStart,
                                targetValue: 20_000, sortOrder: offset, createdAt: monthStart)
@@ -242,7 +246,6 @@ struct DebugDataSeeder {
         for item in try context.fetch(FetchDescriptor<TrophyUnlock>()) { context.delete(item) }
         for goal in goals { context.delete(goal) }
         for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
-        for item in try context.fetch(FetchDescriptor<Budget>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
         try context.save()
     }

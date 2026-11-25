@@ -133,7 +133,7 @@ final class GoalService {
             guard (0...InputLimits.countTargetMax).contains(targetValue) else {
                 throw SpendgeError.invalidGoalTarget
             }
-        case .categorySum:
+        case .budget:
             guard targetValue >= 0, Int64(targetValue) <= InputLimits.amountCentsMax else {
                 throw SpendgeError.invalidGoalTarget
             }
@@ -186,7 +186,8 @@ final class GoalService {
             achieved: achieved,
             currentValue: progress.current,
             targetValue: progress.target,
-            unit: progress.unit
+            unit: progress.unit,
+            kindRawValue: goal.kindRawValue
         ))
         try context.save()
     }
@@ -232,6 +233,55 @@ final class GoalService {
         UserDefaults.standard.set(true, forKey: carryKey)
     }
 
+    // MARK: - 预算（kind = budget，分类为空）
+
+    /// 某月的整体预算（原预算卡的数据源）
+    func budget(year: Int, month: Int) throws -> Goal? {
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        guard let start = calendar.date(from: comps) else { return nil }
+        return try goals().first {
+            $0.isBudget && calendar.isDate($0.monthStart, equalTo: start, toGranularity: .month)
+        }
+    }
+
+    @discardableResult
+    func setBudget(amountCents: Int64, year: Int, month: Int, isRecurring: Bool = false) throws -> Goal {
+        try FaultInjection.current.check(.budgetWrite)
+        guard amountCents >= 0, amountCents <= InputLimits.amountCentsMax else {
+            throw SpendgeError.invalidAmount
+        }
+        if let existing = try budget(year: year, month: month) {
+            existing.targetValue = Int(amountCents)
+            existing.isRecurring = isRecurring
+            existing.updatedAt = .now
+            try context.save()
+            return existing
+        }
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        guard let start = calendar.date(from: comps) else { throw SpendgeError.invalidDate }
+        let goal = Goal(title: "本月预算",
+                        kind: .budget,
+                        categoryCodes: [],
+                        period: .month,
+                        periodStart: start,
+                        ledgerID: DefaultData.defaultLedgerID(context: context),
+                        targetValue: Int(amountCents),
+                        isRecurring: isRecurring)
+        context.insert(goal)
+        try context.save()
+        return goal
+    }
+
+    func deleteBudget(_ goal: Goal) throws {
+        try FaultInjection.current.check(.budgetWrite)
+        goal.deletedAt = .now
+        try context.save()
+    }
+
     /// 是否已有同类型、同分类范围、同周期的目标（阈值不同也算同一个）
     func existingGoal(kind: GoalKind, categoryCodes: [String], period: GoalPeriod) throws -> Goal? {
         let codes = categoryCodes.sorted()
@@ -258,7 +308,7 @@ final class GoalService {
             current = try transactions(
                 from: range.start, to: range.end, codes: goal.categoryCodes, kind: .expense
             ).filter { $0.refundOfID == nil }.count
-        case .categorySum:
+        case .budget:
             unit = .cents
             isAtMost = true
             current = Int(try transactions(

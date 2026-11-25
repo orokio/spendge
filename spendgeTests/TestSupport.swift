@@ -20,7 +20,6 @@ enum TestStore {
         deleteAll(TrophyUnlock.self, in: context)
         deleteAll(Goal.self, in: context)
         deleteAll(Transaction.self, in: context)
-        deleteAll(Budget.self, in: context)
         deleteAll(DayConfirmation.self, in: context)
         deleteAll(Category.self, in: context)
         deleteAll(Ledger.self, in: context)

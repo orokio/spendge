@@ -10,7 +10,6 @@ enum ModelContainerProvider {
             Category.self,
             Ledger.self,
             Transaction.self,
-            Budget.self,
             DayConfirmation.self,
             Goal.self,
             GoalAchievement.self,

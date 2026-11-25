@@ -18,6 +18,8 @@ final class GoalAchievement {
     var targetValue: Int = 0
     /// count / days / cents
     var unitRawValue: String = "count"
+    /// 目标类型快照；budget 用于把预算成就和目标成就分开统计
+    var kindRawValue: String = ""
     var createdAt: Date = Date.now
     /// 软删除时间；nil 表示未删除
     var deletedAt: Date?
@@ -32,6 +34,7 @@ final class GoalAchievement {
         currentValue: Int,
         targetValue: Int,
         unit: GoalProgress.Unit,
+        kindRawValue: String = "",
         createdAt: Date = .now
     ) {
         self.id = id
@@ -43,6 +46,7 @@ final class GoalAchievement {
         self.currentValue = currentValue
         self.targetValue = targetValue
         self.unitRawValue = Self.unitRawValue(unit)
+        self.kindRawValue = kindRawValue
         self.createdAt = createdAt
     }
 
