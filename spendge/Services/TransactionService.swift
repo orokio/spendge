@@ -3,13 +3,13 @@ import SwiftData
 
 /// 单分类月度汇总条目（面向 UI 的快照，不直接暴露模型）。
 struct CategorySummary: Identifiable, Equatable {
-    let categoryID: UUID
+    let categoryID: String
     let categoryName: String
     let iconName: String
     let colorHex: String
     let amountCents: Int64
 
-    var id: UUID { categoryID }
+    var id: String { categoryID }
     var amount: Decimal { Money.yuan(from: amountCents) }
 }
 
@@ -62,7 +62,7 @@ final class TransactionService {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
-        category: Category? = nil
+        category: CategoryInfo? = nil
     ) throws -> Transaction {
         do {
             try FaultInjection.current.check(.transactionWrite)
@@ -98,7 +98,7 @@ final class TransactionService {
         kind: TransactionKind? = nil,
         date: Date? = nil,
         note: String? = nil,
-        category: Category? = nil
+        category: CategoryInfo? = nil
     ) throws {
         try FaultInjection.current.check(.transactionWrite)
         try validate(amountCents: amountCents, date: date, note: note)
@@ -223,7 +223,7 @@ final class TransactionService {
     }
 
     /// 某分类的全部账单。
-    func transactions(category: Category) throws -> [Transaction] {
+    func transactions(category: CategoryInfo) throws -> [Transaction] {
         let code = category.code
         var descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.categoryCode == code && $0.deletedAt == nil }
@@ -299,22 +299,22 @@ final class TransactionService {
         let txns = try transactions(from: range.start, to: range.end)
 
         var summary = MonthlySummary(year: year, month: month)
-        var expenseGroups: [UUID: (Category, Int64)] = [:]
-        var incomeGroups: [UUID: (Category, Int64)] = [:]
+        var expenseGroups: [String: (CategoryInfo, Int64)] = [:]
+        var incomeGroups: [String: (CategoryInfo, Int64)] = [:]
 
         for txn in txns {
             switch txn.kind {
             case .expense:
                 summary.totalExpenseCents += txn.amountCents
                 if let category = txn.category {
-                    let current = expenseGroups[category.id]?.1 ?? 0
-                    expenseGroups[category.id] = (category, current + txn.amountCents)
+                    let current = expenseGroups[category.code]?.1 ?? 0
+                    expenseGroups[category.code] = (category, current + txn.amountCents)
                 }
             case .income:
                 summary.totalIncomeCents += txn.amountCents
                 if let category = txn.category {
-                    let current = incomeGroups[category.id]?.1 ?? 0
-                    incomeGroups[category.id] = (category, current + txn.amountCents)
+                    let current = incomeGroups[category.code]?.1 ?? 0
+                    incomeGroups[category.code] = (category, current + txn.amountCents)
                 }
             }
         }
@@ -336,12 +336,12 @@ final class TransactionService {
     }
 
     private func makeCategorySummaries(
-        from groups: [UUID: (Category, Int64)]
+        from groups: [String: (CategoryInfo, Int64)]
     ) -> [CategorySummary] {
         groups.values
             .map { category, amountCents in
                 CategorySummary(
-                    categoryID: category.id,
+                    categoryID: category.code,
                     categoryName: category.name,
                     iconName: category.iconName,
                     colorHex: category.colorHex,

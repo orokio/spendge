@@ -11,32 +11,32 @@ import XCTest
 final class SeedTests: XCTestCase {
     func testExpenseCategoryCountIs25() throws {
         TestStore.reset()
-        let categories = try CategoryService(context: TestStore.context).categories()
+        let categories = CategoryCatalog.shared.categories()
         XCTAssertEqual(categories.filter { $0.kind == .expense }.count, 25)
     }
 
     func testEveryCategoryHasCode() throws {
         TestStore.reset()
-        let categories = try CategoryService(context: TestStore.context).categories()
+        let categories = CategoryCatalog.shared.categories()
         XCTAssertTrue(categories.allSatisfy { $0.categoryCode != nil })
     }
 
     func testOnlyOtherExpenseHasEmptyScope() throws {
         TestStore.reset()
-        let categories = try CategoryService(context: TestStore.context).categories()
+        let categories = CategoryCatalog.shared.categories()
         XCTAssertTrue(categories.allSatisfy { $0.scope.isEmpty == ($0.categoryCode == .otherExpense) })
     }
 
     func testFoodDomainHasSixCategories() throws {
         TestStore.reset()
-        let categories = try CategoryService(context: TestStore.context).categories()
+        let categories = CategoryCatalog.shared.categories()
         let food = categories.filter { $0.kind == .expense && $0.domain == .food }
         XCTAssertEqual(food.count, 6)
     }
 
     func testSalaryCategoryExists() throws {
         TestStore.reset()
-        let categories = try CategoryService(context: TestStore.context).categories()
+        let categories = CategoryCatalog.shared.categories()
         XCTAssertTrue(categories.contains { $0.categoryCode == .salary })
     }
 }
@@ -95,7 +95,7 @@ final class BackupExportTests: XCTestCase {
         let data = try service.backupData()
         let decoded = try service.decodeBackup(data)
         XCTAssertEqual(decoded.transactions.count, try transactions.transactions(from: nil, to: nil).count)
-        XCTAssertGreaterThan(decoded.categories.count, 0)
+        XCTAssertEqual(decoded.transactions.first?.categoryCode, CategoryCode.takeout.rawValue)
         XCTAssertNoThrow(try service.validate(decoded))
     }
 }
@@ -194,7 +194,7 @@ final class VoiceParserTests: XCTestCase {
 final class CategoryMatcherTests: XCTestCase {
     func testMatchesByScope() throws {
         TestStore.reset()
-        let categories = try CategoryService(context: TestStore.context).categories()
+        let categories = CategoryCatalog.shared.categories()
         XCTAssertEqual(CategoryMatcher.match("PS Plus 会员", in: categories, kind: .expense)?.categoryCode, .subscription)
         XCTAssertEqual(CategoryMatcher.match("买了瓶啤酒", in: categories, kind: .expense)?.categoryCode, .alcoholBeverage)
         XCTAssertEqual(CategoryMatcher.match("高铁票200", in: categories, kind: .expense)?.categoryCode, .travel)

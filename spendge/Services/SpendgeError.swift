@@ -3,7 +3,6 @@ import Foundation
 enum SpendgeError: LocalizedError {
     case invalidAmount
     case invalidDate
-    case cannotDeleteSystemCategory
     /// DEBUG 故障注入：带具体故障点，方便定位
     case amountTooLarge
     case futureDate
@@ -22,8 +21,6 @@ enum SpendgeError: LocalizedError {
             return "金额必须大于 0"
         case .invalidDate:
             return "日期无效"
-        case .cannotDeleteSystemCategory:
-            return "系统预置分类不能删除"
         case .amountTooLarge:
             let maxYuan = Money.roundedYuan(from: InputLimits.amountCentsMax)
             return "单笔金额不能超过 ¥\(maxYuan)"

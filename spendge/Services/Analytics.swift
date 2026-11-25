@@ -120,7 +120,6 @@ extension SpendgeError {
         switch self {
         case .invalidAmount: return "invalid_amount"
         case .invalidDate: return "invalid_date"
-        case .cannotDeleteSystemCategory: return "system_category"
         case .amountTooLarge: return "amount_too_large"
         case .futureDate: return "future_date"
         case .noteTooLong: return "note_too_long"

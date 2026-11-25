@@ -5,6 +5,8 @@ import SwiftData
 /// 新增、编辑、暂停都在半层里完成，不再跳整页管理。
 struct GoalView: View {
     let onOpenTrophies: () -> Void
+    /// 是否停留在目标 tab；离开时收起抽屉，避免状态留着
+    let isActive: Bool
 
     @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Goal> { $0.deletedAt == nil },
@@ -124,6 +126,12 @@ struct GoalView: View {
             }
         }
         .unlockPrompt($showUnlock)
+        .onReceive(NotificationCenter.default.publisher(for: .dataRestored)) { _ in
+            dismissDrawers()
+        }
+        .onChange(of: isActive) { _, active in
+            if !active { dismissDrawers() }
+        }
         .sheet(isPresented: $showMonthPicker) {
             PeriodPickerSheet(options: monthOptions.map { .month($0) },
                               selected: .month(monthStart),
@@ -576,6 +584,12 @@ struct GoalView: View {
             count += 1
         }
         return count
+    }
+
+    private func dismissDrawers() {
+        showGoalForm = false
+        formTarget = nil
+        showBudgetEditor = false
     }
 
     private func openBudget() {

@@ -55,14 +55,12 @@ struct spendgeApp: App {
                 // 导入事件会连续来几条，合并成一次刷新
                 importRefreshWork?.cancel()
                 let work = DispatchWorkItem {
-                    EntityLookup.invalidateAll()
                     let context = container.mainContext
                     _ = try? context.fetch(FetchDescriptor<Transaction>())
                     _ = try? context.fetch(FetchDescriptor<Goal>())
                     _ = try? context.fetch(FetchDescriptor<GoalAchievement>())
                     _ = try? context.fetch(FetchDescriptor<DayConfirmation>())
                     _ = try? context.fetch(FetchDescriptor<TrophyUnlock>())
-                    _ = try? context.fetch(FetchDescriptor<Category>())
                     DefaultData.dedupeRecords(context: context)
                     LaunchTrace.mark("cloud.import.refreshed")
                 }

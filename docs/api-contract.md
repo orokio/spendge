@@ -73,15 +73,33 @@
   "deviceId": "uuid",
   "deviceSecret": "base64-32bytes",
   "appVersion": "1.0",
-  "build": "2",
-  "platform": "ios"
+  "build": "6",
+  "platform": "ios",
+  "categoriesVersion": 0
 }
 ```
 
-首次登记响应（仅这一次返回明文 token）：
+首次登记响应（仅这一次返回明文 token；分类有更新时才返回 `categories`）：
 
 ```json
-{ "deviceToken": "opaque-random", "expiresAt": "2027-02-24T00:00:00Z" }
+{
+  "deviceToken": "opaque-random",
+  "expiresAt": "2027-02-24T00:00:00Z",
+  "categoriesVersion": 3,
+  "categories": [
+    {
+      "code": "takeout",
+      "name": "点外卖",
+      "iconName": "takeoutbag.and.cup.and.straw.fill",
+      "colorHex": "#FB923C",
+      "kindRawValue": "expense",
+      "domainRawValue": "food",
+      "scope": "外卖点餐、美团、饿了么",
+      "sortOrder": 1,
+      "isArchived": false
+    }
+  ]
+}
 ```
 
 之后的续期响应：
@@ -96,7 +114,9 @@
 - 同设备未过期、未吊销时复用同一 token，不重新签发
 - 有效期 3 个月，每次 register 滑动续期
 - 只存 deviceId、secret 哈希、token 哈希、首次/最后时间、版本号
-- 限流：按 IP 10 次/分钟、按 deviceId 5 次/分钟
+- 分类：客户端带 `categoriesVersion`；服务端只在版本更高时返回全量 `categories`，版本相同则不返回
+- 分类 code 永久不变，只允许新增、修改展示字段、归档；永不删除或复用 code
+- 分类不参与 CloudKit 同步，客户端内置默认配置，注册响应覆盖
 
 ## 5. 接口（M4 规划，未实现）
 

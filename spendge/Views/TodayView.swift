@@ -11,6 +11,7 @@ struct TodayView: View {
     var focus: Date?
 
     @Environment(\.modelContext) private var context
+    @ObservedObject private var catalog = CategoryCatalog.shared
     @Environment(\.scenePhase) private var scenePhase
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
            sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),

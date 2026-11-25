@@ -21,10 +21,8 @@ enum TestStore {
         deleteAll(Goal.self, in: context)
         deleteAll(Transaction.self, in: context)
         deleteAll(DayConfirmation.self, in: context)
-        deleteAll(Category.self, in: context)
         deleteAll(Ledger.self, in: context)
         try? context.save()
-        DefaultData.seedIfNeeded(context: context)
         DefaultData.seedLedgerIfNeeded(context: context)
     }
 
@@ -36,9 +34,8 @@ enum TestStore {
 
     // MARK: - 取种子数据
 
-    static func category(_ code: CategoryCode) throws -> spendge.Category {
-        let all = try CategoryService(context: context).categories()
-        guard let match = all.first(where: { $0.categoryCode == code }) else {
+    static func category(_ code: CategoryCode) throws -> CategoryInfo {
+        guard let match = CategoryCatalog.shared.category(code: code.rawValue) else {
             throw TestSetupError.missingCategory(code.rawValue)
         }
         return match

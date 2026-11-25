@@ -182,7 +182,7 @@ enum VoiceParser {
 /// 分类匹配：先认口语关键词，再拿每个分类的「包含范围」兜底。
 /// 命中词取最长的那个，所以「充电宝」不会被「充电」抢走。
 enum CategoryMatcher {
-    static func match(_ text: String, in categories: [Category], kind: TransactionKind) -> Category? {
+    static func match(_ text: String, in categories: [CategoryInfo], kind: TransactionKind) -> CategoryInfo? {
         let normalized = VoiceParser.normalize(text)
         guard !normalized.isEmpty else { return nil }
 
@@ -193,7 +193,7 @@ enum CategoryMatcher {
             return hit
         }
 
-        var best: (category: Category, length: Int)?
+        var best: (category: CategoryInfo, length: Int)?
         for category in pool {
             for term in terms(of: category) where normalized.contains(term) {
                 if term.count > (best?.length ?? 0) {
@@ -206,7 +206,7 @@ enum CategoryMatcher {
 
     /// 「包含范围」按顿号、逗号、分号切开，只留两个字以上的词。
     /// 单字（菜、肉、奶）太容易误伤，交给上面的关键词表处理。
-    static func terms(of category: Category) -> [String] {
+    static func terms(of category: CategoryInfo) -> [String] {
         category.scope
             .split(whereSeparator: { "、，,；;/｜| ".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespaces) }

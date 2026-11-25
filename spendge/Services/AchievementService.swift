@@ -149,7 +149,7 @@ final class AchievementService {
         var expenseByMonth: [Date: Int64] = [:]
         var monthTotals: [Date: (total: Int, noted: Int)] = [:]
         var monthDays: [Date: Set<Date>] = [:]
-        var monthCategories: [Date: Set<UUID>] = [:]
+        var monthCategories: [Date: Set<String>] = [:]
 
         for txn in transactions {
             let day = calendar.startOfDay(for: txn.date)
@@ -160,8 +160,8 @@ final class AchievementService {
             monthDays[month, default: []].insert(day)
             monthTotals[month, default: (0, 0)].total += 1
             if txn.note?.isEmpty == false { monthTotals[month, default: (0, 0)].noted += 1 }
-            if let categoryID = txn.category?.id {
-                monthCategories[month, default: []].insert(categoryID)
+            if let categoryCode = txn.category?.code {
+                monthCategories[month, default: []].insert(categoryCode)
             }
             if txn.kind == .expense {
                 expenseByMonth[month, default: 0] += txn.amountCents

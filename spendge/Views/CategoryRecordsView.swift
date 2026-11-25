@@ -3,7 +3,7 @@ import SwiftData
 
 /// 从统计页的二级分类下钻时带过来的范围：分类 + 当前期间。
 struct CategoryScope {
-    let category: Category
+    let category: CategoryInfo
     /// 期间标题，如「2026年11月」
     let title: String
     let start: Date
@@ -18,6 +18,7 @@ struct CategoryRecordsView: View {
     let onClose: () -> Void
 
     @Environment(\.modelContext) private var context
+    @ObservedObject private var catalog = CategoryCatalog.shared
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
            sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
                   SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])

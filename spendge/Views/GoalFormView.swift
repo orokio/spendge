@@ -8,7 +8,7 @@ struct GoalFormView: View {
     let onClose: () -> Void
 
     @Environment(\.modelContext) private var context
-    @Query(sort: [SortDescriptor(\Category.sortOrder)]) private var categories: [Category]
+    @ObservedObject private var catalog = CategoryCatalog.shared
 
     @State private var title: String
     @State private var kind: GoalKind
@@ -24,16 +24,18 @@ struct GoalFormView: View {
     @FocusState private var nameFocused: Bool
 
     init(goal: Goal?, onClose: @escaping () -> Void) {
-        self.goal = goal
+        // 备份恢复会删掉旧目标，视图可能还拿着已脱离上下文的引用
+        let target = goal?.modelContext == nil ? nil : goal
+        self.goal = target
         self.onClose = onClose
-        let kind = goal?.kind ?? .countLimit
-        _title = State(initialValue: goal?.title ?? "")
+        let kind = target?.kind ?? .countLimit
+        _title = State(initialValue: target?.title ?? "")
         _kind = State(initialValue: kind)
-        _period = State(initialValue: goal?.period ?? .month)
-        _categoryCode = State(initialValue: goal?.categoryCodes.first ?? "")
-        let raw = goal?.targetValue ?? 0
-        _valueText = State(initialValue: goal == nil ? "" : Self.text(kind: kind, value: raw))
-        _isRecurring = State(initialValue: goal?.isRecurring ?? false)
+        _period = State(initialValue: target?.period ?? .month)
+        _categoryCode = State(initialValue: target?.categoryCodes.first ?? "")
+        let raw = target?.targetValue ?? 0
+        _valueText = State(initialValue: target == nil ? "" : Self.text(kind: kind, value: raw))
+        _isRecurring = State(initialValue: target?.isRecurring ?? false)
     }
 
     private static func text(kind: GoalKind, value: Int) -> String {
@@ -41,9 +43,9 @@ struct GoalFormView: View {
     }
 
     /// 当前维度允许的分类（白名单顺序）
-    private var allowedCategories: [Category] {
+    private var allowedCategories: [CategoryInfo] {
         goalKindCodes.compactMap { code in
-            categories.first { $0.categoryCode == code && !$0.isArchived }
+            catalog.categories().first { $0.code == code.rawValue && !$0.isArchived }
         }
     }
 

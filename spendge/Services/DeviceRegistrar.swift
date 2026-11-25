@@ -12,6 +12,20 @@ enum DeviceRegistrar {
     /// 首次签发才返回明文 token；之后的滑动续期不带
     private struct RegisterResponse: Decodable {
         let deviceToken: String?
+        let categoriesVersion: Int?
+        let categories: [RemoteCategory]?
+    }
+
+    private struct RemoteCategory: Decodable {
+        let code: String
+        let name: String
+        let iconName: String?
+        let colorHex: String?
+        let kindRawValue: String?
+        let domainRawValue: String?
+        let scope: String?
+        let sortOrder: Int?
+        let isArchived: Bool?
     }
 
     static func registerIfNeeded() async {
@@ -28,12 +42,14 @@ enum DeviceRegistrar {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        let body: [String: String] = [
+        let knownVersion = await MainActor.run { CategoryCatalog.shared.version }
+        let body: [String: Any] = [
             "deviceId": IdentityService.deviceId,
             "deviceSecret": IdentityService.deviceSecret,
             "appVersion": (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "",
             "build": (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "",
             "platform": "ios",
+            "categoriesVersion": knownVersion,
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
@@ -41,9 +57,30 @@ enum DeviceRegistrar {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             // 服务端签发设备 token，存 Keychain；M4 的接口用它鉴权
-            if let payload = try? JSONDecoder().decode(RegisterResponse.self, from: data),
-               let token = payload.deviceToken {
-                IdentityService.deviceToken = token
+            if let payload = try? JSONDecoder().decode(RegisterResponse.self, from: data) {
+                if let token = payload.deviceToken {
+                    IdentityService.deviceToken = token
+                }
+                if (200...299).contains(status),
+                   let version = payload.categoriesVersion,
+                   version > knownVersion,
+                   let remote = payload.categories,
+                   !remote.isEmpty {
+                    let items = remote.map { item in
+                        CategoryInfo(code: item.code,
+                                     name: item.name,
+                                     iconName: item.iconName ?? "tag.fill",
+                                     colorHex: item.colorHex ?? "#9CA3AF",
+                                     kindRawValue: item.kindRawValue ?? TransactionKind.expense.rawValue,
+                                     domainRawValue: item.domainRawValue ?? CategoryDomain.other.rawValue,
+                                     scope: item.scope ?? "",
+                                     sortOrder: item.sortOrder ?? 99,
+                                     isArchived: item.isArchived ?? false)
+                    }
+                    await MainActor.run {
+                        CategoryCatalog.shared.apply(version: version, categories: items)
+                    }
+                }
             }
             logger.notice("register status=\(status, privacy: .public)")
         } catch {

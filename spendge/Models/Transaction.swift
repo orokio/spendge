@@ -31,7 +31,8 @@ final class Transaction {
         kind: TransactionKind,
         date: Date = .now,
         note: String? = nil,
-        category: Category? = nil,
+        category: CategoryInfo? = nil,
+        categoryCode: String? = nil,
         ledgerID: UUID? = nil,
         refundOfID: UUID? = nil,
         createdAt: Date = .now,
@@ -43,14 +44,14 @@ final class Transaction {
         self.date = date
         self.note = note
         self.ledgerID = ledgerID
-        self.categoryCode = category?.code
+        self.categoryCode = categoryCode ?? category?.code
         self.refundOfID = refundOfID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
     /// 分类对象：按 code 在本机解析
-    @MainActor var category: Category? { EntityLookup.category(code: categoryCode, in: modelContext) }
+    @MainActor var category: CategoryInfo? { CategoryCatalog.shared.category(code: categoryCode) }
 
     var kind: TransactionKind {
         get { TransactionKind(rawValue: kindRawValue) ?? .expense }

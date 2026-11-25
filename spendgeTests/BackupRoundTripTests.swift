@@ -34,7 +34,7 @@ final class BackupRoundTripTests: XCTestCase {
     func testRoundTripPreservesTransactions() throws {
         let seed = try seededBackup()
         let file = try service().validateBackupData(seed.data)
-        let codesBefore = Set(file.categories.compactMap(\.code))
+        let codesBefore = Set(file.transactions.compactMap(\.categoryCode))
 
         let restored = try service().restore(from: seed.data)
         XCTAssertEqual(restored, seed.count)
@@ -48,7 +48,7 @@ final class BackupRoundTripTests: XCTestCase {
                        500000)
         XCTAssertEqual(rows.filter { $0.note == "早饭" }.count, 1)
 
-        let codesAfter = Set(try CategoryService(context: TestStore.context).categories().compactMap(\.categoryCode?.rawValue))
+        let codesAfter = Set(rows.compactMap(\.categoryCode))
         XCTAssertEqual(codesAfter, codesBefore)
     }
 
@@ -79,14 +79,32 @@ final class BackupRoundTripTests: XCTestCase {
 
 
 
-    func testRejectsDuplicateTransactionIDs() throws {
+    func testDeduplicatesDuplicateTransactionIDs() throws {
         let seed = try seededBackup()
         var file = try service().decodeBackup(seed.data)
         file.transactions.append(file.transactions[0])
-        assertRejected("备份文件里有重复的账单") { try service().validate(file) }
+        let restored = try service().restore(from: try encode(file))
+        XCTAssertEqual(restored, seed.count)
     }
 
 
+
+    func testRestoresLegacyCategorySumAsBudget() throws {
+        let seed = try seededBackup()
+        var file = try service().decodeBackup(seed.data)
+        let oldID = UUID()
+        let legacy = Goal(id: oldID,
+                          title: "奶茶咖啡 100 元",
+                          kind: .budget,
+                          categoryCodes: ["drink"],
+                          period: .month,
+                          targetValue: 10000)
+        legacy.kindRawValue = "categorySum"
+        file.goals = [GoalDTO(legacy)]
+        _ = try service().restore(from: try encode(file))
+        let goals = try TestStore.context.fetch(FetchDescriptor<Goal>())
+        XCTAssertEqual(goals.first(where: { $0.id == oldID })?.kind, .budget)
+    }
 
     func testRejectsFutureTransactionDate() throws {
         let seed = try seededBackup()

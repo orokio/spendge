@@ -6,6 +6,9 @@ import CloudKit
 /// 设置：云同步状态、开关、数据导出等。
 /// 数据组已接实现（CSV 导出 / JSON 备份 / 恢复）。
 struct SettingsView: View {
+    /// 是否停留在设置 tab；离开时收起开发者面板
+    let isActive: Bool
+
     private struct Item: Identifiable {
         let id = UUID()
         let icon: String
@@ -74,6 +77,9 @@ struct SettingsView: View {
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { Analytics.record(.settingsOpened) }
+        .onChange(of: isActive) { _, active in
+            if !active { closeDebugPanel() }
+        }
         .toolbar(.hidden, for: .navigationBar)
         }
         .contentShape(Rectangle())
@@ -419,7 +425,7 @@ struct SettingsView: View {
         pendingRestore = data
         notice = ConfirmRequest(
             title: "从备份恢复？",
-            message: "将恢复 \(file.transactions.count) 笔记录、\((file.budgets?.count ?? 0)) 条预算、\(file.goals?.count ?? 0) 个目标，并替换当前全部数据。建议先导出一份当前备份。",
+            message: "将恢复 \(file.transactions.count) 笔记录、\((file.goals?.count ?? 0) + (file.budgets?.count ?? 0)) 个目标（含预算），并替换当前全部数据。建议先导出一份当前备份。",
             confirmTitle: "覆盖恢复",
             onConfirm: {
                 if let data = pendingRestore { performRestore(data) }
@@ -433,6 +439,7 @@ struct SettingsView: View {
             let count = try BackupService(context: context).restore(from: data)
             Analytics.record(.backup, ["action": "restore", "result": "ok", "count": String(count)])
             pendingRestore = nil
+            NotificationCenter.default.post(name: .dataRestored, object: nil)
             Toast.show("已恢复 \(count) 笔记录", into: $toast)
         } catch {
             Analytics.record(.backup, ["action": "restore", "result": "fail", "code": Analytics.errorCode(error)])

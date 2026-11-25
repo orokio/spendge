@@ -7,6 +7,7 @@ struct ReviewView: View {
     let onOpenCategory: (CategoryScope) -> Void
 
     @Environment(\.modelContext) private var context
+    @ObservedObject private var catalog = CategoryCatalog.shared
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
            sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
                   SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])
@@ -45,7 +46,7 @@ struct ReviewView: View {
         let cents: Int64
         let count: Int
         /// 用来取图标与颜色；分类被删掉时为空
-        let category: Category?
+        let category: CategoryInfo?
     }
 
     // MARK: - 数据
@@ -67,7 +68,7 @@ struct ReviewView: View {
     private func rows(from items: [Transaction]) -> [CategoryRow] {
         var cents: [String: Int64] = [:]
         var counts: [String: Int] = [:]
-        var categories: [String: Category] = [:]
+        var categories: [String: CategoryInfo] = [:]
         for txn in items {
             let name = txn.category?.name ?? "未分类"
             cents[name, default: 0] += txn.amountCents
@@ -821,7 +822,7 @@ struct ReviewView: View {
     }
 
     /// 把当前期间换算成区间，和分类一起交给明细页
-    private func openCategory(_ category: Category) {
+    private func openCategory(_ category: CategoryInfo) {
         let start: Date
         let end: Date
         switch period {

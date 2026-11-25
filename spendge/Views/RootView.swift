@@ -98,19 +98,22 @@ struct RootView: View {
                 .tabItem { Label { Text("统计").foregroundStyle(tab == .review ? Color.brand : Color.textSecondary) } icon: { tabIcon("chart.bar.xaxis", selected: tab == .review) } }
                 .tag(Tab.review)
 
-            GoalView(onOpenTrophies: openTrophies)
+            GoalView(onOpenTrophies: openTrophies, isActive: tab == .goal)
                 .background(AppBackground())
                 .overlay { secondaryPages($goalPages) }
                 .tabItem { Label { Text("目标").foregroundStyle(tab == .goal ? Color.brand : Color.textSecondary) } icon: { tabIcon("trophy", selected: tab == .goal) } }
                 .tag(Tab.goal)
 
-            SettingsView()
+            SettingsView(isActive: tab == .settings)
                 .background(AppBackground())
                 .tabItem { Label { Text("设置").foregroundStyle(tab == .settings ? Color.brand : Color.textSecondary) } icon: { tabIcon("gearshape", selected: tab == .settings) } }
                 .tag(Tab.settings)
         }
         .tint(Color.brand)
         .onAppear { LaunchTrace.mark("root.appear") }
+        .onReceive(NotificationCenter.default.publisher(for: .dataRestored)) { _ in
+            resetSecondaryPages()
+        }
         .task {
             LaunchTrace.mark("task.start")
             refreshTrophies(celebrate: false)

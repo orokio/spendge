@@ -12,15 +12,14 @@ struct RecordPage: View {
 
     @Environment(\.modelContext) private var context
 
-    @Query(sort: [SortDescriptor(\Category.sortOrder), SortDescriptor(\Category.name)])
-    private var allCategories: [Category]
+    @ObservedObject private var catalog = CategoryCatalog.shared
     @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil },
            sort: [SortDescriptor<Transaction>(\Transaction.date, order: .reverse),
                   SortDescriptor<Transaction>(\Transaction.createdAt, order: .reverse)])
     private var recentTransactions: [Transaction]
 
     @State private var kind: TransactionKind = .expense
-    @State private var selectedCategory: Category?
+    @State private var selectedCategory: CategoryInfo?
     /// 已输入的金额文本（"26"、"26.5"），小数最多一位
     @State private var amountText = ""
     @State private var amountEdited = false
@@ -83,16 +82,8 @@ struct RecordPage: View {
     }
 
     /// 固定顺序：sortOrder 决定位置，每 10 个为一组，组间画一条短横线。
-    private var categories: [Category] {
-        var seen = Set<String>()
-        return allCategories
-            .filter { $0.kind == kind && !$0.isArchived }
-            .sorted { $0.sortOrder < $1.sortOrder }
-            // 云端合并可能留下同 code 的旧记录，显示层只保留一条
-            .filter { category in
-                let key = category.code ?? category.id.uuidString
-                return seen.insert(key).inserted
-            }
+    private var categories: [CategoryInfo] {
+        catalog.categories(kind: kind)
     }
 
     private var railRows: [RailRow] {
@@ -110,12 +101,12 @@ struct RecordPage: View {
     }
 
     private enum RailRow: Identifiable {
-        case category(Category)
+        case category(CategoryInfo)
         case divider
 
         var id: String {
             switch self {
-            case .category(let category): return category.id.uuidString
+            case .category(let category): return category.code
             case .divider: return "divider-(UUID().uuidString)"
             }
         }
@@ -313,7 +304,7 @@ struct RecordPage: View {
                             .frame(width: 28, height: 1)
                             .padding(.vertical, 5)
                     case .category(let category):
-                        let selected = selectedCategory?.id == category.id
+                        let selected = selectedCategory?.code == category.code
                         Button {
                             categoryPicked = true
                             select(category)
@@ -534,7 +525,7 @@ struct RecordPage: View {
     private func loadRecentAmounts() {
     }
 
-    private func select(_ category: Category?) {
+    private func select(_ category: CategoryInfo?) {
         selectedCategory = category
     }
 
@@ -544,8 +535,8 @@ struct RecordPage: View {
         guard !categoryPicked, editing == nil else { return }
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2,
-              let matched = CategoryMatcher.match(trimmed, in: allCategories, kind: kind),
-              matched.id != selectedCategory?.id else { return }
+              let matched = CategoryMatcher.match(trimmed, in: catalog.categories(), kind: kind),
+              matched.code != selectedCategory?.code else { return }
         select(matched)
     }
 
@@ -557,8 +548,8 @@ struct RecordPage: View {
         let parsed = VoiceParser.parse(text)
 
         // 认不出分类就落到「其他」，不留着上一次的选择让人误会
-        let matched = CategoryMatcher.match(text, in: allCategories, kind: kind)
-            ?? allCategories.first { $0.categoryCode == .otherExpense && $0.kind == kind }
+        let matched = CategoryMatcher.match(text, in: catalog.categories(), kind: kind)
+            ?? catalog.categories().first { $0.code == CategoryCode.otherExpense.rawValue && $0.kind == kind }
 
         if let matched { select(matched) }
 
@@ -576,7 +567,7 @@ struct RecordPage: View {
             return
         }
         let parsed = VoiceParser.parse(text)
-        let matched = CategoryMatcher.match(text, in: allCategories, kind: kind)
+        let matched = CategoryMatcher.match(text, in: catalog.categories(), kind: kind)
 
         if matched != nil, parsed.yuan != nil {
             showHint("已按你说的填好")

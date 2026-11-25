@@ -231,8 +231,8 @@ struct DebugDataSeeder {
         }
     }
 
-    private func base() throws -> ([Category], [Category]) {
-        let categories = try context.fetch(FetchDescriptor<Category>())
+    private func base() throws -> ([CategoryInfo], [CategoryInfo]) {
+        let categories = CategoryCatalog.shared.categories()
         let expenses = categories.filter { $0.kind == .expense && $0.categoryCode != .otherExpense }
         let incomes = categories.filter { $0.kind == .income }
         return (expenses.isEmpty ? categories : expenses, incomes)

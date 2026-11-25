@@ -127,86 +127,6 @@ enum DefaultData {
     ]
 
     /// 分类体系改版：把旧分类迁到新分类上，**保留已有账单**。
-    /// 与结构变更不同，这里不删库——账单归属是用户数据。
-    static func migrateCategoriesIfNeeded(context: ModelContext) {
-        let key = "spendge.categoryMigration"
-        let version = UserDefaults.standard.integer(forKey: key)
-        guard version < 15 else { return }
-
-        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
-        guard !categories.isEmpty else {
-            UserDefaults.standard.set(15, forKey: key)
-            return
-        }
-
-        func category(_ code: String) -> Category? {
-            categories.first { $0.code == code }
-        }
-
-        // 11 及更早：旧的「买东西」并入装备；交通 + 娱乐合成「出行游玩」
-        if version < 11 {
-            category("shopping")?.code = CategoryCode.digitalGear.rawValue
-            if let outing = category("outing") ?? category("transport") {
-                outing.code = CategoryCode.outing.rawValue
-                outing.name = "交通出行"
-                outing.domain = .transport
-                if let fun = category("fun") {
-                    let funCode = fun.code
-                    let transactions = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
-                    for txn in transactions where txn.categoryCode == funCode {
-                        txn.categoryCode = outing.code
-                    }
-                    context.delete(fun)
-                }
-            }
-        }
-
-        // 12：装备器材 → 数码器材，code 一并改；目标里引用的分类同步改名
-        if let gear = category("gear") {
-            gear.code = CategoryCode.digitalGear.rawValue
-        }
-        if let goals = try? context.fetch(FetchDescriptor<Goal>()) {
-            for goal in goals {
-                let mapped = goal.categoryCodes.map {
-                    $0 == "gear" ? CategoryCode.digitalGear.rawValue : $0
-                }
-                if mapped != goal.categoryCodes { goal.categoryCodes = mapped }
-            }
-        }
-
-        // 按种子校正名称、图标、领域、排序与包含范围
-        for seed in expenseCategorySeeds + incomeCategorySeeds {
-            guard let existing = category(seed.code.rawValue) else { continue }
-            existing.name = seed.name
-            existing.iconName = seed.iconName
-            existing.colorHex = seed.colorHex
-            existing.domain = seed.domain
-            existing.sortOrder = seed.sortOrder
-            existing.scope = seed.scope
-        }
-
-        // 补充新增分类
-        let existingCodes = Set(categories.compactMap(\.code))
-        for seed in expenseCategorySeeds + incomeCategorySeeds where !existingCodes.contains(seed.code.rawValue) {
-            context.insert(Category(
-                id: StableID.category(seed.code.rawValue),
-                name: seed.name,
-                code: seed.code.rawValue,
-                iconName: seed.iconName,
-                colorHex: seed.colorHex,
-                kind: seed.kind,
-                domain: seed.domain,
-                scope: seed.scope,
-                sortOrder: seed.sortOrder,
-                isSystem: true
-            ))
-        }
-
-        try? context.save()
-        EntityLookup.invalidate(context)
-        UserDefaults.standard.set(15, forKey: key)
-    }
-
     /// 老目标没有归属月份：按创建时间回填，保证每个月各自独立
     static func backfillGoalMonths(context: ModelContext) {
         guard let goals = try? context.fetch(FetchDescriptor<Goal>()) else { return }
@@ -219,30 +139,6 @@ enum DefaultData {
     }
 
     /// 幂等：已有数据时不重复写入。
-    static func seedIfNeeded(context: ModelContext) {
-        let categoryCount = (try? context.fetchCount(FetchDescriptor<Category>())) ?? 0
-        if categoryCount == 0 {
-            for seed in expenseCategorySeeds + incomeCategorySeeds {
-                context.insert(Category(
-                    id: StableID.category(seed.code.rawValue),
-                    name: seed.name,
-                    code: seed.code.rawValue,
-                    iconName: seed.iconName,
-                    colorHex: seed.colorHex,
-                    kind: seed.kind,
-                    domain: seed.domain,
-                    scope: seed.scope,
-                    sortOrder: seed.sortOrder,
-                    isSystem: true
-                ))
-            }
-        }
-
-        try? context.save()
-        EntityLookup.invalidate(context)
-    }
-
-
     /// 软删除 30 天后物理清理；只清这些同步模型，分类仍是物理删除。
     static func purgeExpiredDeletions(context: ModelContext, now: Date = .now) {
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: now) else { return }
@@ -280,11 +176,6 @@ enum DefaultData {
                          deletedAt: { $0.deletedAt },
                          updatedAt: { $0.updatedAt }) || changed
 
-        changed = dedupe(Category.self, context: context,
-                         key: { $0.code },
-                         deletedAt: { _ in nil },
-                         updatedAt: { $0.updatedAt }) || changed
-
         changed = dedupe(Transaction.self, context: context,
                          key: { $0.id.uuidString },
                          deletedAt: { $0.deletedAt },
@@ -312,7 +203,6 @@ enum DefaultData {
 
         if changed {
             try? context.save()
-            EntityLookup.invalidate(context)
         }
     }
 
@@ -402,29 +292,6 @@ enum DefaultData {
         if changed { try? context.save() }
     }
 
-    /// 分类的跨设备身份：ID 由 code 推导，并按 code 归并重复记录。
-    static func normalizeEntityIdentity(context: ModelContext) {
-        let key = "spendge.stableEntityIdentity"
-        guard UserDefaults.standard.integer(forKey: key) < 1 else { return }
-
-        if let categories = try? context.fetch(FetchDescriptor<Category>()) {
-            var seen = Set<String>()
-            for category in categories {
-                guard let code = category.code, !code.isEmpty else { continue }
-                guard seen.insert(code).inserted else {
-                    context.delete(category)
-                    continue
-                }
-                let stable = StableID.category(code)
-                if category.id != stable { category.id = stable }
-            }
-        }
-
-        try? context.save()
-        UserDefaults.standard.set(1, forKey: key)
-        EntityLookup.invalidate(context)
-    }
-
     /// 给旧数据补上跨设备身份：账单 / 预算的分类 code。
     /// 必须在关系字段还存在的版本里跑，改造完成后就再也读不到旧关系了。
     static func backfillCodes(context: ModelContext) {
@@ -438,7 +305,6 @@ enum DefaultData {
         }
 
         try? context.save()
-        EntityLookup.invalidate(context)
         UserDefaults.standard.set(1, forKey: key)
     }
 }

@@ -186,7 +186,7 @@ struct SectionHeader<Trailing: View>: View {
 }
 
 struct CategoryBadge: View {
-    let category: Category
+    let category: CategoryInfo
     var iconSize: CGFloat = 44
     var isSelected: Bool = false
 

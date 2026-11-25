@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+extension Notification.Name {
+    /// 备份恢复完成：二级页和持有旧对象的表单需要立刻收起来
+    static let dataRestored = Notification.Name("spendge.dataRestored")
+}
+
 /// 导出范围
 enum BackupScope {
     case all
@@ -86,7 +91,6 @@ final class BackupService {
 
     func backupData() throws -> Data {
         let ledgers = try context.fetch(FetchDescriptor<Ledger>(predicate: #Predicate { $0.deletedAt == nil }))
-        let categories = try context.fetch(FetchDescriptor<Category>())
         let transactions = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil }))
         let confirmations = try context.fetch(FetchDescriptor<DayConfirmation>(predicate: #Predicate { $0.deletedAt == nil }))
         let goals = try context.fetch(FetchDescriptor<Goal>(predicate: #Predicate { $0.deletedAt == nil }))
@@ -97,7 +101,7 @@ final class BackupService {
             version: BackupFile.currentVersion,
             exportedAt: .now,
             ledgers: ledgers.map(LedgerDTO.init),
-            categories: categories.map(CategoryDTO.init),
+            categories: [],
             transactions: transactions.map(TransactionDTO.init),
             dayConfirmations: confirmations.map(DayConfirmationDTO.init),
             goals: goals.map(GoalDTO.init),
@@ -118,18 +122,36 @@ final class BackupService {
     }
 
     func validateBackupData(_ data: Data) throws -> BackupFile {
-        let file = try decodeBackup(data)
+        let file = normalize(try decodeBackup(data))
         try validate(file)
         return file
+    }
+
+    /// 旧版本导出过同 id 重复的记录；导入前先按身份键去重，不让整份备份失败。
+    private func normalize(_ file: BackupFile) -> BackupFile {
+        var copy = file
+        copy.ledgers = file.ledgers.map { dedupe($0, key: { $0.id.uuidString }) }
+        copy.categories = dedupe(file.categories, key: { $0.code ?? $0.id.uuidString })
+        copy.transactions = dedupe(file.transactions, key: { $0.id.uuidString })
+        copy.dayConfirmations = dedupe(file.dayConfirmations, key: {
+            String(Int(calendar.startOfDay(for: $0.day).timeIntervalSince1970))
+        })
+        copy.budgets = file.budgets.map { dedupe($0, key: { $0.id.uuidString }) }
+        copy.goals = file.goals.map { dedupe($0, key: { $0.id.uuidString }) }
+        copy.achievements = file.achievements.map { dedupe($0, key: { $0.id.uuidString }) }
+        copy.trophies = file.trophies.map { dedupe($0, key: { $0.trophyID }) }
+        return copy
+    }
+
+    private func dedupe<T>(_ items: [T], key: (T) -> String) -> [T] {
+        var seen = Set<String>()
+        return items.filter { seen.insert(key($0)).inserted }
     }
 
     /// 只校验，不落库：所有检查通过后才允许清空
     func validate(_ file: BackupFile) throws {
         guard (1...BackupFile.currentVersion).contains(file.version) else {
             throw BackupValidationError.unsupportedVersion
-        }
-        guard !file.categories.isEmpty else {
-            throw BackupValidationError.missingCoreData
         }
 
         try ensureUnique(file.categories.map(\.id), "分类")
@@ -245,7 +267,7 @@ final class BackupService {
     /// 覆盖恢复：先清空，再按备份重建；返回恢复的账单数
     @discardableResult
     func restore(from data: Data) throws -> Int {
-        let file = try decodeBackup(data)
+        let file = normalize(try decodeBackup(data))
         try validate(file)
 
         // 清空（先删有引用的，再删被引用的）
@@ -254,7 +276,6 @@ final class BackupService {
         for item in try context.fetch(FetchDescriptor<Goal>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<Transaction>()) { context.delete(item) }
         for item in try context.fetch(FetchDescriptor<DayConfirmation>()) { context.delete(item) }
-        for item in try context.fetch(FetchDescriptor<Category>()) { context.delete(item) }
         try context.save()
 
         // 账本：v1 备份没有，落到默认账本；v2 按 id 覆盖
@@ -277,25 +298,19 @@ final class BackupService {
         }
 
 
-        var categoryMap: [UUID: Category] = [:]
+        var categoryMap: [UUID: CategoryInfo] = [:]
         for dto in file.categories {
-            let category = Category(
-                id: dto.id,
-                name: dto.name,
+            categoryMap[dto.id] = CategoryInfo(
                 code: dto.code ?? dto.id.uuidString,
+                name: dto.name,
                 iconName: dto.iconName,
                 colorHex: dto.colorHex,
-                kind: TransactionKind(rawValue: dto.kindRawValue) ?? .expense,
-                domain: CategoryDomain(rawValue: dto.domainRawValue) ?? .other,
+                kindRawValue: dto.kindRawValue,
+                domainRawValue: dto.domainRawValue,
                 scope: dto.scope ?? "",
                 sortOrder: dto.sortOrder,
-                isSystem: dto.isSystem,
-                isArchived: dto.isArchived,
-                createdAt: dto.createdAt,
-                updatedAt: dto.updatedAt
+                isArchived: dto.isArchived
             )
-            context.insert(category)
-            categoryMap[dto.id] = category
         }
 
         for dto in file.transactions {
@@ -306,6 +321,7 @@ final class BackupService {
                 date: dto.date,
                 note: dto.note,
                 category: dto.categoryID.flatMap { categoryMap[$0] },
+                categoryCode: dto.categoryCode ?? dto.categoryID.flatMap { categoryMap[$0]?.code },
                 ledgerID: dto.ledgerID ?? defaultLedgerID,
                 refundOfID: dto.refundOfID,
                 createdAt: dto.createdAt,
@@ -345,7 +361,7 @@ final class BackupService {
             context.insert(Goal(
                 id: dto.id,
                 title: dto.title,
-                kind: GoalKind(rawValue: dto.kindRawValue) ?? .countLimit,
+                kind: GoalKind(rawValue: dto.kindRawValue == "categorySum" ? GoalKind.budget.rawValue : dto.kindRawValue) ?? .countLimit,
                 categoryCodes: dto.categoryCodes,
                 period: GoalPeriod(rawValue: dto.periodRawValue) ?? .month,
                 ledgerID: dto.ledgerID ?? defaultLedgerID,
@@ -386,7 +402,6 @@ final class BackupService {
 
         try context.save()
         DefaultData.dedupeRecords(context: context)
-        EntityLookup.invalidate(context)
         return file.transactions.count
     }
 }
@@ -394,7 +409,7 @@ final class BackupService {
 // MARK: - 备份格式
 
 struct BackupFile: Codable {
-    static let currentVersion = 4
+    static let currentVersion = 5
 
     var version: Int
     var exportedAt: Date
@@ -445,21 +460,6 @@ struct CategoryDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
 
-    init(_ category: Category) {
-        id = category.id
-        name = category.name
-        code = category.code
-        iconName = category.iconName
-        colorHex = category.colorHex
-        kindRawValue = category.kindRawValue
-        domainRawValue = category.domainRawValue
-        scope = category.scope
-        sortOrder = category.sortOrder
-        isSystem = category.isSystem
-        isArchived = category.isArchived
-        createdAt = category.createdAt
-        updatedAt = category.updatedAt
-    }
 }
 
 struct TransactionDTO: Codable {
@@ -469,6 +469,8 @@ struct TransactionDTO: Codable {
     var kindRawValue: String
     var date: Date
     var note: String?
+    /// v4 起直接存 code，分类缺失时也能还原归属
+    var categoryCode: String?
     var categoryID: UUID?
     /// 退款记录指回原单；普通账单为空
     var refundOfID: UUID?
@@ -482,7 +484,8 @@ struct TransactionDTO: Codable {
         kindRawValue = txn.kindRawValue
         date = txn.date
         note = txn.note
-        categoryID = txn.category?.id
+        categoryCode = txn.categoryCode
+        categoryID = nil // 分类不再有行 ID，优先使用 categoryCode
         refundOfID = txn.refundOfID
         createdAt = txn.createdAt
         updatedAt = txn.updatedAt
