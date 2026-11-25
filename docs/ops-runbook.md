@@ -16,7 +16,7 @@
 | 对外接口 | `https://api.orokio.com:8443/spendge/v1/...`（nginx 剥掉 `/spendge`） |
 | 健康检查 | `https://www.orokio.com:8443/health`、`https://api.orokio.com:8443/spendge/health` |
 | 源码（git） | `/home/ubuntu/spendge`（sparse-checkout：server/ docs/），**日常开发就在这里的 `server/`** |
-| 开发服务器 | `127.0.0.1:8011`（`server/serve.sh --port 8011`；8010 被生产 gunicorn 占用） |
+| 开发服务器 | `127.0.0.1:9010`（`server/serve.sh` 默认端口；8010 留给生产 gunicorn） |
 | 运行副本 | `/home/ubuntu/spendge-server`（代码 + .venv + .env + logs/ + run/） |
 | nginx | `/home/ubuntu/nginx`（conf/ logs/ ssl/ sbin/） |
 | 数据库 | `/home/ubuntu/sqlite/spendge.db`，备份目录 `/home/ubuntu/sqlite/backup/` |
@@ -72,8 +72,8 @@
 ### 5.1 日常开发
 
     cd /home/ubuntu/spendge/server        # git 工作区，直接改
-    ./serve.sh start --port 8011          # 开发服务器（8010 被生产 gunicorn 占用）
-    PORT=8011 ./serve.sh status
+    ./serve.sh start                      # 开发服务器，默认 9010（8010 留给生产 gunicorn）
+    ./serve.sh status
     ./serve.sh stop
 
     .venv/bin/pytest -q                   # 测试：Redis 走 DB 15，不污染生产

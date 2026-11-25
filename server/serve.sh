@@ -3,9 +3,9 @@
 #
 # 用法:
 #   ./serve.sh status              查看状态与健康检查
-#   ./serve.sh start [--port 8010] 启动
+#   ./serve.sh start [--port 9010] 启动
 #   ./serve.sh stop                停止
-#   ./serve.sh restart [--port 8010] 重启
+#   ./serve.sh restart [--port 9010] 重启
 #
 # 日志与 pid 都在 server/.run/ 下，不入库。
 
@@ -15,7 +15,7 @@ VENV="$SERVER_DIR/.venv"
 RUN_DIR="$SERVER_DIR/.run"
 PID_FILE="$RUN_DIR/server.pid"
 LOG_FILE="$RUN_DIR/server.log"
-PORT="${PORT:-8010}"
+PORT="${PORT:-9010}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'
 YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'

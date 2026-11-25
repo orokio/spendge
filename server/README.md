@@ -19,12 +19,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
-flask --app app.main run --debug --port 8010
+flask --app app.main run --debug --port 9010
 ```
 
-打开 http://127.0.0.1:8010/health 应返回 `{"status":"ok","env":"development"}`。
+打开 http://127.0.0.1:9010/health 应返回 `{"status":"ok","env":"development"}`。
 
-默认用 8010：macOS 的 5000 常被 AirPlay 接收器占用，8000 也容易撞上别的本地服务。
+默认用 9010：8010 留给服务器上的生产 gunicorn（nginx upstream 固定指向它），dev 用 9010 避免冲突。
 
 ## 测试
 
@@ -35,11 +35,11 @@ pytest
 ## 起停
 
 ```bash
-./serve.sh start          # 后台启动，默认 8010
+./serve.sh start          # 后台启动，默认 9010
 ./serve.sh status         # pid、端口、health
 ./serve.sh stop
 ./serve.sh restart
-./serve.sh start --port 8011   # 换端口
+./serve.sh start --port 9011   # 换端口
 ```
 
 日志和 pid 文件都在 `server/.run/`，不入库。脚本会先检查端口占用，启动后轮询 `/health` 确认真的起来了，失败时打印日志尾部。
