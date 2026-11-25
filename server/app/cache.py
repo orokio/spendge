@@ -39,8 +39,13 @@ def delete_device(device_id: str) -> None:
     get_redis().delete(DEVICE_KEY.format(id=device_id))
 
 
+STREAM_MAXLEN = 10000  # 近似裁剪，防止流无限增长（约 3MB 上限）
+
+
 def enqueue_register(device: dict, session: dict) -> None:
     get_redis().xadd(
         STREAM_REGISTER,
         {"data": json.dumps({"device": device, "session": session})},
+        maxlen=STREAM_MAXLEN,
+        approximate=True,
     )

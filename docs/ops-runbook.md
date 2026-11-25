@@ -231,3 +231,66 @@
 
 - **备案后切 80/443**：改 nginx listen + 80→443 跳转，安全组放行 80/443。
 - **证书续期**：api 至 2027-02-23、www 至 2027-02-20，到期前重新申请并替换（§9）。
+## 14. 手工操作（应急 / 排障）
+
+> 前缀统一先取一次密码：`export REDISCLI_AUTH=$(sudo grep '^requirepass ' /etc/redis/redis.conf | awk '{print $2}' | head -1)`，下文 redis-cli 都可直接用。
+
+### 14.1 只同步代码到运行副本
+
+    rsync -a --exclude '.venv' --exclude '.env' --exclude '.run' \
+      --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.git' \
+      /home/ubuntu/spendge/server/ /home/ubuntu/spendge-server/
+    sudo systemctl restart spendge
+
+完整发布（含 pull / 依赖 / 迁移）见 §5。
+
+### 14.2 手动刷一次落库
+
+把 `stream:register` 里未消费的消息写进 SQLite（等价于 writer 跑一轮）：
+
+    cd /home/ubuntu/spendge-server && set -a; . ./.env; set +a
+    .venv/bin/python -c "from app.writer import process_batch; print('processed =', process_batch(batch=1000, block_ms=200))"
+
+- 与运行中的 `spendge-writer` 并发安全（消费组保证一条消息只投给一个消费者）
+- 队列为空返回 `processed = 0`
+- 先看积压：`redis-cli xlen stream:register`、`redis-cli xinfo groups stream:register`（`lag` 应接近 0）
+
+### 14.3 Redis 读模型（device:*）
+
+    redis-cli --scan --pattern 'device:*' | head
+    redis-cli get "device:<deviceId>" | python3 -m json.tool
+    redis-cli del "device:<deviceId>"      # 只删缓存；下次 register 只读回源 DB
+    redis-cli --scan --pattern 'rl:*' | xargs -r redis-cli del   # 清限流计数（仅调试）
+
+**不要手工 `SET device:<id>`**：读模型字段与 DB 状态需一致，写错会造成缓存与库漂移；排障时删掉让它回源即可（cache-aside，不写库）。
+
+### 14.4 写队列（stream:register）
+
+    redis-cli xlen stream:register
+    redis-cli xinfo groups stream:register
+    redis-cli xinfo consumers stream:register writer
+    redis-cli xtrim stream:register MAXLEN ~ 10000     # 一般不需要，应用已带近似裁剪
+
+- 应用侧 `XADD` 已带 `maxlen=10000, approximate`，流不会无限增长。
+- `xgroup destroy` 只用于清理测试遗留组，生产只有一个 `writer` 组。
+
+### 14.5 SQLite 手工改数据（安全流程）
+
+    sudo systemctl stop spendge spendge-writer
+    sqlite3 /home/ubuntu/sqlite/spendge.db \
+      ".backup /home/ubuntu/sqlite/backup/pre-manual-$(date +%F-%H%M).db"
+    sqlite3 /home/ubuntu/sqlite/spendge.db "UPDATE ... WHERE ...;"
+    sqlite3 /home/ubuntu/sqlite/spendge.db "PRAGMA integrity_check;"
+    sudo systemctl start spendge-writer spendge
+
+- 必须先停 `spendge-writer`，否则 writer 的 upsert 会覆盖你的修改或触发锁等待。
+- 分类数据**不要用 UPDATE**：改 `docs/categories-seed.json` 后走 §8 导入（自动 +1 版本并失效缓存）。
+
+### 14.6 未 ack 的消息（writer 崩溃后）
+
+writer 在批处理异常时不会 ack，消息留在 PEL 里；当前没有自动 `XAUTOCLAIM`，需要人工确认后再补：
+
+    redis-cli xpending stream:register writer
+    redis-cli xack stream:register writer <消息ID>    # 确认已落库（或已手工补写）后再 ack
+
+先核对对应 device 是否已在库里，避免盲目 ack 丢登记。
