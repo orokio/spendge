@@ -38,7 +38,11 @@ final class CategoryCatalog: ObservableObject {
     @Published private(set) var version: Int
     @Published private(set) var categories: [CategoryInfo]
 
+    /// 本地缓存结构版本：字段语义变了就 +1，旧缓存直接丢弃重拉，避免残留合并结果
+    private static let cacheSchema = 2
+
     private struct Cache: Codable {
+        var schema: Int?
         var version: Int
         var categories: [CategoryInfo]
     }
@@ -54,6 +58,7 @@ final class CategoryCatalog: ObservableObject {
         if let url,
            let data = try? Data(contentsOf: url),
            let cache = try? JSONDecoder().decode(Cache.self, from: data),
+           cache.schema == Self.cacheSchema,
            !cache.categories.isEmpty {
             version = cache.version
             categories = cache.categories
@@ -95,15 +100,11 @@ final class CategoryCatalog: ObservableObject {
         }
     }
 
-    /// 服务端下发新版本时调用；按 code 合并，未知 code 追加，缺失的保留
+    /// 服务端下发的是全量快照：整体替换，而不是和本地取并集。
+    /// 合并会把内置表里残留的旧 code 留下来，界面上就会出现同名的两条分类。
     func apply(version newVersion: Int, categories incoming: [CategoryInfo]) {
         guard newVersion > version else { return }
-
-        var byCode = Dictionary(uniqueKeysWithValues: categories.map { ($0.code, $0) })
-        for item in incoming {
-            byCode[item.code] = item
-        }
-        categories = byCode.values.sorted {
+        categories = incoming.sorted {
             if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
             return $0.code < $1.code
         }
@@ -113,7 +114,7 @@ final class CategoryCatalog: ObservableObject {
 
     private func save() {
         guard let cacheURL else { return }
-        let cache = Cache(version: version, categories: categories)
+        let cache = Cache(schema: Self.cacheSchema, version: version, categories: categories)
         if let data = try? JSONEncoder().encode(cache) {
             try? data.write(to: cacheURL, options: .atomic)
         }

@@ -52,7 +52,7 @@ enum CategoryCode: String, CaseIterable, Sendable {
     /// 咖啡、奶茶、果茶
     case drink = "drink"
     /// 啤酒、白酒、红酒、饮料
-    case alcoholBeverage = "alcohol_beverage"
+    case alcoholBeverage
     /// 公交、地铁、打车、共享单车
     case outing = "outing"
     /// 游戏、电影、门票、展览、演出
@@ -69,9 +69,9 @@ enum CategoryCode: String, CaseIterable, Sendable {
     /// 穿的：衣帽鞋袜、包、配饰
     case wear = "wear"
     /// 数码：手机配件、耳机、相机、外设
-    case digitalGear = "digital_gear"
+    case digitalGear
     /// 运动与户外：健身、球类、露营、登山
-    case sportsOutdoor = "sports_outdoor"
+    case sportsOutdoor
     /// 给家里添置的固定设施：家具、家电
     case appliance = "appliance"
     /// 加油、充电
@@ -79,19 +79,19 @@ enum CategoryCode: String, CaseIterable, Sendable {
     /// 火车、机票、酒店、民宿
     case travel = "travel"
     /// 停车费、保养、洗车
-    case carCare = "car_care"
+    case carCare
     /// 话费、流量包
     case phone = "phone"
     /// 视频 / 软件 / 云服务会员、周期扣费
     case subscription = "subscription"
     case social = "social"
     case health = "health"
-    case otherExpense = "other_expense"
+    case otherExpense
     // 收入
     case salary = "salary"
-    case sideJob = "side_job"
+    case sideJob
     case invest = "invest"
-    case otherIncome = "other_income"
+    case otherIncome
 }
 
 extension CategoryCode {
