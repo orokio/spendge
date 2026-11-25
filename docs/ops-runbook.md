@@ -15,7 +15,8 @@
 |---|---|
 | 对外接口 | `https://api.orokio.com:8443/spendge/v1/...`（nginx 剥掉 `/spendge`） |
 | 健康检查 | `https://www.orokio.com:8443/health`、`https://api.orokio.com:8443/spendge/health` |
-| 源码（git） | `/home/ubuntu/spendge`（sparse-checkout：server/ docs/） |
+| 源码（git） | `/home/ubuntu/spendge`（sparse-checkout：server/ docs/），**日常开发就在这里的 `server/`** |
+| 开发服务器 | `127.0.0.1:8011`（`server/serve.sh --port 8011`；8010 被生产 gunicorn 占用） |
 | 运行副本 | `/home/ubuntu/spendge-server`（代码 + .venv + .env + logs/ + run/） |
 | nginx | `/home/ubuntu/nginx`（conf/ logs/ ssl/ sbin/） |
 | 数据库 | `/home/ubuntu/sqlite/spendge.db`，备份目录 `/home/ubuntu/sqlite/backup/` |
@@ -64,14 +65,28 @@
     # 5xx / 4xx 明细
     sudo awk '$9 ~ /^[45]/ {print $4, $6, $7, $9}' /home/ubuntu/nginx/logs/access.log | tail -20
 
-## 5. 发布流程（本地开发 → 推到本机）
+## 5. 开发与发布流程（就在这台机器上开发）
 
-本地改完 push 后，在这台机器执行：
+开发环境在这台机器上（Redis、SQLite、nginx 都与生产同构），不再回本地。
+
+### 5.1 日常开发
+
+    cd /home/ubuntu/spendge/server        # git 工作区，直接改
+    ./serve.sh start --port 8011          # 开发服务器（8010 被生产 gunicorn 占用）
+    PORT=8011 ./serve.sh status
+    ./serve.sh stop
+
+    .venv/bin/pytest -q                   # 测试：Redis 走 DB 15，不污染生产
+
+- 开发服务器读 `server/.env`（同一 SQLite、同一 Redis DB0），**调试写入会进生产库**；测试产生的 device 记录记得清掉。
+- 需要完全隔离时，改 `server/.env` 的 `DATABASE_URL` / `REDIS_URL` 指向临时库。
+- `serve.sh` 的 pid/日志在 `server/.run/`（已 gitignore）。
+
+### 5.2 发布到运行副本
 
     cd /home/ubuntu/spendge
-    git fetch --depth 1 origin && git checkout -B main origin/main
+    git add -A server docs && git commit -m "..." && git push origin main   # 先入库，机器丢了才不丢代码
 
-    # 同步到运行副本（排除运行时文件）
     rsync -a --exclude '.venv' --exclude '.env' --exclude '.run' \
       --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.git' \
       server/ /home/ubuntu/spendge-server/
