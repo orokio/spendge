@@ -321,6 +321,10 @@ writer 在批处理异常时不会 ack，消息留在 PEL 里；当前没有自�
     .venv/bin/python -m app.stats --days 7 --approx-backfill   # 上线前历史近似
 
 - 定时：crontab `10 0 * * *` 每天 00:10 重算昨天；日志 `/home/ubuntu/spendge-server/logs/stats.log`
+- **结果文件**（每天自动生成，直接看这个）：
+  - `/home/ubuntu/stats/latest.txt` — 最新一天的可读报告（活跃/新增/启动次数、版本分布、近 7 天）
+  - `/home/ubuntu/stats/report-YYYY-MM-DD.txt` — 按天留存
+  - `/home/ubuntu/stats/daily.csv` — 每日一行（date,active_devices,new_devices,launches），可直接导入表格
 - 表：`device_daily`（按天明细，writer 与 devices 同事务写入）、`user_stats_daily`（汇总，`build='*'` 为对账口径）
 - 查询：
 

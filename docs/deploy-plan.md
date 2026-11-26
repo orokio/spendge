@@ -360,7 +360,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 
 - 表：`device_daily`（按天明细）、`user_stats_daily`（每日汇总，`build='*'` 为对账口径），迁移 `b8e4f1c2d907`
 - 写入：register 事件由 writer 落 `device_daily`（与 devices/sessions **同事务**，first=min、last=max、register_count+1）；接口线程不写库
-- 汇总：crontab `10 0 * * *` 重算昨天，日志 `spendge-server/logs/stats.log`
+- 汇总：crontab `10 0 * * *` 重算昨天，日志 `spendge-server/logs/stats.log`；同时生成结果文件 `/home/ubuntu/stats/{latest.txt,report-YYYY-MM-DD.txt,daily.csv}`
 - 历史：上线前的日子用 `--approx-backfill` 按 `devices.last_seen_at` 近似（次数记 1），只补缺行，不覆盖真实数据
 
       .venv/bin/python -m app.stats                             # 昨天

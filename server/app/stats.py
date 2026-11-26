@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -14,6 +16,7 @@ from sqlalchemy import text
 from app.db import SessionLocal
 
 CST = ZoneInfo("Asia/Shanghai")
+REPORT_DIR = os.getenv("STATS_REPORT_DIR", "/home/ubuntu/stats")
 
 # 合法设备：客户端只生成大写 UUID，且走过完整 register（secret_hash 非空）
 VALID_DEVICE = "length(d.id) = 36 AND d.id = upper(d.id) AND d.secret_hash <> ''"
@@ -165,11 +168,127 @@ def generate(day: str, session=None) -> list[dict]:
             db.close()
 
 
+_LAUNCH_SQL = text(
+    f"""
+    SELECT COALESCE(dd.build, 'unknown') AS build, SUM(dd.register_count) AS launches
+    FROM device_daily dd
+    JOIN devices d ON d.id = dd.device_id
+    WHERE dd.stat_date = :day AND {VALID_DEVICE}
+    GROUP BY 1
+    """
+)
+
+
+def _launches(day: str, session=None) -> dict[str, int]:
+    db = session or SessionLocal()
+    try:
+        return {
+            r["build"]: int(r["launches"] or 0)
+            for r in db.execute(_LAUNCH_SQL, {"day": day}).mappings()
+        }
+    finally:
+        if session is None:
+            db.close()
+
+
+def render_report(day: str, session=None) -> str:
+    """生成一天的可读报告（含当日明细 + 近 7 天趋势）。"""
+    db = session or SessionLocal()
+    try:
+        rows = db.execute(
+            text(
+                "SELECT build, new_devices, active_devices, first_seen_at, last_seen_at "
+                "FROM user_stats_daily WHERE stat_date = :day "
+                "ORDER BY CASE WHEN build = '*' THEN 0 ELSE 1 END, build"
+            ),
+            {"day": day},
+        ).mappings().all()
+        trend = db.execute(
+            text(
+                "SELECT stat_date, active_devices, new_devices FROM user_stats_daily "
+                "WHERE build = '*' AND stat_date <= :day ORDER BY stat_date DESC LIMIT 7"
+            ),
+            {"day": day},
+        ).mappings().all()
+        total = next((r for r in rows if r["build"] == "*"), None)
+        builds = [r for r in rows if r["build"] != "*"]
+        launches = _launches(day, session)
+        launches_total = sum(launches.values())
+        gen = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        lines = [
+            "spendge 用户统计",
+            f"统计日期: {day}（Asia/Shanghai）",
+            f"生成时间: {gen}",
+            "",
+            f"活跃设备: {total['active_devices'] if total else 0}",
+            f"新增设备: {total['new_devices'] if total else 0}",
+            f"启动次数: {launches_total}   # register 次数近似，偏低",
+        ]
+        if total and total["first_seen_at"]:
+            lines.append(f"当天首次: {total['first_seen_at']}")
+            lines.append(f"当天最后: {total['last_seen_at']}")
+        lines += ["", "版本分布:", "  build      活跃   新增   启动"]
+        for b in sorted(builds, key=lambda x: (x["build"] == "unknown", x["build"])):
+            lines.append(
+                f"  {b['build']:<10} {b['active_devices']:>4}   {b['new_devices']:>4}   "
+                f"{launches.get(b['build'], 0):>4}"
+            )
+        lines += ["", "近 7 天:", "  日期          活跃   新增"]
+        for t in trend:
+            lines.append(f"  {t['stat_date']}   {t['active_devices']:>4}   {t['new_devices']:>4}")
+        lines.append("")
+        return "\n".join(lines)
+    finally:
+        if session is None:
+            db.close()
+
+
+def write_report(day: str, session=None) -> tuple[str, str]:
+    """写 report-YYYY-MM-DD.txt + latest.txt + daily.csv（按日期覆盖行）。"""
+    os.makedirs(REPORT_DIR, exist_ok=True)
+    report = render_report(day, session)
+
+    path = os.path.join(REPORT_DIR, f"report-{day}.txt")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(report)
+    with open(os.path.join(REPORT_DIR, "latest.txt"), "w", encoding="utf-8") as fh:
+        fh.write(report)
+
+    db = session or SessionLocal()
+    try:
+        total = db.execute(
+            text("SELECT new_devices, active_devices FROM user_stats_daily WHERE stat_date=:d AND build='*'"),
+            {"d": day},
+        ).mappings().first()
+        launches = sum(_launches(day, session).values())
+        row = [day, total["active_devices"] if total else 0, total["new_devices"] if total else 0, launches]
+    finally:
+        if session is None:
+            db.close()
+
+    csv_path = os.path.join(REPORT_DIR, "daily.csv")
+    existing: dict[str, list[str]] = {}
+    if os.path.exists(csv_path):
+        with open(csv_path, encoding="utf-8") as fh:
+            for r in csv.reader(fh):
+                if r and r[0] != "date":
+                    existing[r[0]] = r
+    existing[day] = [str(v) for v in row]
+    with open(csv_path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh, lineterminator="\n")
+        w.writerow(["date", "active_devices", "new_devices", "launches"])
+        for d in sorted(existing):
+            w.writerow(existing[d])
+    return path, report
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="生成每日用户统计（默认昨天，CST）")
     parser.add_argument("day", nargs="?", help="YYYY-MM-DD，默认昨天")
     parser.add_argument("--date", dest="day_opt", help="同上")
     parser.add_argument("--days", type=int, default=1, help="从指定日期起往前算 N 天（默认 1）")
+    parser.add_argument("--no-report", action="store_true", help="只算库，不生成文本报告")
     parser.add_argument(
         "--approx-backfill",
         action="store_true",
@@ -195,6 +314,9 @@ def main(argv: list[str]) -> int:
             f"{d} active={total['active_devices']} new={total['new_devices']} "
             f"builds={len(rows) - 1} first={total['first_seen_at']} last={total['last_seen_at']}"
         )
+        if not args.no_report:
+            path, _ = write_report(d.isoformat())
+            print(f"  report -> {path}")
     return 0
 
 
