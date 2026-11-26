@@ -58,10 +58,6 @@ def date_cst(iso: str) -> str:
     return dt.astimezone(CST).date().isoformat()
 
 
-def yesterday_cst() -> str:
-    return (datetime.now(CST).date() - timedelta(days=1)).isoformat()
-
-
 def day_window(day: str) -> tuple[str, str]:
     """CST 日期 → [start, end) 的 UTC ISO8601 边界。"""
     d = date.fromisoformat(day)
@@ -107,39 +103,39 @@ def compute(day: str, session=None) -> dict:
             db.close()
 
 
-def render(result: dict) -> str:
+def render(days: list[dict]) -> str:
     now = datetime.now(CST).strftime("%Y-%m-%d %H:%M")
-    lines = [
-        f"统计日期: {result['day']}（东八区）",
-        f"生成时间: {now}（东八区）",
-        "",
-        f"新增: {result['new']}",
-        f"活跃: {result['active']}",
-        "",
-        "build    新增   活跃",
-    ]
-    for b in result["builds"]:
-        lines.append(f"{b['build']:<8} {b['new']:>4}   {b['active']:>4}")
-    return "\n".join(lines) + "\n"
+    today = datetime.now(CST).date().isoformat()
+    lines = [f"spendge 用户统计（东八区）", f"生成时间: {now}", ""]
+    for r in days:
+        label = "昨天" if r["day"] != today else "今天"
+        lines += [f"=== {r['day']}（{label}） ===", f"新增: {r['new']}", f"活跃: {r['active']}", ""]
+        lines.append("build      新增   活跃")
+        for b in r["builds"]:
+            lines.append(f"{b['build']:<9} {b['new']:>4}   {b['active']:>4}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
-def write_report(day: str | None = None, session=None) -> tuple[str, dict]:
-    """计算 T-1（或指定日）并覆盖写同一个文件。"""
-    day = day or yesterday_cst()
-    result = compute(day, session)
+def write_report(session=None) -> tuple[str, list[dict]]:
+    """统计昨天 + 今天（东八区），覆盖写同一个文件。"""
+    today = datetime.now(CST).date()
+    days = [(today - timedelta(days=1)).isoformat(), today.isoformat()]
+    results = [compute(d, session) for d in days]
     os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as fh:
-        fh.write(render(result))
-    return REPORT_PATH, result
+        fh.write(render(results))
+    return REPORT_PATH, results
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="生成 T-1 用户统计（默认昨天，东八区）")
-    parser.add_argument("--date", help="YYYY-MM-DD，默认昨天（东八区）")
-    args = parser.parse_args(argv)
+    parser = argparse.ArgumentParser(description="手动生成用户统计（昨天 + 今天，东八区）")
+    parser.parse_args(argv)
 
-    path, result = write_report(args.date)
-    print(f"{result['day']} new={result['new']} active={result['active']} -> {path}")
+    path, results = write_report()
+    for r in results:
+        print(f"{r['day']} new={r['new']} active={r['active']}")
+    print(f"-> {path}")
     return 0
 
 

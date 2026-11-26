@@ -309,31 +309,33 @@ writer 在批处理异常时不会 ack，消息留在 PEL 里；当前没有自�
     redis-cli xack stream:register writer <消息ID>    # 确认已落库（或已手工补写）后再 ack
 
 先核对对应 device 是否已在库里，避免盲目 ack 丢登记。
-## 15. 用户统计（T-1）
+## 15. 用户统计（手动执行）
 
-每天 00:10 算昨天（东八区），只输出一个文件，**覆盖写**：
+不需要定时任务，随时手动跑；一次算**昨天 + 今天**（东八区），覆盖写同一个文件：
 
-    /home/ubuntu/stats/latest.txt
-
-    cd /home/ubuntu/spendge-server && set -a; . ./.env; set +a
-    .venv/bin/python -m app.stats                     # 昨天
-    .venv/bin/python -m app.stats --date 2026-11-25   # 补算某天（覆盖同一文件）
-    cat /home/ubuntu/stats/latest.txt
+    /home/ubuntu/stats/run.sh      # 脚本源在 server/deploy/stats.sh，这里是指向运行副本的软链
 
 文件内容示例：
 
-    统计日期: 2026-11-25（东八区）
-    生成时间: 2026-11-26 00:10（东八区）
+    spendge 用户统计（东八区）
+    生成时间: 2026-11-26 14:00
 
+    === 2026-11-25（昨天） ===
     新增: 13
-    活跃: 10
+    活跃: 13
 
-    build    新增   活跃
-    2           6      6
-    3           2      2
+    build      新增   活跃
+    2            6      6
+    ...
 
+    === 2026-11-26（今天） ===
+    新增: 4
+    活跃: 7
+    ...
+
+- 脚本：`/home/ubuntu/stats/run.sh`（无参数，跑完直接打印文件内容）
+- 统计范围：库里昨天与今天两天的数据
 - 新增：`devices.created_at` 落在当天（东八区）
-- 活跃：当天至少一次成功 register；口径 = `device_daily` ∪ 当天 `created_at`，因此**新增一定包含在活跃里**
+- 活跃：当天至少一次成功 register；口径 = `device_daily` ∪ 当天 `created_at`，**新增一定包含在活跃里**
 - 合法设备：36 位大写 UUID 且 `secret_hash` 非空
-- 定时：crontab `10 0 * * *`，日志 `spendge-server/logs/stats.log`
-- 只有 `device_daily` 一张明细表；`user_stats_daily` 已删除，不再保留历史汇总（文件每天覆盖）
+- 已无 cron 定时任务（crontab 里只剩每日备份）；`user_stats_daily` 已删除

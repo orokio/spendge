@@ -356,12 +356,12 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 - 回放不减少版本号：`--restore` 把内容恢复成目标版本，但发布出去的是新版本号，客户端照常“版本更高就整包替换”；
 - 需要“账单保留记账当时分类名”时，客户端在账单里存 name 快照（服务端不做，M4 后再定）。
 
-### 13.7 用户统计（2026-11-26 上线）
+### 13.7 用户统计（手动执行）
 
-- 表：仅 `device_daily`（按天明细，迁移 `b8e4f1c2d907`）；汇总表 `user_stats_daily` 已移除（`c9f2a7d1e803`）
-- 写入：register 事件由 writer 落 `device_daily`（与 devices/sessions **同事务**）；接口线程不写库
-- 汇总：crontab `10 0 * * *` 只算 T-1（东八区），覆盖写 **一个文件** `/home/ubuntu/stats/latest.txt`
-- 文件内容：统计日期、生成时间（均东八区）、新增、活跃、按 build 的新增/活跃
-- 手工补算：`.venv/bin/python -m app.stats --date 2026-11-25`（同样覆盖该文件）
+- 表：仅 `device_daily`（迁移 `b8e4f1c2d907`）；`user_stats_daily` 已移除（`c9f2a7d1e803`）
+- 无定时任务，手动执行；一次统计**昨天 + 今天**（东八区），覆盖写一个文件 `/home/ubuntu/stats/latest.txt`
+- 内容：每天的 新增、活跃、按 build 的新增/活跃
 
-口径详见 `docs/user-stats-spec.md`；合法设备 = 36 位大写 UUID 且 `secret_hash` 非空。
+      /home/ubuntu/stats/run.sh     # 脚本：server/deploy/stats.sh（运行副本内软链）
+
+口径详见 `docs/user-stats-spec.md`；活跃 ⊇ 新增；合法设备 = 36 位大写 UUID 且 `secret_hash` 非空。
