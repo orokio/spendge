@@ -158,6 +158,20 @@ struct DebugPanelView: View {
 
     private var crashSection: some View {
         section(title: "崩溃验证") {
+            HStack(spacing: 12) {
+                Text("Bugly")
+                    .font(Typography.body)
+                    .foregroundStyle(Color.textPrimary)
+                Spacer(minLength: 8)
+                Text(CrashReporter.statusText)
+                    .font(Typography.label)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 44)
+
+            divider
+
             Button {
                 confirm = ConfirmRequest(
                     title: "模拟崩溃？",
@@ -264,7 +278,8 @@ struct DebugPanelView: View {
     /// 给 Bugly 做端到端验证：等点击动画走完再触发，避免崩在半帧
     private func simulateCrash() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            fatalError("Bugly 验证：手动触发的测试崩溃")
+            // SIGABRT：Bugly 文档推荐的标准崩溃方式，比 fatalError 的 trap 更通用
+            abort()
         }
     }
 

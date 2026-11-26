@@ -23,6 +23,13 @@ import Bugly
 enum CrashReporter {
     private static var started = false
 
+    /// 开发者面板用：一眼看出 SDK 为什么没工作
+    static var statusText: String {
+        if !isConfigured { return "未配置 AppId" }
+        if !PrivacyConsent.canStartSDK { return "未同意隐私" }
+        return started ? "已启动" : "未启动"
+    }
+
     static var isConfigured: Bool {
         guard let appId = Bundle.main.object(forInfoDictionaryKey: "BuglyAppId") as? String else {
             return false
@@ -38,7 +45,11 @@ enum CrashReporter {
 
         let appKey = (Bundle.main.object(forInfoDictionaryKey: "BuglyAppKey") as? String) ?? ""
         let config = BuglyConfig(appId: appId, appKey: appKey)
+        #if DEBUG
+        config.debugMode = true   // 开发者面板验证期间打印 SDK 日志
+        #else
         config.debugMode = false
+        #endif
         config.userIdentifier = IdentityService.deviceId
 
         // 只保留崩溃所需的最小采集，其余按官方示例关闭
@@ -62,6 +73,7 @@ enum CrashReporter {
 /// 没放 Bugly.xcframework 时保持可编译，功能为空。
 enum CrashReporter {
     static var isConfigured: Bool { false }
+    static var statusText: String { "未引入 SDK" }
     static func startIfAuthorized() {}
 }
 #endif

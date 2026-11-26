@@ -118,7 +118,6 @@ struct RootView: View {
             LaunchTrace.mark("task.start")
             refreshTrophies(celebrate: false)
             LaunchTrace.mark("trophies.done")
-            CrashReporter.startIfAuthorized()
             UmengReporter.startIfAuthorized()
             Task.detached(priority: .utility) { await DeviceRegistrar.registerIfNeeded() }
             LaunchTrace.mark("bugly.done")

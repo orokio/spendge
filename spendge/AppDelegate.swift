@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Bugly 要求尽早在 didFinishLaunching 里启动；隐私未同意时它自己会跳过
+        CrashReporter.startIfAuthorized()
         PushSync.registerIfNeeded()
         return true
     }
