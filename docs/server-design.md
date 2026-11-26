@@ -323,7 +323,7 @@ PRAGMA cache_size = -8192;
   - 导入：`python -m app.categories docs/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1 并失效缓存）
   - 读取：Redis 快照（TTL 1h，导入时主动失效）→ 未命中只读回源 DB；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
   - 历史：每次变更在**同一事务**写一条 `category_versions`（全量 JSON 快照，只增不改）。用于审计与精确回放，也是“账单按记账当时名称展示”的数据基础；回放（`--restore N`）同样把版本 +1，版本号永不回退
-  - 用户统计（口径见 [user-stats-spec.md](user-stats-spec.md)）：`device_daily` 由 writer 与 devices **同事务** upsert（first 取 min、last 取 max、count+1），接口线程不写；`python -m app.stats` 每天 00:10 只算 T-1，覆盖写 `/home/ubuntu/stats/latest.txt`（东八区，含新增/活跃/按 build 分布），不再保留汇总表；活跃/新增只算合法设备（36 位大写 UUID + secret_hash 非空）
+  - 用户统计（口径见 [user-stats-spec.md](user-stats-spec.md)）：`device_daily` 由 writer 与 devices **同事务** upsert（first 取 min、last 取 max、count+1），接口线程不写；`python -m app.stats` 每天 00:10 只算 T-1，覆盖写 `/home/ubuntu/stats/latest.txt`（东八区，含新增/活跃/按 build 分布），不再保留汇总表；活跃 = 当天 device_daily ∪ 当天新增（保证新增 ⊆ 活跃）；活跃/新增只算合法设备（36 位大写 UUID + secret_hash 非空）
   - goalKinds（api-contract §4.2.1）：每条分类按 `goalKinds` 决定可用于哪种目标，值域封闭 `countLimit` / `budget` / `shareCap`；库里存逗号串，空串或 NULL 都表示“不能设目标”；导入时逐个校验，非法值直接报错；register 必须为每条分类显式返回数组（空也返回 `[]`）
 
 ## 7. 架构与防护分层

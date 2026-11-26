@@ -20,12 +20,16 @@ REPORT_PATH = os.getenv("STATS_REPORT", "/home/ubuntu/stats/latest.txt")
 
 VALID_DEVICE = "length(d.id) = 36 AND d.id = upper(d.id) AND d.secret_hash <> ''"
 
+# 活跃 = 当天有 register 记录（device_daily）∪ 当天首次登记（created_at），
+# 保证「新增」一定是「活跃」的子集；后者也覆盖历史缺 device_daily 的日子。
 _ACTIVE_SQL = text(
     f"""
-    SELECT COALESCE(dd.build, 'unknown') AS build, COUNT(*) AS n
-    FROM device_daily dd
-    JOIN devices d ON d.id = dd.device_id
-    WHERE dd.stat_date = :day AND {VALID_DEVICE}
+    SELECT COALESCE(dd.build, d.build, 'unknown') AS build, COUNT(*) AS n
+    FROM devices d
+    LEFT JOIN device_daily dd ON dd.device_id = d.id AND dd.stat_date = :day
+    WHERE (dd.device_id IS NOT NULL
+           OR (d.created_at >= :start AND d.created_at < :end))
+      AND {VALID_DEVICE}
     GROUP BY 1
     """
 )
@@ -75,7 +79,10 @@ def compute(day: str, session=None) -> dict:
     start, end = day_window(day)
     db = session or SessionLocal()
     try:
-        active = {r["build"]: int(r["n"]) for r in db.execute(_ACTIVE_SQL, {"day": day}).mappings()}
+        active = {
+            r["build"]: int(r["n"])
+            for r in db.execute(_ACTIVE_SQL, {"day": day, "start": start, "end": end}).mappings()
+        }
         new_by_build = {
             r["build"]: int(r["n"])
             for r in db.execute(_NEW_BY_BUILD_SQL, {"day": day, "start": start, "end": end}).mappings()

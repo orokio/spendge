@@ -199,12 +199,12 @@ def test_stats_compute_within_sqlite():
         day = "2026-11-26"
         seen = "2026-11-26T01:00:00Z"  # 落在 CST 11-26 的窗口内
         s.add(Device(id="AAAAAAAA-1111-2222-3333-444444444444", secret_hash="h", created_at=seen, last_seen_at=seen))
-        s.add(Device(id="BBBBBBBB-1111-2222-3333-444444444444", secret_hash="h", created_at=seen, last_seen_at=seen))
         s.add(Device(id="test-bad", secret_hash="h", created_at=seen, last_seen_at=seen))
         s.add(DeviceDaily(device_id="AAAAAAAA-1111-2222-3333-444444444444", stat_date=day,
                           first_seen_at=seen, last_seen_at=seen, register_count=2, build="8"))
-        s.add(DeviceDaily(device_id="BBBBBBBB-1111-2222-3333-444444444444", stat_date=day,
-                          first_seen_at=seen, last_seen_at=seen, register_count=1, build="7"))
+        # B 当天新增但还没有 device_daily 行：仍应计入活跃（活跃 ⊇ 新增）
+        s.add(Device(id="BBBBBBBB-1111-2222-3333-444444444444", secret_hash="h",
+                     build="7", created_at=seen, last_seen_at=seen))
         s.add(DeviceDaily(device_id="test-bad", stat_date=day,
                           first_seen_at=seen, last_seen_at=seen, register_count=1, build="8"))
         s.commit()

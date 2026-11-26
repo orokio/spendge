@@ -333,7 +333,7 @@ writer 在批处理异常时不会 ack，消息留在 PEL 里；当前没有自�
     3           2      2
 
 - 新增：`devices.created_at` 落在当天（东八区）
-- 活跃：当天至少一次成功 register（`device_daily`）
+- 活跃：当天至少一次成功 register；口径 = `device_daily` ∪ 当天 `created_at`，因此**新增一定包含在活跃里**
 - 合法设备：36 位大写 UUID 且 `secret_hash` 非空
 - 定时：crontab `10 0 * * *`，日志 `spendge-server/logs/stats.log`
 - 只有 `device_daily` 一张明细表；`user_stats_daily` 已删除，不再保留历史汇总（文件每天覆盖）
