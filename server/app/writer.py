@@ -14,6 +14,7 @@ from sqlalchemy import text
 from app.cache import STREAM_REGISTER
 from app.config import load_settings
 from app.db import SessionLocal
+from app.stats import date_cst
 
 GROUP = "writer"
 CONSUMER = "writer-1"
@@ -45,6 +46,22 @@ _SESSION_SQL = text(
 )
 
 
+_DAILY_SQL = text(
+    """
+    INSERT INTO device_daily (device_id, stat_date, first_seen_at, last_seen_at, register_count, app_version, build)
+    VALUES (:device_id, :stat_date, :seen_at, :seen_at, 1, :app_version, :build)
+    ON CONFLICT(device_id, stat_date) DO UPDATE SET
+        first_seen_at = CASE WHEN excluded.first_seen_at < first_seen_at
+                             THEN excluded.first_seen_at ELSE first_seen_at END,
+        last_seen_at  = CASE WHEN excluded.last_seen_at > last_seen_at
+                             THEN excluded.last_seen_at ELSE last_seen_at END,
+        register_count = register_count + 1,
+        app_version = excluded.app_version,
+        build = excluded.build
+    """
+)
+
+
 def _writer_redis():
     """writer 用独立连接：阻塞读不能用很短的 socket_timeout。"""
     global _client
@@ -64,6 +81,17 @@ def ensure_group(r, group: str = GROUP) -> None:
 def _apply(db, evt: dict) -> None:
     db.execute(_DEVICE_SQL, evt["device"])
     db.execute(_SESSION_SQL, evt["session"])
+    seen_at = evt.get("seen_at") or evt["device"]["last_seen_at"]
+    db.execute(
+        _DAILY_SQL,
+        {
+            "device_id": evt["device"]["id"],
+            "stat_date": date_cst(seen_at),
+            "seen_at": seen_at,
+            "app_version": evt["device"].get("app_version"),
+            "build": evt["device"].get("build"),
+        },
+    )
 
 
 def process_batch(batch: int = 200, block_ms: int = 2000, group: str = GROUP, consumer: str = CONSUMER) -> int:

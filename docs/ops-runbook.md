@@ -309,3 +309,24 @@ writer 在批处理异常时不会 ack，消息留在 PEL 里；当前没有自�
     redis-cli xack stream:register writer <消息ID>    # 确认已落库（或已手工补写）后再 ack
 
 先核对对应 device 是否已在库里，避免盲目 ack 丢登记。
+## 15. 用户统计
+
+口径详见 [user-stats-spec.md](user-stats-spec.md)（与友盟对照、时区、边界情况）。
+
+    cd /home/ubuntu/spendge-server && set -a; . ./.env; set +a
+
+    .venv/bin/python -m app.stats                     # 昨天（CST）
+    .venv/bin/python -m app.stats 2026-11-26           # 指定日
+    .venv/bin/python -m app.stats --days 7             # 近 7 天重算（覆盖）
+    .venv/bin/python -m app.stats --days 7 --approx-backfill   # 上线前历史近似
+
+- 定时：crontab `10 0 * * *` 每天 00:10 重算昨天；日志 `/home/ubuntu/spendge-server/logs/stats.log`
+- 表：`device_daily`（按天明细，writer 与 devices 同事务写入）、`user_stats_daily`（汇总，`build='*'` 为对账口径）
+- 查询：
+
+      sqlite3 -header -column /home/ubuntu/sqlite/spendge.db \
+        "SELECT stat_date, build, new_devices, active_devices FROM user_stats_daily ORDER BY stat_date DESC, build;"
+
+- 验收：各 build 的 `active_devices` 之和应等于 `build='*'` 的值；`new_devices ≤ active_devices`
+- 合法设备过滤：36 位大写 UUID 且 `secret_hash` 非空；小写/短串测试数据不计入
+- `active_devices` 依赖 `device_daily`，上线前的日子只能用 `--approx-backfill` 近似（register 次数记 1）

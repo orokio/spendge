@@ -105,6 +105,34 @@ class Category(Base):
     goal_kinds: Mapped[str | None] = mapped_column(String, nullable=True)  # 逗号分隔：countLimit,budget,shareCap
 
 
+class DeviceDaily(Base):
+    """按天聚合的设备活跃明细（write-behind 写入，min/max 幂等）。"""
+
+    __tablename__ = "device_daily"
+
+    device_id: Mapped[str] = mapped_column(String, primary_key=True)
+    stat_date: Mapped[str] = mapped_column(String, primary_key=True)  # Asia/Shanghai 的 YYYY-MM-DD
+    first_seen_at: Mapped[str] = mapped_column(String, nullable=False)  # UTC ISO8601
+    last_seen_at: Mapped[str] = mapped_column(String, nullable=False)
+    register_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    app_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    build: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class UserStatsDaily(Base):
+    """每日汇总（build='*' 为对账口径），重跑覆盖。"""
+
+    __tablename__ = "user_stats_daily"
+
+    stat_date: Mapped[str] = mapped_column(String, primary_key=True)
+    build: Mapped[str] = mapped_column(String, primary_key=True)  # '*' 或具体 build / 'unknown'
+    new_devices: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_devices: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    first_seen_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_seen_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    generated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class CategoryVersion(Base):
     """分类的版本快照（追加写，不更新不删除），用于审计与回放。"""
 
@@ -133,3 +161,4 @@ Index("ix_usage_account_created", Usage.account_id, Usage.created_at)
 Index("ix_events_created", Event.created_at)
 Index("ix_entitlements_account_expires", Entitlement.account_id, Entitlement.expires_at)
 Index("ix_categories_sort", Category.sort_order)
+Index("idx_device_daily_date", DeviceDaily.stat_date)

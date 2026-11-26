@@ -158,7 +158,7 @@ def register():
                 "last_seen_at": now_iso,
             }
             cache.set_device(device_id, state, _STATE_TTL)
-            cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state))
+            cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state), now_iso)
             return jsonify(_attach_categories({"deviceToken": token, "expiresAt": expires_iso}, data.get("categoriesVersion"))), 200
 
         if state["secret_hash"] != secret_hash:
@@ -176,14 +176,14 @@ def register():
         if token_valid:
             state["expires_at"] = expires_iso
             cache.set_device(device_id, state, _STATE_TTL)
-            cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state))
+            cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state), now_iso)
             return jsonify(_attach_categories({"expiresAt": expires_iso}, data.get("categoriesVersion"))), 200
 
         token = secrets.token_urlsafe(32)
         state["token_hash"] = _sha256(token)
         state["expires_at"] = expires_iso
         cache.set_device(device_id, state, _STATE_TTL)
-        cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state))
+        cache.enqueue_register(_device_row(device_id, state), _session_row(device_id, state), now_iso)
         return jsonify(_attach_categories({"deviceToken": token, "expiresAt": expires_iso}, data.get("categoriesVersion"))), 200
     except Exception:  # noqa: BLE001
         return _error("service_unavailable", "服务暂不可用", 503)

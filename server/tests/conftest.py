@@ -33,9 +33,15 @@ def _clean_test_redis_db():
 
 
 @pytest.fixture(autouse=True)
-def _reset_local_rate_limit():
-    """测试都来自 127.0.0.1，逐个清掉本机 IP 计数，避免相互触发 429。"""
+def _reset_test_redis_state():
+    """每个测试前清空测试流的待消费消息与限流计数。
+
+    否则上一个测试留下的 register 事件会被下一个测试的新消费组从头重放，
+    把 device_daily 的 register_count 累加多次。
+    """
     try:
-        cache.get_redis().delete("rl:ip:127.0.0.1")
+        r = cache.get_redis()
+        r.delete(cache.STREAM_REGISTER)
+        r.delete("rl:ip:127.0.0.1")
     except Exception:  # noqa: BLE001
         pass
