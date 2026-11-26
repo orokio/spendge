@@ -3,7 +3,7 @@ import Foundation
 /// 能力层：视图只问“能不能用”，不直接问“买没买”。
 /// v1 只有一次性解锁；以后接订阅时只换这里的判定。
 enum Capability {
-    /// 目标数量不限（免费版最多 2 个）
+    /// 目标数量不限（免费版每月 1 个预算 + 2 个目标）
     case unlimitedGoals
     /// 完整历史回看（免费版只看近 3 个月）
     case fullHistory
@@ -14,8 +14,10 @@ enum Capability {
 enum Entitlements {
     private static let key = "entitlement.unlocked"
 
-    /// 免费版的目标上限
+    /// 免费版每月除预算外的目标上限
     static let freeGoalLimit = 2
+    /// 免费版每月的整体预算上限
+    static let freeBudgetLimit = 1
     /// 免费版可回看的月数
     static let freeHistoryMonths = 3
 

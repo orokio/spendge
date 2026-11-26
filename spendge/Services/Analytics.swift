@@ -129,6 +129,7 @@ extension SpendgeError {
         case .notRefundable: return "not_refundable"
         case .alreadyRefunded: return "already_refunded"
         case .goalLimitReached: return "goal_limit_reached"
+        case .budgetLimitReached: return "budget_limit_reached"
         }
     }
 }
