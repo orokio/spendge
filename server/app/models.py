@@ -119,20 +119,6 @@ class DeviceDaily(Base):
     build: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-class UserStatsDaily(Base):
-    """每日汇总（build='*' 为对账口径），重跑覆盖。"""
-
-    __tablename__ = "user_stats_daily"
-
-    stat_date: Mapped[str] = mapped_column(String, primary_key=True)
-    build: Mapped[str] = mapped_column(String, primary_key=True)  # '*' 或具体 build / 'unknown'
-    new_devices: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    active_devices: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    first_seen_at: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_seen_at: Mapped[str | None] = mapped_column(String, nullable=True)
-    generated_at: Mapped[str] = mapped_column(String, nullable=False)
-
-
 class CategoryVersion(Base):
     """分类的版本快照（追加写，不更新不删除），用于审计与回放。"""
 

@@ -275,7 +275,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 ### 13.3 已完成步骤（按序）
 
 1. 依赖：sudo apt install build-essential libpcre2-dev zlib1g-dev libssl-dev python3.12-venv sqlite3 redis-server
-2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（11 表）；迁移 20f108f0a1fc（7 表）+ 9f3c1a70b2d1（categories、app_config）+ c4d7e2a91b08（category_versions）+ a7b1c9d4e620（categories.goal_kinds）+ b8e4f1c2d907（device_daily、user_stats_daily）；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
+2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（10 表）；迁移 20f108f0a1fc（7 表）+ 9f3c1a70b2d1（categories、app_config）+ c4d7e2a91b08（category_versions）+ a7b1c9d4e620（categories.goal_kinds）+ b8e4f1c2d907（device_daily）+ c9f2a7d1e803（drop user_stats_daily）；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
 3. 后端：pyproject 加 gunicorn/redis；rsync server/ 到 spendge-server/；副本建 venv 并 pip install .；.env 复制
 4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
 5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010。**api 域只保留 /spendge/ 前缀**：location /spendge/ { proxy_pass http://spendge_app/; }（末尾 / 剥前缀）；api 域根路径已删除（build 4 根请求 404，客户端静默、不影响记账）；www 域保留根路径供探活/旧包
@@ -358,14 +358,10 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 
 ### 13.7 用户统计（2026-11-26 上线）
 
-- 表：`device_daily`（按天明细）、`user_stats_daily`（每日汇总，`build='*'` 为对账口径），迁移 `b8e4f1c2d907`
-- 写入：register 事件由 writer 落 `device_daily`（与 devices/sessions **同事务**，first=min、last=max、register_count+1）；接口线程不写库
-- 汇总：crontab `10 0 * * *` 重算昨天，日志 `spendge-server/logs/stats.log`；同时生成结果文件 `/home/ubuntu/stats/{latest.txt,report-YYYY-MM-DD.txt,daily.csv}`
-- 历史：上线前的日子用 `--approx-backfill` 按 `devices.last_seen_at` 近似（次数记 1），只补缺行，不覆盖真实数据
+- 表：仅 `device_daily`（按天明细，迁移 `b8e4f1c2d907`）；汇总表 `user_stats_daily` 已移除（`c9f2a7d1e803`）
+- 写入：register 事件由 writer 落 `device_daily`（与 devices/sessions **同事务**）；接口线程不写库
+- 汇总：crontab `10 0 * * *` 只算 T-1（东八区），覆盖写 **一个文件** `/home/ubuntu/stats/latest.txt`
+- 文件内容：统计日期、生成时间（均东八区）、新增、活跃、按 build 的新增/活跃
+- 手工补算：`.venv/bin/python -m app.stats --date 2026-11-25`（同样覆盖该文件）
 
-      .venv/bin/python -m app.stats                             # 昨天
-      .venv/bin/python -m app.stats 2026-11-26                   # 指定日
-      .venv/bin/python -m app.stats --days 7                     # 近 7 天重算
-      .venv/bin/python -m app.stats --days 7 --approx-backfill   # 含历史近似
-
-口径与对账方法见 `docs/user-stats-spec.md`；合法设备 = 36 位大写 UUID 且 `secret_hash` 非空。
+口径详见 `docs/user-stats-spec.md`；合法设备 = 36 位大写 UUID 且 `secret_hash` 非空。

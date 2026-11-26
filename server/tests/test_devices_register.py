@@ -184,39 +184,38 @@ def test_device_daily_counts_registers(client, device_id):
         db.close()
 
 
-def test_stats_generate_within_sqlite():
-    from datetime import datetime, timezone
+def test_stats_compute_within_sqlite():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
     from app.db import Base
-    from app.stats import generate
+    from app.stats import compute
 
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     S = sessionmaker(bind=engine)
     s = S()
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        # 两台合法设备（当天活跃），其中一台当天新增；一台非法设备应被排除
-        s.add(Device(id="AAAAAAAA-1111-2222-3333-444444444444", secret_hash="h", created_at=now, last_seen_at=now))
-        s.add(Device(id="BBBBBBBB-1111-2222-3333-444444444444", secret_hash="h", created_at=now, last_seen_at=now))
-        s.add(Device(id="test-bad", secret_hash="h", created_at=now, last_seen_at=now))
-        s.add(DeviceDaily(device_id="AAAAAAAA-1111-2222-3333-444444444444", stat_date="2026-11-26",
-                          first_seen_at=now, last_seen_at=now, register_count=1, build="8"))
-        s.add(DeviceDaily(device_id="BBBBBBBB-1111-2222-3333-444444444444", stat_date="2026-11-26",
-                          first_seen_at=now, last_seen_at=now, register_count=3, build="8"))
-        s.add(DeviceDaily(device_id="test-bad", stat_date="2026-11-26",
-                          first_seen_at=now, last_seen_at=now, register_count=1, build="8"))
+        day = "2026-11-26"
+        seen = "2026-11-26T01:00:00Z"  # 落在 CST 11-26 的窗口内
+        s.add(Device(id="AAAAAAAA-1111-2222-3333-444444444444", secret_hash="h", created_at=seen, last_seen_at=seen))
+        s.add(Device(id="BBBBBBBB-1111-2222-3333-444444444444", secret_hash="h", created_at=seen, last_seen_at=seen))
+        s.add(Device(id="test-bad", secret_hash="h", created_at=seen, last_seen_at=seen))
+        s.add(DeviceDaily(device_id="AAAAAAAA-1111-2222-3333-444444444444", stat_date=day,
+                          first_seen_at=seen, last_seen_at=seen, register_count=2, build="8"))
+        s.add(DeviceDaily(device_id="BBBBBBBB-1111-2222-3333-444444444444", stat_date=day,
+                          first_seen_at=seen, last_seen_at=seen, register_count=1, build="7"))
+        s.add(DeviceDaily(device_id="test-bad", stat_date=day,
+                          first_seen_at=seen, last_seen_at=seen, register_count=1, build="8"))
         s.commit()
 
-        rows = generate("2026-11-26", session=s)
-        total = next(r for r in rows if r["build"] == "*")
-        assert total["active_devices"] == 2
-        assert sum(r["active_devices"] for r in rows if r["build"] != "*") == total["active_devices"]
-
-        again = generate("2026-11-26", session=s)
-        assert next(r for r in again if r["build"] == "*")["active_devices"] == 2  # 重跑覆盖，不累加
+        result = compute(day, session=s)
+        assert result["active"] == 2
+        assert result["new"] == 2
+        assert {b["build"]: (b["new"], b["active"]) for b in result["builds"]} == {
+            "7": (1, 1),
+            "8": (1, 1),
+        }
     finally:
         s.close()
         engine.dispose()
