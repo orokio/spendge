@@ -1,11 +1,11 @@
 # 后端部署计划（spendge server）
 
-> 状态：**已部署**（2026-11-25）｜ nginx + HTTPS(8443) + gunicorn + SQLite + Redis 已上线，`/v1/devices/register` 可用 ｜ 备案后切 80/443 ｜ 服务端开发与调试都在云机器上进行（Redis/DB/nginx 与生产同构） ｜ 适用主机：腾讯云 Ubuntu 24.04
+> 状态：**已部署**（2026-11-25，2026-11-27 简化为 nginx + gunicorn + SQLite）｜ HTTPS(8443) + `/v1/devices/register` 可用 ｜ 备案后切 80/443 ｜ 服务端开发与调试都在云机器上进行 ｜ 适用主机：腾讯云 Ubuntu 24.04
 > 本文是部署的唯一依据；架构与接口见 [server-design.md](server-design.md)；**日常运维命令见 [ops-runbook.md](ops-runbook.md)**。
 
 ## 1. 概述
 
-为 spendge App 部署后端服务。代码位于 spendge/server（Flask），采用 nginx 反向代理 + gunicorn + SQLite + Redis 的单机架构；Redis 做限流、幂等与抗刷前置，挡在 DB 之前。基础软件采用"源码/二进制包放 package、安装到各自目录（如 nginx/）"的自管理方式，便于版本控制与后续容器化；SQLite、Redis 用系统包，不单独编译。
+为 spendge App 部署后端服务。代码位于 spendge/server（Flask），采用 nginx 反向代理 + gunicorn + SQLite 的单机架构；限流在 nginx（按 IP），register 直接写 SQLite。基础软件采用"源码/二进制包放 package、安装到各自目录（如 nginx/）"的自管理方式；SQLite 用系统包，不单独编译。Redis 与 write-behind 已于 2026-11-27 移除，见 13.8。
 
 ### 架构
 
@@ -17,8 +17,7 @@
        ▼
     gunicorn + Flask（2 worker × 4 线程）
        │
-       ├── SQLite  /home/ubuntu/sqlite/spendge.db（WAL）
-       └── Redis   127.0.0.1:6379（限流 / 幂等 / 抗刷，前置）
+       └── SQLite  /home/ubuntu/sqlite/spendge.db（WAL，短事务直写）
 
 ## 2. 环境基线
 
@@ -30,9 +29,9 @@
 | 磁盘 | 50G（可用约 35G） |
 | 公网 IP | 124.223.27.87 |
 | 域名 | 接口 **api.orokio.com**（主用）/ www.orokio.com（保留）；ICP 备案进行中 |
-| 已装服务 | 无 nginx / 无 mysql / 无 redis |
+| 已装服务 | nginx（源码）、gunicorn、SQLite；Redis 已停用（disabled） |
 
-已占用端口（需规避）：22、53、3080（node）、59087（node/CodeBuddy）。9000/9001/9003 的旧 python 服务已停止；8000/8010/8080/8443/6379 均空闲。
+已占用端口（需规避）：22、53、3080（node）、59087（node/CodeBuddy）。9000/9001/9003 的旧 python 服务已停止；6379 随 Redis 停用而释放。
 
 ## 3. 目录规划
 
@@ -52,7 +51,6 @@
 | nginx | 8080 / 8443 | 是 | 测试期 |
 | nginx | 80 / 443 | 是 | 备案后 |
 | gunicorn | 127.0.0.1:8010 | 否 | 全程 |
-| Redis | 127.0.0.1:6379 | 否 | 全程 |
 
 > gunicorn 用 8010：nginx upstream 固定指向它；开发服务器默认 9010（serve.sh），避免与生产冲突。
 
@@ -62,10 +60,10 @@
 |---|---|
 | nginx | 最新 stable，源码编译到 nginx/ |
 | SQLite | 系统 sqlite3（apt），库文件放 sqlite/ |
-| Redis | 系统 redis-server（apt，7.x），仅本机；限流 / 幂等 / 抗刷前置 |
+| Redis | **已停用**（2026-11-27 移除；限流改由 nginx） |
 | 应用服务器 | gunicorn 2 worker × 4 线程，127.0.0.1:8010（加入 pyproject 依赖） |
 | Python | 系统 python3 + venv |
-| 进程管理 | systemd（nginx / redis-server / spendge 三个 unit；SQLite 无服务） |
+| 进程管理 | systemd（nginx / spendge 两个 unit；SQLite 无服务） |
 | HTTPS | 腾讯云免费证书（Nginx 格式） |
 
 nginx 编译参数（关键模块）：
@@ -83,12 +81,13 @@ nginx 编译参数（关键模块）：
 | nginx | 15M |
 | gunicorn 2×4 | 180–220M |
 | SQLite | 进程内，页缓存几十 MB |
-| Redis（maxmemory 128M） | 60M |
-| 合计 | 约 0.6–0.7G |
+| 合计 | 约 0.5G |
 
 剩余给 page cache 与突发；swap 只做兜底。上表成立的前提是当前已用的约 1G 能查清并释放，否则先升 4G。
 
 ## 7. 部署阶段
+
+> 2026-11-27 起 Redis 与 writer 已移除（见 13.8）。以下阶段保留为当时的执行记录，涉及 Redis 的步骤不再适用。
 
 ### 阶段 0 · 准备
 - 创建 nginx/、sqlite/ 与 sqlite/backup/、redis/；运行副本 spendge-server/ 在阶段 3 生成。
@@ -255,8 +254,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 |---|---|
 | nginx | 1.28.0（源码编译，package/nginx-1.28.0.tar.gz） |
 | gunicorn | 27.0.1（spendge-server/.venv） |
-| Flask / SQLAlchemy / Alembic / redis-py | 3.1.3 / 2.1.9 / 1.20.1 / 8.2.0 |
-| Redis | 7.0.15（apt） |
+| Flask / SQLAlchemy / Alembic | 3.1.3 / 2.1.9 / 1.20.1 |
 | SQLite | 3.45.1（系统） |
 | 证书（接口） | TrustAsia DV，CN=api.orokio.com，SAN 仅 api.orokio.com，有效至 2027-02-23 |
 | 证书（保留） | TrustAsia DV，CN=orokio.com，SAN 含 www.orokio.com，有效至 2027-02-20 |
@@ -268,20 +266,20 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
     ├── spendge-server/     运行副本：app/、.venv/、.env、logs/、run/、spendge.service
     ├── nginx/              sbin/ conf/ logs/ html/、nginx.service、conf/ssl/{orokio.com_nginx,api.orokio.com_nginx}/
     ├── sqlite/             spendge.db（含 -wal/-shm）、backup/
-    ├── redis/              数据与日志目录（属 redis:redis）
+    ├── redis/              旧 Redis 数据目录（服务已停用，保留）
     ├── package/            nginx-1.28.0.tar.gz
     └── backup/             orokio.com_nginx.zip、api.orokio.com_nginx.zip（原始证书）
 
 ### 13.3 已完成步骤（按序）
 
 1. 依赖：sudo apt install build-essential libpcre2-dev zlib1g-dev libssl-dev python3.12-venv sqlite3 redis-server
-2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（10 表）；迁移 20f108f0a1fc（7 表）+ 9f3c1a70b2d1（categories、app_config）+ c4d7e2a91b08（category_versions）+ a7b1c9d4e620（categories.goal_kinds）+ b8e4f1c2d907（device_daily）+ c9f2a7d1e803（drop user_stats_daily）；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
+2. 数据层：server 加 sqlalchemy/alembic；app/db.py（engine + WAL PRAGMA）；app/models.py（6 表：devices、sessions、categories、category_versions、app_config、device_daily）；迁移 20f108f0a1fc（7 表）+ 9f3c1a70b2d1（categories、app_config）+ c4d7e2a91b08（category_versions）+ a7b1c9d4e620（categories.goal_kinds）+ b8e4f1c2d907（device_daily）+ c9f2a7d1e803（drop user_stats_daily）+ d1a5b8c3f702（drop accounts/entitlements/usage/diagnostics/events）；alembic upgrade head 建表到 /home/ubuntu/sqlite/spendge.db
 3. 后端：pyproject 加 gunicorn/redis；rsync server/ 到 spendge-server/；副本建 venv 并 pip install .；.env 复制
 4. register：app/devices.py（deviceSecret 校验、opaque token 首签/续期）；app/rate_limit.py（Redis 限流，不可用降级放行）；main.py 注册 blueprint
 5. nginx：源码 configure（prefix=/home/ubuntu/nginx，加 ssl/v2/realip/gzip_static/threads）→ make install；conf 监听 8080(HTTP) + 8443(ssl)，反代 127.0.0.1:8010。**api 域只保留 /spendge/ 前缀**：location /spendge/ { proxy_pass http://spendge_app/; }（末尾 / 剥前缀）；api 域根路径已删除（build 4 根请求 404，客户端静默、不影响记账）；www 域保留根路径供探活/旧包
 6. 证书：两张腾讯云 zip 分别解压到 conf/ssl/orokio.com_nginx/ 与 conf/ssl/api.orokio.com_nginx/（bundle.pem + key）；nginx 用 SNI 按 server_name 选证书。
-7. Redis：apt 装；redis.conf 设 bind 127.0.0.1 / requirepass / maxmemory 128mb / volatile-lru / save "" / **appendonly yes（AOF，write-behind 写队列持久化）** / dir 与 logfile 指向 /home/ubuntu/redis
-8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M）、spendge-writer.service（write-behind worker，MemoryMax=200M）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
+7. （已废弃）Redis 与 write-behind：2026-11-27 移除，见 13.8
+8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M；含 ExecReload 优雅重载）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
 9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com 与 api.orokio.com 均 → 124.223.27.87。
 10. 验证：api /spendge/health 返回 ok（证书 CN=api.orokio.com，不加 -k 校验通过）；api /spendge/v1/devices/register 剥前缀后命中（新客户端），api 根路径 /health 与 /v1/devices/register 均 404（build 4 静默）；www 根路径仍可用；同 deviceId 第 6 次请求返回 429（限流生效）。
 11. 分类下发：导入 docs/categories-seed.json（29 条）→ 启动时 `python -m app.categories docs/categories-seed.json`，categoriesVersion=1；register 按客户端上报的 categoriesVersion 决定是否下发全量分类（见 13.6）。
@@ -309,13 +307,12 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 
 ### 13.5 重装速查（机器丢失时）
 
-1. 建目录：mkdir -p /home/ubuntu/{package,nginx/conf/ssl,nginx/logs,sqlite/backup,redis,spendge-server}；chmod o+x /home/ubuntu
+1. 建目录：mkdir -p /home/ubuntu/{package,nginx/conf/ssl,nginx/logs,sqlite/backup,spendge-server}；chmod o+x /home/ubuntu
 2. 装依赖（见 13.3 第 1 条）
 3. 拉代码：git clone --depth 1 <repo> spendge && cd spendge && git sparse-checkout init --no-cone && git sparse-checkout set /server/ /docs/
 4. 数据层 + 后端（13.3 第 2-4 条），运行副本单独 venv；导入分类种子（13.3 第 11 条）
 5. nginx 编译 + 配置 + 两张证书（13.3 第 5-6 条；api 与 www 各一张，SNI 分流）
-6. Redis（13.3 第 7 条 + 13.4 第 2 条 override）
-7. systemd units（unit 文件放组件目录，软链到 /etc/systemd/system/）
+6. systemd units（nginx、spendge；unit 文件放组件目录，软链到 /etc/systemd/system/）
 8. 安全组 + DNS
 9. 全链路验证（13.3 第 10 条）
 
@@ -365,3 +362,16 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
       /home/ubuntu/stats/run.sh     # 脚本：server/deploy/stats.sh（运行副本内软链）
 
 口径详见 `docs/user-stats-spec.md`；活跃 ⊇ 新增；合法设备 = 36 位大写 UUID 且 `secret_hash` 非空。
+
+### 13.8 架构简化：移除 Redis 与 write-behind（2026-11-27）
+
+商业化改为买断后只剩 `/v1/devices/register` 一个接口，原「Redis + Stream + 独立 writer」的复杂度不再划算，已移除：
+
+- 代码：删除 `app/cache.py`、`app/rate_limit.py`、`app/writer.py`；register 在请求线程内完成一个短事务（devices / sessions / device_daily）
+- 依赖：去掉 `redis`（pyproject 与 venv）；`.env` 去掉 `REDIS_URL`
+- 服务：`spendge-writer.service` 删除并 disable；`redis-server` 停止并 disable（apt 包保留，便于回滚）
+- 限流：改由 nginx `limit_req` 按 IP（10 次/分，burst 5，返回 429）；不再有 device 级限流
+- 数据：无结构变更；`device_daily` 仍由 register 同事务写入，统计口径不变
+- 验证：单次 register 首次/续期/错 secret 均正常，`device_daily.register_count` 正确累加
+
+回滚：恢复 commit 中的 `cache.py/rate_limit.py/writer.py` 与 writer unit，`systemctl enable --now redis-server` 与 writer 即可。

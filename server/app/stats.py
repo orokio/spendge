@@ -1,6 +1,6 @@
 """用户统计（CST，T-1）：输出一个覆盖写的文本文件。
 
-口径见 docs/user-stats-spec.md。只统计昨天：新增（created_at 落在当天）、
+口径见 docs/user-stats-spec.md。每次统计昨天与今天：新增（created_at 落在当天）、
 活跃（当天有 register 记录，来自 device_daily）、以及按 build 的分布。
 """
 from __future__ import annotations

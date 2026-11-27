@@ -7,14 +7,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 
-class Account(Base):
-    __tablename__ = "accounts"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)  # server accountId
-    apple_subject: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
-    created_at: Mapped[str] = mapped_column(String, nullable=False)
-
-
 class Device(Base):
     __tablename__ = "devices"
 
@@ -35,56 +27,6 @@ class Session(Base):
     account_id: Mapped[str | None] = mapped_column(String, nullable=True)
     device_id: Mapped[str] = mapped_column(String, nullable=False)
     expires_at: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[str] = mapped_column(String, nullable=False)
-
-
-class Entitlement(Base):
-    __tablename__ = "entitlements"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    account_id: Mapped[str] = mapped_column(String, nullable=False)
-    original_transaction_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    product_id: Mapped[str] = mapped_column(String, nullable=False)
-    expires_at: Mapped[str | None] = mapped_column(String, nullable=True)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    updated_at: Mapped[str] = mapped_column(String, nullable=False)
-
-
-class Usage(Base):
-    __tablename__ = "usage"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    device_id: Mapped[str] = mapped_column(String, nullable=False)
-    idempotency_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    kind: Mapped[str] = mapped_column(String, nullable=False)
-    tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    result: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[str] = mapped_column(String, nullable=False)
-
-
-class Diagnostic(Base):
-    __tablename__ = "diagnostics"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    device_id: Mapped[str] = mapped_column(String, nullable=False)
-    account_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    app_version: Mapped[str | None] = mapped_column(String, nullable=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    result: Mapped[str | None] = mapped_column(String, nullable=True)
-    code: Mapped[str | None] = mapped_column(String, nullable=True)
-    at: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[str] = mapped_column(String, nullable=False)
-
-
-class Event(Base):
-    __tablename__ = "events"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    device_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    props: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
@@ -143,8 +85,5 @@ class AppConfig(Base):
 Index("ix_devices_account_id", Device.account_id)
 Index("ix_sessions_device_id", Session.device_id)
 Index("ix_sessions_account_id", Session.account_id)
-Index("ix_usage_account_created", Usage.account_id, Usage.created_at)
-Index("ix_events_created", Event.created_at)
-Index("ix_entitlements_account_expires", Entitlement.account_id, Entitlement.expires_at)
 Index("ix_categories_sort", Category.sort_order)
 Index("idx_device_daily_date", DeviceDaily.stat_date)

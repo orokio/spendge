@@ -2,11 +2,9 @@ import uuid
 
 import pytest
 
-from app import cache
 from app.db import SessionLocal
 from app.main import create_app
 from app.models import Device, DeviceDaily, Session
-from app.writer import process_batch
 
 
 @pytest.fixture
@@ -20,10 +18,6 @@ def client():
 def device_id():
     did = "test-" + uuid.uuid4().hex
     yield did
-    try:
-        cache.delete_device(did)
-    except Exception:
-        pass
     db = SessionLocal()
     try:
         db.query(Session).filter(Session.device_id == did).delete()
@@ -49,7 +43,12 @@ def test_register_first_then_renew(client, device_id):
     assert r1.status_code == 200
     j1 = r1.get_json()
     assert j1["deviceToken"] and j1["expiresAt"]
-    assert cache.get_device(device_id)["token_hash"]
+
+    db = SessionLocal()
+    try:
+        assert db.query(Session).filter(Session.device_id == device_id).count() == 1
+    finally:
+        db.close()
 
     r2 = client.post("/v1/devices/register", json=_body(device_id))
     assert r2.status_code == 200
@@ -69,18 +68,6 @@ def test_register_missing_fields(client, device_id):
     assert r.status_code == 400
     assert r.get_json()["code"] == "invalid_request"
 
-
-def test_writer_persists_asynchronously(client, device_id):
-    r = client.post("/v1/devices/register", json=_body(device_id))
-    assert r.status_code == 200
-    group = "test-" + uuid.uuid4().hex
-    process_batch(batch=2000, block_ms=200, group=group, consumer="t")
-    db = SessionLocal()
-    try:
-        assert db.get(Device, device_id) is not None
-        assert db.query(Session).filter(Session.device_id == device_id).count() >= 1
-    finally:
-        db.close()
 
 def _body_with_version(did, version):
     body = _body(did)
@@ -137,7 +124,7 @@ def test_register_survives_categories_failure(client, device_id, monkeypatch):
     from app import categories
 
     def boom():
-        raise RuntimeError("redis down")
+        raise RuntimeError("db down")
 
     monkeypatch.setattr(categories, "load_snapshot", boom)
     r = client.post("/v1/devices/register", json=_body_with_version(device_id, 0))
@@ -169,8 +156,6 @@ def test_goal_kinds_normalization():
 def test_device_daily_counts_registers(client, device_id):
     assert client.post("/v1/devices/register", json=_body(device_id)).status_code == 200
     assert client.post("/v1/devices/register", json=_body(device_id)).status_code == 200
-    group = "test-" + uuid.uuid4().hex
-    process_batch(batch=2000, block_ms=200, group=group, consumer="t")
 
     db = SessionLocal()
     try:

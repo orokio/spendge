@@ -1,4 +1,4 @@
-"""分类参考数据：读取（Redis 快照 + DB 只读回源）与导入（运维 CLI）。
+"""分类参考数据：读取（直接读 DB）与导入（运维 CLI）。
 
 接口线程只读，不写库；变更由运维命令导入并递增 categoriesVersion。
 """
@@ -11,15 +11,12 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app import cache
 from app.db import SessionLocal
 from app.models import AppConfig, Category, CategoryVersion
 
 logger = logging.getLogger(__name__)
 
 VERSION_KEY = "categories_version"
-SNAPSHOT_KEY = "categories:snapshot"
-SNAPSHOT_TTL = 3600  # 秒；导入时会主动失效
 
 KINDS = ("expense", "income")
 GOAL_KINDS = ("countLimit", "budget", "shareCap")  # 契约 §4.2.1，封闭值域
@@ -54,31 +51,8 @@ def _load_from_db() -> dict:
 
 
 def load_snapshot() -> dict:
-    """返回 {version, items}；Redis 命中直接返回，未命中只读回源并回填缓存。"""
-    try:
-        raw = cache.get_redis().get(SNAPSHOT_KEY)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("categories: redis read failed (%s), fallback to db", exc)
-        raw = None
-
-    if raw:
-        return json.loads(raw)
-
-    snapshot = _load_from_db()
-    try:
-        cache.get_redis().set(
-            SNAPSHOT_KEY, json.dumps(snapshot, ensure_ascii=False), ex=SNAPSHOT_TTL
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("categories: redis write failed (%s)", exc)
-    return snapshot
-
-
-def invalidate() -> None:
-    try:
-        cache.get_redis().delete(SNAPSHOT_KEY)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("categories: cache invalidate failed (%s)", exc)
+    """返回 {version, items}；直接读 DB（register 只在版本变化时才带分类，查询频率很低）。"""
+    return _load_from_db()
 
 
 def _normalize_goal_kinds(code: str, raw) -> str:
@@ -202,8 +176,6 @@ def _apply_items(items: list[dict], note: str) -> tuple[bool, int]:
     finally:
         db.close()
 
-    if changed:
-        invalidate()
     return changed, version
 
 

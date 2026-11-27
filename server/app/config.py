@@ -8,9 +8,7 @@ from dataclasses import dataclass
 class Settings:
     app_env: str
     log_level: str
-    llm_api_key: str | None
     database_url: str
-    redis_url: str
     device_token_ttl_days: int
 
 
@@ -18,8 +16,6 @@ def load_settings() -> Settings:
     return Settings(
         app_env=os.getenv("APP_ENV", "development"),
         log_level=os.getenv("LOG_LEVEL", "info"),
-        llm_api_key=os.getenv("LLM_API_KEY") or None,
         database_url=os.getenv("DATABASE_URL", "sqlite:////home/ubuntu/sqlite/spendge.db"),
-        redis_url=os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"),
         device_token_ttl_days=int(os.getenv("DEVICE_TOKEN_TTL_DAYS", "90")),
     )

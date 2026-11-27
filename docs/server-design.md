@@ -183,7 +183,7 @@ CloudKit 的 userRecordID 只在 Apple 容器内可见，服务端拿不到，�
 
 - 除 `/health` 与 `/v1/devices/register` 外，所有接口带 `Authorization: Bearer <deviceToken>`
 - register 不需要 Bearer，但必须带 deviceSecret 校验，否则任何知道 deviceId 的人都能签发/复用 token
-- 中间件：验 token → 取 deviceId → 查 Redis 额度/限流 → 进入业务
+- 中间件（M4 起）：验 token → 取 deviceId → 限流（nginx/WAF）→ 进入业务
 - token 无效或吊销：返回 401 + `code=token_invalid`，客户端带 deviceSecret 重新 register（重签/续期）后再重试
 - 没有 App Attest 时，token 是**会话载体**而不是身份证明；deviceSecret + 限流 + 后续 Attest 共同防伪造
 
@@ -242,26 +242,12 @@ POST /v1/parse        multipart：text 或 image（二选一）+ clientRequestId
 单文件数据库，WAL 模式；路径与权限由部署决定（见 [deploy-plan.md](deploy-plan.md)）。选它的理由只有一个：2C2G 的机器上，省下的 200–400M 常驻内存比并发写能力更值钱。
 
 ```sql
-accounts            id TEXT PK,              -- server accountId
-                    apple_subject TEXT UNIQUE,
-                    created_at TEXT
 devices             id TEXT PK,              -- client deviceId
                     secret_hash TEXT,        -- deviceSecret 哈希
                     account_id TEXT NULL,
                     created_at TEXT, last_seen_at TEXT
 sessions            token_hash TEXT PK, account_id TEXT NULL, -- 设备 token 时为空
                     device_id TEXT, expires_at TEXT, created_at TEXT
-entitlements        id TEXT PK, account_id TEXT,
-                    original_transaction_id TEXT UNIQUE, product_id TEXT,
-                    expires_at TEXT, status TEXT, updated_at TEXT
-usage               id INTEGER PK AUTOINCREMENT, account_id TEXT NULL,
-                    device_id TEXT, idempotency_key TEXT UNIQUE,
-                    kind TEXT, tokens INTEGER, result TEXT, created_at TEXT
-diagnostics         id INTEGER PK AUTOINCREMENT, device_id TEXT,
-                    account_id TEXT NULL, app_version TEXT,
-                    name TEXT, result TEXT, code TEXT, at TEXT, created_at TEXT
-events              id INTEGER PK AUTOINCREMENT, account_id TEXT NULL,
-                    device_id TEXT, name TEXT, props TEXT, created_at TEXT
 categories          code TEXT PK,              -- 唯一、永久、不可复用
                     name TEXT, icon_name TEXT, color_hex TEXT,
                     kind_raw_value TEXT,       -- expense / income，创建后不可变
@@ -277,6 +263,8 @@ device_daily        device_id TEXT, stat_date TEXT,  -- PK(device_id, stat_date)
                     first_seen_at TEXT, last_seen_at TEXT,
                     register_count INTEGER, app_version TEXT, build TEXT
 ```
+
+- 账号/权益/解析/诊断/埋点相关表（accounts、entitlements、usage、diagnostics、events）已于 2026-11-27 随「付费买断」移除；§2/§5 中对应接口均为将来规划，当前不实现，不要据此加业务逻辑。
 
 类型约定：
 
@@ -321,54 +309,51 @@ PRAGMA cache_size = -8192;
   - code 唯一、永久、不可复用；删除只置 is_archived，历史账单仍可显示
   - 任何展示字段（名称/图标/颜色/排序/归档）变更必须把 categories_version +1，且不回退
   - 导入：`python -m app.categories docs/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1 并失效缓存）
-  - 读取：Redis 快照（TTL 1h，导入时主动失效）→ 未命中只读回源 DB；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
+  - 读取：每次 register 直接读 DB（29 行，毫秒级）；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
   - 历史：每次变更在**同一事务**写一条 `category_versions`（全量 JSON 快照，只增不改）。用于审计与精确回放，也是“账单按记账当时名称展示”的数据基础；回放（`--restore N`）同样把版本 +1，版本号永不回退
-  - 用户统计（口径见 [user-stats-spec.md](user-stats-spec.md)）：`device_daily` 由 writer 与 devices **同事务** upsert（first 取 min、last 取 max、count+1），接口线程不写；`python -m app.stats` 每天 00:10 只算 T-1，覆盖写 `/home/ubuntu/stats/latest.txt`（东八区，含新增/活跃/按 build 分布），不再保留汇总表；活跃 = 当天 device_daily ∪ 当天新增（保证新增 ⊆ 活跃）；活跃/新增只算合法设备（36 位大写 UUID + secret_hash 非空）
+  - 用户统计（口径见 [user-stats-spec.md](user-stats-spec.md)）：`device_daily` 由 register 在**同一个事务**里 upsert（first 取 min、last 取 max、count+1）；`python -m app.stats` 每天 00:10 只算 T-1，覆盖写 `/home/ubuntu/stats/latest.txt`（东八区，含新增/活跃/按 build 分布），不再保留汇总表；活跃 = 当天 device_daily ∪ 当天新增（保证新增 ⊆ 活跃）；活跃/新增只算合法设备（36 位大写 UUID + secret_hash 非空）
   - goalKinds（api-contract §4.2.1）：每条分类按 `goalKinds` 决定可用于哪种目标，值域封闭 `countLimit` / `budget` / `shareCap`；库里存逗号串，空串或 NULL 都表示“不能设目标”；导入时逐个校验，非法值直接报错；register 必须为每条分类显式返回数组（空也返回 `[]`）
 
 ## 7. 架构与防护分层
 
-**Redis 不是盾牌。** 防攻击靠分层，Redis 只承担计数与缓存，让重复请求不落到数据库。
+当前只有一个对外接口 `/v1/devices/register`，架构刻意保持最小：**nginx → gunicorn → SQLite**。
 
 ```
 用户
   │
-  ├─ nginx       TLS、limit_req / limit_conn、请求体上限、超时、WAF
+  ├─ nginx       TLS、limit_req（按 IP 10 次/分，burst 5）、请求体上限、超时、WAF
   │
-  ├─ gunicorn    WSGI 应用服务器
+  ├─ gunicorn    WSGI 应用服务器（2 worker × 4 线程）
   │     │
-  │     ├─ 应用层：App Attest、token 鉴权、按账号限流、幂等
-  │     ├─ Redis：滑动窗口计数、幂等键、热点缓存
-  │     └─ SQLite：单文件、WAL、单写者；写事务必须短
+  │     └─ 应用层：校验 deviceSecret、签发/续期 token、分类下发
+  │
+  └─ SQLite      单文件、WAL、单写者；写事务必须短
 ```
 
 四道闸门：
 
 1. **边缘**（nginx / 腾讯云 WAF）：按 IP 限速与并发，挡脚本和重放；L4 靠腾讯云基础防护
-2. **身份**（App Attest + token）：未通过校验的请求不进业务逻辑，DB 完全不接触
-3. **限流与幂等**（Redis）：按 device / account 的窗口计数、`SETNX` 幂等键；Redis 不可用时**非付费路径降级为放行**，付费与额度路径**失败即拒绝**
-4. **数据库**（SQLite）：WAL 下读不阻塞写，写串行；`busy_timeout` 5 秒，写事务不跨模型调用；所有查询走索引，禁止无界 `SELECT`
+2. **身份**：register 校验 deviceSecret；token 目前只签发，等 M4 有需鉴权接口再启用校验
+3. **输入**：JSON 结构、必填字段、分类版本号校验；非法直接 4xx
+4. **数据库**（SQLite）：WAL 下读不阻塞写，写串行；`busy_timeout` 5 秒，写事务不跨外部调用
 
 参数起步值：
 
-- nginx：`10r/s` per IP，burst 30；`limit_conn` 20
-- 应用：匿名 20 次/分/设备；已注册 60 次/分/账号
-- 解析：免费额度按设备计，付费按账号计，额度检查在 Redis，落库以 `usage` 唯一键兜底
+- nginx：`10r/m` per IP，burst 5（register 每次冷启动一次，远低于此）
+- 数据库：单条 upsert 毫秒级；锁等待超时返回 503，客户端下次启动重试
 
-选型说明：SQLite 适合单机、低并发写；迁移触发条件见 [deploy-plan.md](deploy-plan.md) 的「运行与升级触发」。以后需要独立数据库服务时，目标是 MariaDB（比 MySQL 8 轻 100–150M、协议兼容），不是 MySQL 8。表不建外键约束，关系与唯一性由应用层和唯一索引保证，迁移时不碍事；连接时仍保留 `PRAGMA foreign_keys=ON`，以后补约束时行为一致。
+选型说明：SQLite 适合单机、低并发写；迁移触发条件见 [deploy-plan.md](deploy-plan.md) 的「运行与升级触发」。以后需要独立数据库服务时，目标是 MariaDB（比 MySQL 8 轻 100–150M、协议兼容），不是 MySQL 8。表不建外键约束，关系与唯一性由应用层和唯一索引保证；连接时仍保留 `PRAGMA foreign_keys=ON`。
 
-### 写入路径（write-behind，所有接口统一）
+### 写入路径（直写，2026-11-27 起）
 
-面向用户的接口**不直接写 SQLite**。统一写路径：
+`register` 在请求线程内完成**一个短事务**：
 
-    接口线程: 鉴权/限流 → 读写模型(Redis) → XADD 写队列(Redis Stream) → 立即返回
-    writer 进程: 消费 Stream → 批量 upsert SQLite → XACK
+    读 devices → 校验 secret → 复用/新签 sessions → upsert devices + device_daily → commit
 
-- 接口线程**零 DB 写**；SQLite 只由 writer 进程写入（批量、短事务）。
-- 读走 Redis 读模型；未命中时**只读回源 DB**（cache-aside，不写）。
-- Redis 开 **AOF**（appendonly yes），保证写队列在落库前不丢；Redis 不可用时接口返回 **503**，不回退同步写库。
-- 一致性为最终一致（秒级）；at-least-once（未 ack 会重投），落库用 upsert 保证幂等。
-- **所有新接口都遵循此路径**：写操作入队，由 writer 落库；不允许接口里直接 db.commit()。
+- 无 Redis、无写队列、无独立 writer 进程；低频写（每次冷启动一次）毫秒级完成
+- 限流全部在 nginx（按 IP），应用内不再做 device 级限流
+- 失败即返回 4xx/503，客户端静默重试；不做最终一致的异步补偿
+- 若将来 `/v1/parse` 这类**秒级外部调用**上线，再单独引入队列，不在数据库事务里调模型
 
 ## 8. 可观测性
 
@@ -392,7 +377,7 @@ PRAGMA cache_size = -8192;
 > **2026-11-24**：v1 先做设备登记。顺序：**`/v1/devices/register`（+ devices 表 + 最小部署）→ M4 解析代理 → 诊断接收 →（仅当做订阅）账号与权益**。下面旧列表仅按订阅方案保留备查。
 
 1. 账号：匿名发放、token、改名、绑定 Apple、删除
-2. SQLite 表与 Alembic 迁移；Redis 计数与幂等
+2. SQLite 表与 Alembic 迁移
 3. StoreKit 通知与权益
 4. 解析代理（模型确定后）：mock provider → 真实 provider → 金句集评估
 5. 业务事件与告警
