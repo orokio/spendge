@@ -133,7 +133,9 @@ final class CloudSyncMonitor: ObservableObject {
         ) { [weak self] note in
             guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
                     as? NSPersistentCloudKitContainer.Event else { return }
-            Task { @MainActor in self?.handle(event) }
+            // 先固化成一个常量再进 Task，避免在并发闭包里捕获 weak var
+            let monitor = self
+            Task { @MainActor in monitor?.handle(event) }
         }
     }
 

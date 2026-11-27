@@ -65,7 +65,7 @@ struct DebugDataSeeder {
         }
 
         try context.save()
-        try? AchievementService(context: context).refreshUnlocks()
+        AchievementService(context: context).refreshUnlocks()
     }
 
     // MARK: - 场景

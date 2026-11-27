@@ -248,7 +248,7 @@ struct SettingsView: View {
                             }
                             .font(Typography.label)
                             .foregroundStyle(Color.brand)
-                        } else if let last = lastSyncText {
+                        } else if syncMonitor.status == .idle, let last = lastSyncText {
                             Text("上次同步 \(last)")
                                 .font(Typography.caption)
                                 .foregroundStyle(Color.textSecondary)

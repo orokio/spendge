@@ -92,4 +92,44 @@ struct RecentlyDeletedView: View {
         return formatter.string(from: date)
     }
 }
+
+extension View {
+    /// 首页右上角的「最近删除」入口：只在 DEBUG 构建挂载，Release 原样返回
+    @ViewBuilder
+    func recentlyDeletedEntry(isPresented: Binding<Bool>) -> some View {
+        self
+            .overlay(alignment: .topTrailing) {
+                if DebugMode.showsRecentlyDeleted {
+                    Button {
+                        isPresented.wrappedValue = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.brand)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, PageLayout.pageInset)
+                    .padding(.top, 58)
+                }
+            }
+            .overlay {
+                ZStack {
+                    if isPresented.wrappedValue {
+                        RecentlyDeletedView { isPresented.wrappedValue = false }
+                            .transition(.move(edge: .trailing))
+                    }
+                }
+                .animation(.spring(response: 0.34, dampingFraction: 0.9), value: isPresented.wrappedValue)
+            }
+    }
+}
+#else
+import SwiftUI
+
+extension View {
+    /// Release 构建没有开发者入口，保持方法存在以便调用点不用加条件编译
+    func recentlyDeletedEntry(isPresented: Binding<Bool>) -> some View { self }
+}
 #endif
