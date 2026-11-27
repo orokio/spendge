@@ -21,6 +21,7 @@ struct TodayView: View {
 
     @State private var insight: Insight?
     @State private var debugToast: String?
+    @State private var showRecentlyDeleted = false
     @State private var errorMessage: String?
     /// 流水区滚到顶部的日期：柱图指示器和记账日期都跟着它走
     @State private var visibleDay: Date?
@@ -168,6 +169,31 @@ struct TodayView: View {
             }
 
             fab
+        }
+        .overlay(alignment: .topTrailing) {
+            if DebugMode.showsRecentlyDeleted {
+                Button {
+                    showRecentlyDeleted = true
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.brand)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, PageLayout.pageInset)
+                .padding(.top, 58)
+            }
+        }
+        .overlay {
+            ZStack {
+                if showRecentlyDeleted {
+                    RecentlyDeletedView { showRecentlyDeleted = false }
+                        .transition(.move(edge: .trailing))
+                }
+            }
+            .animation(.spring(response: 0.34, dampingFraction: 0.9), value: showRecentlyDeleted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { LaunchTrace.mark("today.appear") }

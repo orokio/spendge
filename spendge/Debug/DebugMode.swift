@@ -9,6 +9,11 @@ enum DebugMode {
         static var lastTap = Date.distantPast
     }
 
+    /// 首页是否显示「最近删除」入口：只在 DEBUG 构建存在，由开发者面板开关
+    static var showsRecentlyDeleted: Bool {
+        UserDefaults.standard.bool(forKey: DebugKeys.recentlyDeletedEntry)
+    }
+
     static var isUnlocked: Bool {
         UserDefaults.standard.bool(forKey: DebugKeys.unlocked)
     }

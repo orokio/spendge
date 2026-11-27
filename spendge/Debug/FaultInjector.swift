@@ -37,6 +37,7 @@ enum FaultPoint: String, CaseIterable, Identifiable {
 
 enum DebugKeys {
     static let unlocked = "debug.unlocked"
+    static let recentlyDeletedEntry = "debug.recentlyDeletedEntry"
     static func fault(_ point: FaultPoint) -> String { "debug.fault.\(point.rawValue)" }
 }
 

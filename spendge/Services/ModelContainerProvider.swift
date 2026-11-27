@@ -32,6 +32,7 @@ enum ModelContainerProvider {
             let container = try ModelContainer(for: schema, configurations: [configuration])
             let context = ModelContext(container)
             DefaultData.seedLedgerIfNeeded(context: context)
+            DefaultData.migrateLegacyCategoryCodes(context: context)
             DefaultData.dedupeRecords(context: context)
             DefaultData.purgeExpiredDeletions(context: context)
             return container

@@ -177,6 +177,45 @@ enum DefaultData {
         if changed { try? context.save() }
     }
 
+    /// 分类 code 曾经用下划线命名（alcohol_beverage 等），2026-11-26 统一成驼峰。
+    /// 旧记录里的 code 不迁移就查不到分类，会被显示成未识别。
+    static let legacyCategoryCodes: [String: String] = [
+        "alcohol_beverage": "alcoholBeverage",
+        "digital_gear": "digitalGear",
+        "sports_outdoor": "sportsOutdoor",
+        "car_care": "carCare",
+        "other_expense": "otherExpense",
+        "side_job": "sideJob",
+        "other_income": "otherIncome",
+    ]
+
+    /// 把旧 code 一次性改写成本次发布使用的 code
+    static func migrateLegacyCategoryCodes(context: ModelContext) {
+        let key = "spendge.categoryCodeMigration.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+
+        var changed = false
+        if let items = try? context.fetch(FetchDescriptor<Transaction>()) {
+            for item in items {
+                guard let code = item.categoryCode,
+                      let mapped = legacyCategoryCodes[code] else { continue }
+                item.categoryCode = mapped
+                changed = true
+            }
+        }
+        if let goals = try? context.fetch(FetchDescriptor<Goal>()) {
+            for goal in goals {
+                let mapped = goal.categoryCodes.compactMap { legacyCategoryCodes[$0] ?? $0 }
+                if mapped != goal.categoryCodes {
+                    goal.categoryCodes = mapped
+                    changed = true
+                }
+            }
+        }
+        if changed { try? context.save() }
+        UserDefaults.standard.set(true, forKey: key)
+    }
+
     /// 统一去重：按各自的身份键分组，只保留一条。
     /// 分类用业务 code，其余用 id；优先未删除，其次更新时间较新。
     static func dedupeRecords(context: ModelContext) {

@@ -12,6 +12,7 @@ struct DebugPanelView: View {
     @State private var errorMessage: String?
     @State private var toast: String?
     @State private var faultRowsVersion = 0
+    @AppStorage(DebugKeys.recentlyDeletedEntry) private var showsDeletedEntry = false
     private let implementedFaults: [FaultPoint] = [
         .transactionWrite, .goalWrite, .budgetWrite, .dayConfirmationWrite, .shareExport,
     ]
@@ -22,6 +23,7 @@ struct DebugPanelView: View {
                 header
                 faultSection
                 scenarioSection
+                deletedEntrySection
                 syncSection
                 crashSection
                 closeSection
@@ -106,20 +108,6 @@ struct DebugPanelView: View {
 
     private var crashSection: some View {
         section(title: "崩溃验证") {
-            HStack(spacing: 12) {
-                Text("Bugly")
-                    .font(Typography.body)
-                    .foregroundStyle(Color.textPrimary)
-                Spacer(minLength: 8)
-                Text(CrashReporter.statusText)
-                    .font(Typography.label)
-                    .foregroundStyle(Color.textSecondary)
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 44)
-
-            divider
-
             Button {
                 confirm = ConfirmRequest(
                     title: "模拟崩溃？",
@@ -137,7 +125,7 @@ struct DebugPanelView: View {
                         .font(Typography.body)
                         .foregroundStyle(Color.danger)
                     Spacer(minLength: 8)
-                    Text("会退出 App")
+                    Text(CrashReporter.statusText)
                         .font(Typography.label)
                         .foregroundStyle(Color.textSecondary)
                 }
@@ -170,6 +158,16 @@ struct DebugPanelView: View {
     }
 
     // MARK: - 组件
+
+    private var deletedEntrySection: some View {
+        section(title: "隐藏入口") {
+            Toggle("显示「最近删除」", isOn: $showsDeletedEntry)
+                .font(Typography.body)
+                .tint(Color.brand)
+                .padding(.horizontal, 16)
+                .frame(height: 50)
+        }
+    }
 
     private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
