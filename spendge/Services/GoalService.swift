@@ -68,26 +68,6 @@ final class GoalService {
         try FaultInjection.current.check(.goalWrite)
         try validate(title: title, kind: kind, targetValue: targetValue)
 
-        // 免费版限制：本月 1 个整体预算 + 2 个其他目标，两类分开计数
-        if !Entitlements.can(.unlimitedGoals) {
-            let monthStart = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
-            let monthGoals = try goals().filter {
-                calendar.isDate($0.monthStart, equalTo: monthStart, toGranularity: .month)
-            }
-            let isBudget = kind == .budget && categoryCodes.isEmpty
-            if isBudget {
-                let budgets = monthGoals.filter(\.isBudget).count
-                guard budgets < Entitlements.freeBudgetLimit else {
-                    throw SpendgeError.budgetLimitReached
-                }
-            } else {
-                let others = monthGoals.filter { !$0.isBudget }.count
-                guard others < Entitlements.freeGoalLimit else {
-                    throw SpendgeError.goalLimitReached
-                }
-            }
-        }
-
         let existing = try goals()
         let goal = Goal(
             title: title,

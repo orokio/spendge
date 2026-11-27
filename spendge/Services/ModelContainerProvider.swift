@@ -19,7 +19,7 @@ enum ModelContainerProvider {
         #if targetEnvironment(simulator)
         let cloudKit: ModelConfiguration.CloudKitDatabase = .none
         #else
-        let syncAllowed = cloudKitEnabled ?? (CloudSyncPreference.isEnabled && Entitlements.can(.iCloudSync))
+        let syncAllowed = cloudKitEnabled ?? CloudSyncPreference.isEnabled
         let cloudKit: ModelConfiguration.CloudKitDatabase = syncAllowed ? .automatic : .none
         #endif
         let configuration = ModelConfiguration(

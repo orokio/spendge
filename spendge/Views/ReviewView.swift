@@ -20,7 +20,6 @@ struct ReviewView: View {
     @State private var selectedDomain: String? = CategoryDomain.food.rawValue
     /// 下方展示支出还是收入
     @State private var mode: StatMode = .expense
-    @State private var showUnlock = false
 
     private let calendar = Calendar.current
 
@@ -107,20 +106,6 @@ struct ReviewView: View {
             }
         }
 
-        // 免费版只看近 3 个月
-        guard Entitlements.can(.fullHistory) else {
-            let currentStart = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
-            let cutoff = calendar.date(byAdding: .month,
-                                       value: -(Entitlements.freeHistoryMonths - 1),
-                                       to: currentStart) ?? currentStart
-            let currentYear = calendar.component(.year, from: .now)
-            return result.filter { option in
-                switch option {
-                case .month(let date): return date >= cutoff
-                case .year(let year): return year == currentYear
-                }
-            }
-        }
         return result
     }
 
@@ -150,18 +135,13 @@ struct ReviewView: View {
             .padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)
-        .unlockPrompt($showUnlock)
         .onAppear {
             Analytics.record(.reviewOpened, ["mode": mode == .expense ? "expense" : "income",
                                              "period": isYear ? "year" : "month"])
         }
         .sheet(isPresented: $showPicker) {
             PeriodPickerSheet(options: periodOptions,
-                              selected: period,
-                              onUnlock: Entitlements.can(.fullHistory) ? nil : {
-                                  showPicker = false
-                                  showUnlock = true
-                              }) { picked in
+                              selected: period) { picked in
                 period = picked
                 showPicker = false
             }
@@ -1239,8 +1219,6 @@ struct ReviewView: View {
 struct PeriodPickerSheet: View {
     let options: [ReviewView.Period]
     let selected: ReviewView.Period
-    /// 非空时在列表底部显示「查看更早 · 解锁」
-    var onUnlock: (() -> Void)? = nil
     let onPick: (ReviewView.Period) -> Void
 
     var body: some View {
@@ -1270,26 +1248,6 @@ struct PeriodPickerSheet: View {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(Color.brand)
                                 }
-                            }
-                            .padding(.horizontal, PageLayout.pageInset)
-                            .frame(height: 50)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if let onUnlock {
-                        Button(action: onUnlock) {
-                            HStack {
-                                Text("查看更早的记录")
-                                    .foregroundStyle(Color.textPrimary)
-                                Text("解锁")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Color.brand)
-                                Spacer()
-                                Image(systemName: "lock.fill")
-                                    .font(Typography.caption)
-                                    .foregroundStyle(Color.textSecondary)
                             }
                             .padding(.horizontal, PageLayout.pageInset)
                             .frame(height: 50)

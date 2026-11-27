@@ -21,7 +21,6 @@ struct GoalView: View {
     /// 正在查看的月份：默认当月，可回看历史
     @State private var selectedMonth = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var showMonthPicker = false
-    @State private var showUnlock = false
     @State private var showBudgetEditor = false
     @State private var errorMessage: String?
     @State private var showGoalForm = false
@@ -125,7 +124,6 @@ struct GoalView: View {
                 }
             }
         }
-        .unlockPrompt($showUnlock)
         .onReceive(NotificationCenter.default.publisher(for: .dataRestored)) { _ in
             dismissDrawers()
         }
@@ -134,11 +132,7 @@ struct GoalView: View {
         }
         .sheet(isPresented: $showMonthPicker) {
             PeriodPickerSheet(options: monthOptions.map { .month($0) },
-                              selected: .month(monthStart),
-                              onUnlock: Entitlements.can(.fullHistory) ? nil : {
-                                  showMonthPicker = false
-                                  showUnlock = true
-                              }) { picked in
+                              selected: .month(monthStart)) { picked in
                 if case .month(let date) = picked {
                     selectedMonth = date
                 }
@@ -362,12 +356,7 @@ struct GoalView: View {
                 Spacer(minLength: 12)
                 if isCurrentMonth {
                     Button {
-                        if !Entitlements.can(.unlimitedGoals),
-                           goals.count >= Entitlements.freeGoalLimit {
-                            showUnlock = true
-                        } else {
-                            openForm(nil)
-                        }
+                        openForm(nil)
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "plus")
@@ -553,14 +542,9 @@ struct GoalView: View {
             .min()
             .flatMap { calendar.dateInterval(of: .month, for: $0)?.start } ?? current
 
-        // 免费版只看近 3 个月
-        let lowerBound: Date = Entitlements.can(.fullHistory)
-            ? earliest
-            : calendar.date(byAdding: .month, value: -(Entitlements.freeHistoryMonths - 1), to: current) ?? current
-
         var result: [Date] = []
         var cursor = current
-        while cursor >= max(earliest, lowerBound) {
+        while cursor >= earliest {
             result.append(cursor)
             guard let previous = calendar.date(byAdding: .month, value: -1, to: cursor) else { break }
             cursor = previous

@@ -64,7 +64,6 @@ enum Analytics {
         let line = "\(timestamp()) \(event.rawValue)\(detail.isEmpty ? "" : " " + detail)"
         logger.notice("\(line, privacy: .public)")
         append(line)
-        UmengReporter.track(event.rawValue, params)
     }
 
     // MARK: - 本地文件
@@ -128,8 +127,6 @@ extension SpendgeError {
         case .injectedFailure: return "injected"
         case .notRefundable: return "not_refundable"
         case .alreadyRefunded: return "already_refunded"
-        case .goalLimitReached: return "goal_limit_reached"
-        case .budgetLimitReached: return "budget_limit_reached"
         }
     }
 }

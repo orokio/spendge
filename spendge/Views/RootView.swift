@@ -118,7 +118,6 @@ struct RootView: View {
             LaunchTrace.mark("task.start")
             refreshTrophies(celebrate: false)
             LaunchTrace.mark("trophies.done")
-            UmengReporter.startIfAuthorized()
             Task.detached(priority: .utility) { await DeviceRegistrar.registerIfNeeded() }
             LaunchTrace.mark("bugly.done")
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - LaunchTrace.start) * 1000)
@@ -186,7 +185,6 @@ struct RootView: View {
         privacyChoice = "granted"
         privacyVersionSeen = PrivacyConsent.version
         CrashReporter.startIfAuthorized()
-        UmengReporter.startIfAuthorized()
         Task.detached(priority: .utility) { await DeviceRegistrar.registerIfNeeded() }
     }
 

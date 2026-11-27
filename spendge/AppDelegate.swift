@@ -36,7 +36,7 @@ enum PushSync {
     /// 只在同步真正可用时注册；关闭同步或未买断时不打扰系统
     @MainActor
     static func registerIfNeeded() {
-        guard CloudSyncPreference.isEnabled, Entitlements.can(.iCloudSync) else { return }
+        guard CloudSyncPreference.isEnabled else { return }
         UIApplication.shared.registerForRemoteNotifications()
     }
 }

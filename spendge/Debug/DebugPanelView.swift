@@ -13,7 +13,6 @@ struct DebugPanelView: View {
     @State private var toast: String?
     @State private var sharedFile: DebugSharedFile?
     @State private var faultRowsVersion = 0
-    @State private var entitlementVersion = 0
     private let implementedFaults: [FaultPoint] = [
         .transactionWrite, .goalWrite, .budgetWrite, .dayConfirmationWrite, .shareExport,
     ]
@@ -24,7 +23,6 @@ struct DebugPanelView: View {
                 header
                 faultSection
                 scenarioSection
-                entitlementSection
                 syncSection
                 diagnosticsSection
                 crashSection
@@ -97,40 +95,6 @@ struct DebugPanelView: View {
                 .buttonStyle(.plain)
             }
         }
-    }
-
-    private var entitlementSection: some View {
-        let _ = entitlementVersion
-        return section(title: "付费模拟") {
-            entitlementRow(title: "模拟已买断", unlocked: true)
-            divider
-            entitlementRow(title: "模拟免费版", unlocked: false)
-        }
-    }
-
-    private func entitlementRow(title: String, unlocked: Bool) -> some View {
-        Button {
-            StoreService.shared.debugSetUnlocked(unlocked)
-            entitlementVersion += 1
-            // iCloud 是付费能力，切换后要让容器按新权限重建
-            NotificationCenter.default.post(name: .cloudSyncPreferenceChanged, object: nil)
-        } label: {
-            HStack(spacing: 12) {
-                Text(title)
-                    .font(Typography.body)
-                    .foregroundStyle(Color.textPrimary)
-                Spacer(minLength: 12)
-                if Entitlements.isUnlocked == unlocked {
-                    Image(systemName: "checkmark")
-                        .font(Typography.captionStrong)
-                        .foregroundStyle(Color.brand)
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 50)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private var syncSection: some View {
