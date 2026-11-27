@@ -58,11 +58,14 @@ struct SettingsView: View {
 
                 dataGroup
 
-                privacyGroup
+                VStack(spacing: 0) {
+                    actionRow(icon: "doc.text.magnifyingglass", title: "导出诊断日志", detail: "") {
+                        exportDiagnostics()
+                    }
+                }
+                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
 
-                group([
-                    Item(icon: "info.circle", title: "关于", detail: appVersionText),
-                ])
+                privacyGroup
 
                 DebugSettingsEntry(isPresented: $showDebugPanel)
 
@@ -124,11 +127,14 @@ struct SettingsView: View {
         return "\(version) (\(build))"
     }
 
+    /// 隐私政策与关于合成一张卡
     private var privacyGroup: some View {
         VStack(spacing: 0) {
             actionRow(icon: "doc.text", title: "隐私政策", detail: "") {
                 showPrivacyPolicy = true
             }
+            divider
+            row(Item(icon: "info.circle", title: "关于", detail: appVersionText))
         }
         .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: PageLayout.moduleRadius))
     }
@@ -317,6 +323,24 @@ struct SettingsView: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: .now)
+    }
+
+    /// 诊断日志：只含事件名、代码类属性与错误码，不含金额与备注
+    private func exportDiagnostics() {
+        let source = Analytics.fileURL
+        guard FileManager.default.fileExists(atPath: source.path) else {
+            Toast.show("还没有诊断日志", into: $toast, duration: 2)
+            return
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("海绵记账-诊断日志-\(Self.dateStamp()).txt")
+        try? FileManager.default.removeItem(at: url)
+        do {
+            try FileManager.default.copyItem(at: source, to: url)
+            sharedFile = SharedFile(url: url)
+        } catch {
+            errorMessage = "导出失败，请稍后重试"
+        }
     }
 
     private func exportCSV() {
