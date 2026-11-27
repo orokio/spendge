@@ -282,7 +282,7 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 8. systemd：nginx.service、spendge.service（User=ubuntu，MemoryMax=700M；含 ExecReload 优雅重载）；unit 文件入库 server/deploy/ 并软链到 /etc/systemd/system/；enable --now
 9. 网络：腾讯云安全组入站放行 TCP 8080、8443；DNS www.orokio.com 与 api.orokio.com 均 → 124.223.27.87。
 10. 验证：api /spendge/health 返回 ok（证书 CN=api.orokio.com，不加 -k 校验通过）；api /spendge/v1/devices/register 剥前缀后命中（新客户端），api 根路径 /health 与 /v1/devices/register 均 404（build 4 静默）；www 根路径仍可用；同 deviceId 第 6 次请求返回 429（限流生效）。
-11. 分类下发：导入 docs/categories-seed.json（29 条）→ 启动时 `python -m app.categories docs/categories-seed.json`，categoriesVersion=1；register 按客户端上报的 categoriesVersion 决定是否下发全量分类（见 13.6）。
+11. 分类下发：导入 server/categories-seed.json（29 条）→ 启动时 `python -m app.categories server/categories-seed.json`，categoriesVersion=1；register 按客户端上报的 categoriesVersion 决定是否下发全量分类（见 13.6）。
 
 ### 13.4 踩坑与解决（重点）
 
@@ -326,7 +326,8 @@ Redis（限流 / 幂等 / 抗刷，全部前置在 DB 之前）：
 
     cd /home/ubuntu/spendge-server
     set -a; . ./.env; set +a
-    .venv/bin/python -m app.categories /home/ubuntu/spendge/docs/categories-seed.json
+    .venv/bin/python -m app.categories --diff /home/ubuntu/spendge/server/categories-seed.json   # 先对比
+    .venv/bin/python -m app.categories /home/ubuntu/spendge/server/categories-seed.json          # 再导入
 
 - 内容与库中一致 → `changed=False`，版本不变；
 - 任意展示字段（name/iconName/colorHex/sortOrder/isArchived）变化或新增 code → **categoriesVersion +1**，并失效 Redis 快照；

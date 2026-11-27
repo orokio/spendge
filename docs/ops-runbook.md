@@ -144,14 +144,24 @@
     cd /home/ubuntu/spendge-server
     set -a; . ./.env; set +a
 
-    .venv/bin/python -m app.categories /home/ubuntu/spendge/docs/categories-seed.json  # 导入/更新（幂等）
+种子文件：`/home/ubuntu/spendge/server/categories-seed.json`（唯一输入，随代码入库；rsync 会同步一份到运行副本，但**以 git 工作区这份为准**）
+
+    # 1) 先对比，确认改的就是预期的（只读，不写库）
+    .venv/bin/python -m app.categories --diff /home/ubuntu/spendge/server/categories-seed.json
+
+    # 2) 确认无误再导入（幂等；有实质变更才 +1 版本）
+    .venv/bin/python -m app.categories /home/ubuntu/spendge/server/categories-seed.json
+
     .venv/bin/python -m app.categories --versions    # 历史版本
     .venv/bin/python -m app.categories --show 4      # 查看某版全量
     .venv/bin/python -m app.categories --restore 3   # 回放到某版（版本仍 +1）
 
-- 任何展示字段（name/iconName/colorHex/sortOrder/isArchived/goalKinds）变化 → `categoriesVersion +1` 并失效 Redis 快照。
+`--diff` 输出新增 / 修改（逐字段 old -> new）/ 库内多出的 code，并给出「导入后版本 6 -> 7」或「不会升版本」的结论。**每次导入前先看它**。
+
+- 任何展示字段（name/iconName/colorHex/sortOrder/isArchived/goalKinds）变化 → `categoriesVersion +1`。
 - 版本只增不减；改错就再改一次，不要手工改小。
 - 导入后客户端下次 register 自动拉全量（凭 `categoriesVersion`）。
+- 种子不含的 code 不会被删除（只在日志告警），需要下线分类请用 `isArchived`。
 
 ## 9. HTTPS 证书
 
@@ -255,7 +265,7 @@
     sudo systemctl start spendge
 
 - 必须先停 `spendge`，避免改到一半被并发写入
-- 分类数据**不要用 UPDATE**：改 `docs/categories-seed.json` 后走 §8 导入（自动 +1 版本）
+- 分类数据**不要用 UPDATE**：改 `server/categories-seed.json` 后走 §8 导入（先 `--diff` 再导入，自动 +1 版本）
 
 ## 15. 用户统计（手动执行）
 

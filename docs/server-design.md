@@ -308,7 +308,7 @@ PRAGMA cache_size = -8192;
 - 分类（categories）由服务端下发，契约见 [api-contract.md](api-contract.md) §4.2：
   - code 唯一、永久、不可复用；删除只置 is_archived，历史账单仍可显示
   - 任何展示字段（名称/图标/颜色/排序/归档）变更必须把 categories_version +1，且不回退
-  - 导入：`python -m app.categories docs/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1 并失效缓存）
+  - 导入：`python -m app.categories server/categories-seed.json`（幂等；内容无变化不涨版本，有变化才 +1）；导入前用 `--diff` 只读对比
   - 读取：每次 register 直接读 DB（29 行，毫秒级）；**读取失败不影响 register**（仍 200 返回 token，只是不带 categories，并记日志）
   - 历史：每次变更在**同一事务**写一条 `category_versions`（全量 JSON 快照，只增不改）。用于审计与精确回放，也是“账单按记账当时名称展示”的数据基础；回放（`--restore N`）同样把版本 +1，版本号永不回退
   - 用户统计（口径见 [user-stats-spec.md](user-stats-spec.md)）：`device_daily` 由 register 在**同一个事务**里 upsert（first 取 min、last 取 max、count+1）；`python -m app.stats` 每天 00:10 只算 T-1，覆盖写 `/home/ubuntu/stats/latest.txt`（东八区，含新增/活跃/按 build 分布），不再保留汇总表；活跃 = 当天 device_daily ∪ 当天新增（保证新增 ⊆ 活跃）；活跃/新增只算合法设备（36 位大写 UUID + secret_hash 非空）

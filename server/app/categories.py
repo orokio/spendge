@@ -201,6 +201,105 @@ def get_version(version: int) -> dict | None:
         db.close()
 
 
+def _fmt(value) -> str:
+    if isinstance(value, (list, tuple)):
+        return json.dumps(list(value), ensure_ascii=False)
+    return "null" if value is None else str(value)
+
+
+_FIELD_LABELS = {
+    "name": "name",
+    "icon_name": "iconName",
+    "color_hex": "colorHex",
+    "kind_raw_value": "kindRawValue",
+    "domain_raw_value": "domainRawValue",
+    "scope": "scope",
+    "sort_order": "sortOrder",
+    "is_archived": "isArchived",
+    "goal_kinds": "goalKinds",
+}
+
+
+def _fmt_field(field: str, value) -> str:
+    if field == "goal_kinds":
+        return _fmt([v for v in (value or "").split(",") if v])
+    if field == "is_archived":
+        return "true" if value else "false"
+    return _fmt(value)
+
+
+def diff_seed(path: str) -> dict:
+    """只读对比种子与当前库：不写库、不升版本。"""
+    items = _load_seed_items(path)
+    db = SessionLocal()
+    try:
+        cfg = db.get(AppConfig, VERSION_KEY)
+        version = int(cfg.value) if cfg is not None else 0
+        rows = db.execute(
+            select(Category).order_by(Category.sort_order, Category.code)
+        ).scalars().all()
+    finally:
+        db.close()
+
+    # 与种子同样规范化后再比，避免字段命名（camel/snake）差异造成误报
+    existing = {row.code: _normalize(_row_to_item(row)) for row in rows}
+    codes = {item["code"] for item in items}
+
+    added: list[str] = []
+    changed: dict[str, dict[str, tuple]] = {}
+    for item in items:
+        current = existing.get(item["code"])
+        if current is None:
+            added.append(item["code"])
+            continue
+        fields = {k: v for k, v in item.items() if k != "code"}
+        delta = {k: (current[k], v) for k, v in fields.items() if current[k] != v}
+        if delta:
+            changed[item["code"]] = delta
+
+    kept = sorted(set(existing) - codes)
+    will_bump = bool(added or changed)
+    return {
+        "version": version,
+        "new_version": version + 1 if will_bump else version,
+        "will_bump": will_bump,
+        "seed_count": len(items),
+        "db_count": len(existing),
+        "added": added,
+        "changed": changed,
+        "kept": kept,
+    }
+
+
+def format_diff(path: str, result: dict) -> str:
+    lines = [
+        f"种子: {path}（{result['seed_count']} 条）",
+        f"库内: v{result['version']}（{result['db_count']} 条）",
+        "",
+    ]
+    if result["added"]:
+        lines.append(f"新增 ({len(result['added'])}):")
+        lines += [f"  + {code}" for code in result["added"]]
+    if result["changed"]:
+        lines.append(f"修改 ({len(result['changed'])}):")
+        for code, delta in result["changed"].items():
+            lines.append(f"  ~ {code}")
+            for field, (old, new) in delta.items():
+                label = _FIELD_LABELS.get(field, field)
+                lines.append(f"      {label}: {_fmt_field(field, old)} -> {_fmt_field(field, new)}")
+    if result["kept"]:
+        lines.append(f"库内多出（不会删除，{len(result['kept'])}）:")
+        lines += [f"  ! {code}" for code in result["kept"]]
+    if not (result["added"] or result["changed"] or result["kept"]):
+        lines.append("无差异")
+    lines.append("")
+    if result["will_bump"]:
+        lines.append(f"结论: 有实质变更，导入后 categoriesVersion {result['version']} -> {result['new_version']}")
+    else:
+        lines.append(f"结论: 无实质变更，导入不会升版本（保持 v{result['version']}）")
+    return "\n".join(lines)
+
+
 def list_versions(limit: int = 50) -> list[dict]:
     db = SessionLocal()
     try:
@@ -246,6 +345,10 @@ def main(argv: list[str]) -> int:
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
 
+    if args[:1] == ["--diff"] and len(args) == 2:
+        print(format_diff(args[1], diff_seed(args[1])))
+        return 0
+
     if args[:1] == ["--restore"] and len(args) == 2:
         changed, version = restore(int(args[1]))
         print(f"changed={changed} categoriesVersion={version}")
@@ -255,6 +358,7 @@ def main(argv: list[str]) -> int:
         "用法:\n"
         "  python -m app.categories <seed.json>   # 导入/更新\n"
         "  python -m app.categories --versions    # 列出历史版本\n"
+        "  python -m app.categories --diff <seed.json>  # 只对比，不写库\n"
         "  python -m app.categories --show N      # 查看第 N 版\n"
         "  python -m app.categories --restore N   # 回放到第 N 版（版本仍 +1）"
     )

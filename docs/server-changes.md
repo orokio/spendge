@@ -46,7 +46,7 @@ deviceId, deviceSecret, appVersion, build, platform, categoriesVersion
 
 ### 4. 检查项
 
-- [ ] `register` 返回的 `goalKinds` 与 `docs/categories-seed.json` 一致（当前 v6，29 条，19 条非空）
+- [ ] `register` 返回的 `goalKinds` 与 `server/categories-seed.json` 一致（当前 v6，29 条，19 条非空）
 - [ ] `docs/api-contract.md` 里 /v1/parse 那一行仍写着「免费额度」，措辞待 `/v1/parse` 真正排期时改为「按设备限流」
 - [ ] 生产库中 `categories` 的 `goal_kinds` 列已部署（2026-11-26 已完成）
 

@@ -86,7 +86,7 @@ def test_register_client_version_0_gets_full_categories(client, device_id):
     from app import categories
 
     snapshot = categories.load_snapshot()
-    assert snapshot["version"] >= 1, "分类未导入，先执行 python -m app.categories docs/categories-seed.json"
+    assert snapshot["version"] >= 1, "分类未导入，先执行 python -m app.categories server/categories-seed.json"
 
     r = client.post("/v1/devices/register", json=_body_with_version(device_id, 0))
     assert r.status_code == 200
