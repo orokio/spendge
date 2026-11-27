@@ -44,6 +44,7 @@ if (cd "${WORK_DIR}" && java -jar "${JAR}" \
     -appid "${APP_ID}" \
     -appkey "${APP_KEY}" \
     -version "${MARKETING_VERSION}" \
+    -buildNo "${CURRENT_PROJECT_VERSION}" \
     -platform IOS \
     -inputSymbol "${DSYM_DIR}"); then
     :
